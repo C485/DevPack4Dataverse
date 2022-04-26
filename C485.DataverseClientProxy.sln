@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32319.34
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "C485.DataverseClientProxy", "C485.DataverseClientProxy\C485.DataverseClientProxy.csproj", "{50505563-F489-443F-880D-242C3E09D3BE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{50505563-F489-443F-880D-242C3E09D3BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50505563-F489-443F-880D-242C3E09D3BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50505563-F489-443F-880D-242C3E09D3BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50505563-F489-443F-880D-242C3E09D3BE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4F936046-F952-45AB-B8FE-C89E8B6D9B77}
+	EndGlobalSection
+EndGlobal
