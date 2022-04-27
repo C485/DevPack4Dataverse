@@ -8,6 +8,7 @@ using Microsoft.Xrm.Sdk.Query;
 using Microsoft.Xrm.Tooling.Connector;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -42,7 +43,7 @@ namespace C485.DataverseClientProxy
                 .Against
                 .Null(requestSettings, nameof(requestSettings));
 
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for used connection.");
             }
@@ -76,7 +77,7 @@ namespace C485.DataverseClientProxy
                 .Against
                 .Null(requestSettings, nameof(requestSettings));
 
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for used connection.");
             }
@@ -126,7 +127,7 @@ namespace C485.DataverseClientProxy
                 .Against
                 .Null(requestSettings, nameof(requestSettings));
 
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for this connection.");
             }
@@ -169,45 +170,91 @@ namespace C485.DataverseClientProxy
                 .Run(() => Execute(executeMultipleRequestBuilder));
         }
 
+        public bool IsLockedByThisThread()
+        {
+            return Monitor
+                .IsEntered(_lockObj);
+        }
+
+        public Entity RefreshRecord(Entity record)
+        {
+            if (!_disableLockingCheck && !IsLockedByThisThread())
+            {
+                throw new ArgumentException("Lock not set for this connection.");
+            }
+
+            Guard
+                .Against
+                .Null(_connection, nameof(_connection));
+            ColumnSet columns = new();
+            foreach (string fieldName in record.Attributes.Keys)
+            {
+                columns.AddColumn(fieldName);
+            }
+
+            return _connection
+                .Retrieve(record.LogicalName, record.Id, columns);
+        }
+
+        public async Task<Entity> RefreshRecordAsync(Entity record)
+        {
+            return await Task
+                .Run(() => RefreshRecord(record));
+        }
+
         public void ReleaseLock()
         {
             Monitor
                 .Exit(_lockObj);
         }
 
-        public Entity[] RetriveMultiple(QueryExpression queryExpression)
+        public IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression)
         {
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for this connection.");
             }
-            Guard
-                .Against
-                .Null(_connection, nameof(_connection));
-            queryExpression.PageInfo = new PagingInfo
+
+            return InnerRetriveMultiple();
+
+            IEnumerable<Entity> InnerRetriveMultiple()
             {
-                Count = 5000,
-                PageNumber = 1,
-                PagingCookie = null
-            };
-            List<Entity> records = new();
-            while (true)
-            {
-                var ret = _connection.RetrieveMultiple(queryExpression);
-                records.AddRange(ret.Entities);
-                if (!ret.MoreRecords)
-                    break;
-                queryExpression.PageInfo.PageNumber++;
-                queryExpression.PageInfo.PagingCookie = ret.PagingCookie;
+                Guard
+                    .Against
+                    .Null(_connection, nameof(_connection));
+                queryExpression.PageInfo = new PagingInfo
+                {
+                    Count = 5000,
+                    PageNumber = 1,
+                    PagingCookie = null
+                };
+                while (true)
+                {
+                    EntityCollection ret = _connection.RetrieveMultiple(queryExpression);
+                    foreach (Entity record in ret.Entities)
+                    {
+                        yield return record;
+                    }
+                    if (!ret.MoreRecords)
+                        break;
+                    queryExpression.PageInfo.PageNumber++;
+                    queryExpression.PageInfo.PagingCookie = ret.PagingCookie;
+                }
             }
-            return records.ToArray();//TODO reduce memory usage
+        }
+
+        public async Task<Entity[]> RetriveMultipleAsync(QueryExpression queryExpression)
+        {
+            return await Task
+                .Run(() => RetriveMultiple(queryExpression).ToArray());
         }
 
         public bool Test()
         {
             WhoAmIResponse response = ((WhoAmIResponse)_connection
                 .Execute(new WhoAmIRequest()));
-            return response != null && response.UserId != Guid.Empty;
+            return response != null
+                && response.UserId != Guid.Empty;
         }
 
         public async Task<bool> TestAsync()
@@ -231,7 +278,7 @@ namespace C485.DataverseClientProxy
                 .Against
                 .Null(requestSettings, nameof(requestSettings));
 
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for used connection.");
             }
@@ -240,11 +287,11 @@ namespace C485.DataverseClientProxy
                 .CallerId = requestSettings.ImpersonateAsUserByDataverseId ?? Guid.Empty;
             _connection
                 .BypassPluginExecution = requestSettings.SkipPluginExecution;
-
             Guard
                 .Against
                 .Null(_connection, nameof(_connection))
                 .Update(record);
+
             return record
                 .Id;
         }
@@ -264,7 +311,7 @@ namespace C485.DataverseClientProxy
                 .Against
                 .Null(requestSettings, nameof(requestSettings));
 
-            if (!_disableLockingCheck && !Monitor.IsEntered(_lockObj))
+            if (!_disableLockingCheck && !IsLockedByThisThread())
             {
                 throw new ArgumentException("Lock not set for used connection.");
             }

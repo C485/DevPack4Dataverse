@@ -1,6 +1,8 @@
 ﻿using C485.DataverseClientProxy.Models;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace C485.DataverseClientProxy.Interfaces
@@ -26,6 +28,14 @@ namespace C485.DataverseClientProxy.Interfaces
         Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings);
 
         Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder);
+
+        Entity RefreshRecord(Entity record);
+
+        Task<Entity> RefreshRecordAsync(Entity record);
+
+        IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression);
+
+        Task<Entity[]> RetriveMultipleAsync(QueryExpression queryExpression);
 
         Guid UpdateRecord(Entity record, RequestSettings requestSettings);
 

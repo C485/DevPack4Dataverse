@@ -121,6 +121,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ConnectionLease.cs" />
     <Compile Include="Creators\ClientSecretConnectionCreator.cs" />
     <Compile Include="Models\ExecuteMultipleRequestSettings.cs" />
     <Compile Include="Interfaces\IConnectionCreator.cs" />

@@ -3,9 +3,12 @@ using C485.DataverseClientProxy.Interfaces;
 using C485.DataverseClientProxy.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Query;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,152 +45,82 @@ namespace C485.DataverseClientProxy
 
         public Guid CreateRecord(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                return connection
-                    .CreateRecord(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .CreateRecord(record, requestSettings);
         }
 
         public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                return await connection
-                    .CreateRecordAsync(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .CreateRecordAsync(record, requestSettings);
         }
 
         public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                connection
-                    .DeleteRecord(logicalName, id, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            connectionLease
+                .Connection
+                .DeleteRecord(logicalName, id, requestSettings);
         }
 
         public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                connection
-                    .DeleteRecord(entityReference, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            connectionLease
+                .Connection
+                .DeleteRecord(entityReference, requestSettings);
         }
 
         public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                await connection
-                    .DeleteRecordAsync(logicalName, id, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            await connectionLease
+            .Connection
+                .DeleteRecordAsync(logicalName, id, requestSettings);
         }
 
         public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                await connection
-                    .DeleteRecordAsync(entityReference, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            await connectionLease
+                .Connection
+                .DeleteRecordAsync(entityReference, requestSettings);
         }
 
         public OrganizationResponse Execute(OrganizationRequest request, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                return connection
-                    .Execute(request, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .Execute(request, requestSettings);
         }
 
         public OrganizationResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                return connection
-                    .Execute(executeMultipleRequestBuilder);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .Execute(executeMultipleRequestBuilder);
         }
 
         public async Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                return await connection
-                    .ExecuteAsync(request, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .ExecuteAsync(request, requestSettings);
         }
 
         public async Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                return await connection
-                    .ExecuteAsync(executeMultipleRequestBuilder);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .ExecuteAsync(executeMultipleRequestBuilder);
         }
 
         public ChunksStatistics ExecuteMultipleAsChunks(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
@@ -215,7 +148,8 @@ namespace C485.DataverseClientProxy
                         executeMultipleRequestBuilder.Count);
                 }
             }));
-            statusReportThread.Start(cts.Token);
+            statusReportThread
+                .Start(cts.Token);
 
             OrganizationRequest[][] allRequestChunks = executeMultipleRequestBuilder
                 .RequestWithResults
@@ -232,7 +166,7 @@ namespace C485.DataverseClientProxy
                 new ParallelOptions { MaxDegreeOfParallelism = threadsCount },
                 packOfRequests =>
                 {
-                    IConnection connection = GetConnection();
+                    using ConnectionLease connectionLease = GetConnection();
                     try
                     {
                         ExecuteMultipleRequest requestWithResults = new()
@@ -249,7 +183,8 @@ namespace C485.DataverseClientProxy
                             .AddRange(packOfRequests);
 
                         ExecuteMultipleResponse responseWithResults =
-                            (ExecuteMultipleResponse)connection
+                            (ExecuteMultipleResponse)connectionLease
+                                .Connection
                                 .Execute(requestWithResults, new RequestSettings
                                 {
                                     ImpersonateAsUserByDataverseId = executeMultipleRequestBuilder.ImpersonateAsUserById,
@@ -274,10 +209,6 @@ namespace C485.DataverseClientProxy
                             executeMultipleRequestSettings.ErrorReport(recordToSave, e.ToString());
                         }
                     }
-                    finally
-                    {
-                        connection.ReleaseLock();
-                    }
 
                     Interlocked.Add(ref progress, packOfRequests.Length);
                 }
@@ -288,7 +219,9 @@ namespace C485.DataverseClientProxy
                 .Join();
             cts
                 .Dispose();
-            chunksStatistics.Stopwatch.Stop();
+            chunksStatistics
+                .Stopwatch
+                .Stop();
             chunksStatistics.RecordsProcessed = executeMultipleRequestBuilder
                 .RequestWithResults
                 .Requests
@@ -296,97 +229,104 @@ namespace C485.DataverseClientProxy
             return chunksStatistics;
         }
 
+        public Entity RefreshRecord(Entity record)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .RefreshRecord(record);
+        }
+
+        public async Task<Entity> RefreshRecordAsync(Entity record)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .RefreshRecordAsync(record);
+        }
+
+        public IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .RetriveMultiple(queryExpression);
+        }
+
+        public async Task<Entity[]> RetriveMultipleAsync(QueryExpression queryExpression)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+
+            return await connectionLease
+                .Connection
+                .RetriveMultipleAsync(queryExpression);
+        }
+
         public Guid UpdateRecord(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                return connection
-                    .UpdateRecord(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .UpdateRecord(record, requestSettings);
         }
 
         public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                return await connection
-                    .UpdateRecordAsync(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .UpdateRecordAsync(record, requestSettings);
         }
 
         public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = GetConnection();
-            try
-            {
-                return connection
-                    .UpsertRecord(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .UpsertRecord(record, requestSettings);
         }
 
         public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings)
         {
-            IConnection connection = await GetConnectionAsync();
-            try
-            {
-                return await connection
-                    .UpsertRecordAsync(record, requestSettings);
-            }
-            finally
-            {
-                connection
-                    .ReleaseLock();
-            }
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .UpsertRecordAsync(record, requestSettings);
         }
 
-        private IConnection GetConnection()
+        [SuppressMessage("Minor Code Smell", "S3267:Loops should be simplified with \"LINQ\" expressions", Justification = "No locking in LINQ")]
+        private ConnectionLease GetConnection()
         {
             while (true)
             {
-                Thread
-                    .Sleep(_sleepTimeForConnectionGetter);
                 foreach (IConnection connection in _connections)
                 {
                     if (connection.TryLock())
                     {
-                        return connection;
+                        return new ConnectionLease(connection);
                     }
                 }
+                Thread
+                    .Sleep(_sleepTimeForConnectionGetter);
             }
         }
 
-        private async Task<IConnection> GetConnectionAsync()
+        [SuppressMessage("Minor Code Smell", "S3267:Loops should be simplified with \"LINQ\" expressions", Justification = "No locking in LINQ")]
+        private async Task<ConnectionLease> GetConnectionAsync()
         {
             return await Task.Run(async () =>
             {
                 while (true)
                 {
-                    await Task
-                        .Delay(_sleepTimeForConnectionGetter);
                     foreach (IConnection connection in _connections)
                     {
                         if (connection.TryLock())
                         {
-                            return connection;
+                            return new ConnectionLease(connection);
                         }
                     }
+                    await Task
+                        .Delay(_sleepTimeForConnectionGetter);
                 }
             });
         }

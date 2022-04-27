@@ -1,6 +1,4 @@
-﻿using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Query;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace C485.DataverseClientProxy.Interfaces
 {
@@ -8,9 +6,9 @@ namespace C485.DataverseClientProxy.Interfaces
     {
         void DiableLockingCheck();
 
-        void ReleaseLock();
+        bool IsLockedByThisThread();
 
-        Entity[] RetriveMultiple(QueryExpression queryExpression);
+        void ReleaseLock();
 
         bool Test();
 
