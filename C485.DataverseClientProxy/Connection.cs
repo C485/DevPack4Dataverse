@@ -208,6 +208,34 @@ namespace C485.DataverseClientProxy
                 .Exit(_lockObj);
         }
 
+        public Entity Retrive(string entityName, Guid id, ColumnSet columnSet)
+        {
+            if (!_disableLockingCheck && !IsLockedByThisThread())
+            {
+                throw new ArgumentException("Lock not set for this connection.");
+            }
+            Guard
+                .Against
+                .Null(_connection, nameof(_connection));
+            Guard
+                .Against
+                .NullOrEmpty(entityName, nameof(entityName));
+            Guard
+                .Against
+                .Default(id, nameof(id));
+            Guard
+                .Against
+                .Null(columnSet, nameof(columnSet));
+            return _connection
+                .Retrieve(entityName, id, columnSet);
+        }
+
+        public async Task<Entity> RetriveAsync(string entityName, Guid id, ColumnSet columnSet)
+        {
+            return await Task
+                .Run(() => RetriveAsync(entityName, id, columnSet));
+        }
+
         public IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression)
         {
             if (!_disableLockingCheck && !IsLockedByThisThread())

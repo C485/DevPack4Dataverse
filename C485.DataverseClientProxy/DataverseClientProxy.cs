@@ -245,6 +245,22 @@ namespace C485.DataverseClientProxy
                 .RefreshRecordAsync(record);
         }
 
+        public Entity Retrive(string entityName, Guid id, ColumnSet columnSet)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .Retrive(entityName, id, columnSet);
+        }
+
+        public async Task<Entity> RetriveAsync(string entityName, Guid id, ColumnSet columnSet)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .RetriveAsync(entityName, id, columnSet);
+        }
+
         public IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression)
         {
             using ConnectionLease connectionLease = GetConnection();

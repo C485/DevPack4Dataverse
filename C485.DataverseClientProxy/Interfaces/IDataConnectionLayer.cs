@@ -33,6 +33,10 @@ namespace C485.DataverseClientProxy.Interfaces
 
         Task<Entity> RefreshRecordAsync(Entity record);
 
+        Entity Retrive(string entityName, Guid id, ColumnSet columnSet);
+
+        Task<Entity> RetriveAsync(string entityName, Guid id, ColumnSet columnSet);
+
         IEnumerable<Entity> RetriveMultiple(QueryExpression queryExpression);
 
         Task<Entity[]> RetriveMultipleAsync(QueryExpression queryExpression);
