@@ -123,6 +123,7 @@
   <ItemGroup>
     <Compile Include="ConnectionLease.cs" />
     <Compile Include="Creators\ClientSecretConnectionCreator.cs" />
+    <Compile Include="Creators\ConnectionStringConnectionCreator.cs" />
     <Compile Include="Models\ExecuteMultipleRequestSettings.cs" />
     <Compile Include="Interfaces\IConnectionCreator.cs" />
     <Compile Include="Models\ChunksStatistics.cs" />
