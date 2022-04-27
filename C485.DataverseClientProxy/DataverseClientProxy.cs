@@ -43,94 +43,20 @@ namespace C485.DataverseClientProxy
             throw new InvalidProgramException("Connection is not valid.");
         }
 
-        public Guid CreateRecord(Entity record, RequestSettings requestSettings)
+        public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
         {
-            using ConnectionLease connectionLease = GetConnection();
-            return connectionLease
-                .Connection
-                .CreateRecord(record, requestSettings);
+            return await Task
+                .Run(() => AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder, executeMultipleRequestSettings));
         }
 
-        public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = await GetConnectionAsync();
-            return await connectionLease
-                .Connection
-                .CreateRecordAsync(record, requestSettings);
-        }
-
-        public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = GetConnection();
-            connectionLease
-                .Connection
-                .DeleteRecord(logicalName, id, requestSettings);
-        }
-
-        public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = GetConnection();
-            connectionLease
-                .Connection
-                .DeleteRecord(entityReference, requestSettings);
-        }
-
-        public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = await GetConnectionAsync();
-            await connectionLease
-            .Connection
-                .DeleteRecordAsync(logicalName, id, requestSettings);
-        }
-
-        public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = await GetConnectionAsync();
-            await connectionLease
-                .Connection
-                .DeleteRecordAsync(entityReference, requestSettings);
-        }
-
-        public OrganizationResponse Execute(OrganizationRequest request, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = GetConnection();
-            return connectionLease
-                .Connection
-                .Execute(request, requestSettings);
-        }
-
-        public OrganizationResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
-        {
-            using ConnectionLease connectionLease = GetConnection();
-            return connectionLease
-                .Connection
-                .Execute(executeMultipleRequestBuilder);
-        }
-
-        public async Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings)
-        {
-            using ConnectionLease connectionLease = await GetConnectionAsync();
-            return await connectionLease
-                .Connection
-                .ExecuteAsync(request, requestSettings);
-        }
-
-        public async Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
-        {
-            using ConnectionLease connectionLease = await GetConnectionAsync();
-            return await connectionLease
-                .Connection
-                .ExecuteAsync(executeMultipleRequestBuilder);
-        }
-
-        public ChunksStatistics ExecuteMultipleAsChunks(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
+        public AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
         {
             Guard
                 .Against
                 .Null(executeMultipleRequestSettings, nameof(executeMultipleRequestSettings));
             int threadsCount = executeMultipleRequestSettings.MaxDegreeOfParallelism <= 0
                 ? _connections.Count : executeMultipleRequestSettings.MaxDegreeOfParallelism;
-            ChunksStatistics chunksStatistics = new()
+            AdvancedExecuteMultipleRequestsStatistics chunksStatistics = new()
             {
                 Stopwatch = Stopwatch.StartNew(),
                 ThreadsUsed = threadsCount
@@ -227,6 +153,86 @@ namespace C485.DataverseClientProxy
                 .Requests
                 .Count;
             return chunksStatistics;
+        }
+
+        public Guid CreateRecord(Entity record, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .CreateRecord(record, requestSettings);
+        }
+
+        public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .CreateRecordAsync(record, requestSettings);
+        }
+
+        public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            connectionLease
+                .Connection
+                .DeleteRecord(logicalName, id, requestSettings);
+        }
+
+        public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            connectionLease
+                .Connection
+                .DeleteRecord(entityReference, requestSettings);
+        }
+
+        public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            await connectionLease
+            .Connection
+                .DeleteRecordAsync(logicalName, id, requestSettings);
+        }
+
+        public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            await connectionLease
+                .Connection
+                .DeleteRecordAsync(entityReference, requestSettings);
+        }
+
+        public OrganizationResponse Execute(OrganizationRequest request, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .Execute(request, requestSettings);
+        }
+
+        public OrganizationResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .Execute(executeMultipleRequestBuilder);
+        }
+
+        public async Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .ExecuteAsync(request, requestSettings);
+        }
+
+        public async Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .ExecuteAsync(executeMultipleRequestBuilder);
         }
 
         public Entity RefreshRecord(Entity record)

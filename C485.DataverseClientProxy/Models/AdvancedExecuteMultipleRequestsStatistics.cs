@@ -2,7 +2,7 @@
 
 namespace C485.DataverseClientProxy.Models
 {
-    public class ChunksStatistics
+    public class AdvancedExecuteMultipleRequestsStatistics
     {
         public int RecordsProcessed { get; set; }
         public Stopwatch Stopwatch { get; set; }

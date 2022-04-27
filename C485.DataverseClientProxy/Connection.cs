@@ -214,6 +214,7 @@ namespace C485.DataverseClientProxy
             {
                 throw new ArgumentException("Lock not set for this connection.");
             }
+
             Guard
                 .Against
                 .Null(_connection, nameof(_connection));
@@ -226,6 +227,7 @@ namespace C485.DataverseClientProxy
             Guard
                 .Against
                 .Null(columnSet, nameof(columnSet));
+
             return _connection
                 .Retrieve(entityName, id, columnSet);
         }
