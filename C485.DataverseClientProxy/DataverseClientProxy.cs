@@ -43,12 +43,6 @@ namespace C485.DataverseClientProxy
             throw new InvalidProgramException("Connection is not valid.");
         }
 
-        public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
-        {
-            return await Task
-                .Run(() => AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder, executeMultipleRequestSettings));
-        }
-
         public AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
         {
             Guard
@@ -155,6 +149,20 @@ namespace C485.DataverseClientProxy
             return chunksStatistics;
         }
 
+        public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings)
+        {
+            return await Task
+                .Run(() => AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder, executeMultipleRequestSettings));
+        }
+
+        public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .CreateQuery_Unsafe_Unprotected(entityLogicalName);
+        }
+
         public Guid CreateRecord(Entity record, RequestSettings requestSettings)
         {
             using ConnectionLease connectionLease = GetConnection();
@@ -233,6 +241,54 @@ namespace C485.DataverseClientProxy
             return await connectionLease
                 .Connection
                 .ExecuteAsync(executeMultipleRequestBuilder);
+        }
+
+        public Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .QueryMultiple(entityLogicalName, queryBuilder);
+        }
+
+        public async Task<Entity[]> QueryMultipleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .QueryMultipleAsync(entityLogicalName, queryBuilder);
+        }
+
+        public Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .QuerySingle(entityLogicalName, queryBuilder);
+        }
+
+        public async Task<Entity> QuerySingleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .QuerySingleAsync(entityLogicalName, queryBuilder);
+        }
+
+        public Entity QuerySingleOrDefault(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = GetConnection();
+            return connectionLease
+                .Connection
+                .QuerySingleOrDefault(entityLogicalName, queryBuilder);
+        }
+
+        public async Task<Entity> QuerySingleOrDefaultAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            using ConnectionLease connectionLease = await GetConnectionAsync();
+            return await connectionLease
+                .Connection
+                .QuerySingleOrDefaultAsync(entityLogicalName, queryBuilder);
         }
 
         public Entity RefreshRecord(Entity record)

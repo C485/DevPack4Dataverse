@@ -3,6 +3,7 @@ using C485.DataverseClientProxy.Interfaces;
 using C485.DataverseClientProxy.Models;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Client;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Microsoft.Xrm.Tooling.Connector;
@@ -18,6 +19,7 @@ namespace C485.DataverseClientProxy
     {
         private readonly CrmServiceClient _connection;
         private readonly object _lockObj;
+        private readonly OrganizationServiceContext _xrmServiceContext;
         private bool _disableLockingCheck;
 
         public Connection(CrmServiceClient connection)
@@ -26,12 +28,19 @@ namespace C485.DataverseClientProxy
             _connection = Guard
                 .Against
                 .Null(connection, nameof(connection));
+            _xrmServiceContext = new OrganizationServiceContext(connection);
             _connection
                 .DisableCrossThreadSafeties = true;
             _connection
                 .MaxRetryCount = 10;
             _connection
                 .RetryPauseTime = TimeSpan.FromSeconds(5);
+        }
+
+        public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
+        {
+            return _xrmServiceContext
+                .CreateQuery(entityLogicalName);
         }
 
         public Guid CreateRecord(Entity record, RequestSettings requestSettings)
@@ -174,6 +183,48 @@ namespace C485.DataverseClientProxy
         {
             return Monitor
                 .IsEntered(_lockObj);
+        }
+
+        public Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            IQueryable<Entity> query = _xrmServiceContext
+                .CreateQuery(entityLogicalName);
+            return queryBuilder(query)
+                .ToArray();
+        }
+
+        public async Task<Entity[]> QueryMultipleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            return await Task
+                .Run(() => QueryMultiple(entityLogicalName, queryBuilder));
+        }
+
+        public Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            IQueryable<Entity> query = _xrmServiceContext
+                .CreateQuery(entityLogicalName);
+            return queryBuilder(query)
+                .Single();
+        }
+
+        public async Task<Entity> QuerySingleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            return await Task
+                .Run(() => QuerySingle(entityLogicalName, queryBuilder));
+        }
+
+        public Entity QuerySingleOrDefault(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            IQueryable<Entity> query = _xrmServiceContext
+                .CreateQuery(entityLogicalName);
+            return queryBuilder(query)
+                .SingleOrDefault();
+        }
+
+        public async Task<Entity> QuerySingleOrDefaultAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+        {
+            return await Task
+                .Run(() => QuerySingleOrDefault(entityLogicalName, queryBuilder));
         }
 
         public Entity RefreshRecord(Entity record)

@@ -3,12 +3,15 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace C485.DataverseClientProxy.Interfaces
 {
     public interface IDataConnectionLayer
     {
+        IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName);
+
         Guid CreateRecord(Entity record, RequestSettings requestSettings);
 
         Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings);
@@ -28,6 +31,18 @@ namespace C485.DataverseClientProxy.Interfaces
         Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings);
 
         Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder);
+
+        Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+
+        Task<Entity[]> QueryMultipleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+
+        Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+
+        Task<Entity> QuerySingleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+
+        Entity QuerySingleOrDefault(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+
+        Task<Entity> QuerySingleOrDefaultAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
 
         Entity RefreshRecord(Entity record);
 
