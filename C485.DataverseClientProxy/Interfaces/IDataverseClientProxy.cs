@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace C485.DataverseClientProxy.Interfaces
 {
-    public interface IConnectionManager : IDataConnectionLayer
+    public interface IDataverseClientProxy : IDataConnectionLayer
     {
         AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings);
 

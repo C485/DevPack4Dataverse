@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace C485.DataverseClientProxy
 {
-    public class DataverseClientProxy : IConnectionManager
+    public class DataverseClientProxy : IDataverseClientProxy
     {
         private readonly ConcurrentBag<IConnection> _connections;
         private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);

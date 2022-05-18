@@ -128,7 +128,7 @@
     <Compile Include="Interfaces\IConnectionCreator.cs" />
     <Compile Include="Models\AdvancedExecuteMultipleRequestsStatistics.cs" />
     <Compile Include="DataverseClientProxy.cs" />
-    <Compile Include="Interfaces\IConnectionManager.cs" />
+    <Compile Include="Interfaces\IDataverseClientProxy.cs" />
     <Compile Include="Interfaces\IDataConnectionLayer.cs" />
     <Compile Include="Connection.cs" />
     <Compile Include="ExecuteMultipleRequestBuilder.cs" />
