@@ -9,7 +9,9 @@ namespace C485.DataverseClientProxy.Interfaces;
 
 public interface IDataverseConnectionLayer
 {
-	IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName);
+	IQueryable<Entity> CreateQuery_Unsafe_Unprotected(
+		string entityLogicalName,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
 	Guid CreateRecord(Entity record, RequestSettings requestSettings);
 
@@ -31,21 +33,35 @@ public interface IDataverseConnectionLayer
 
 	Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder);
 
-	Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+	Entity[] QueryMultiple(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
 	Task<Entity[]> QueryMultipleAsync(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
-	Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+	Entity QuerySingle(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
-	Task<Entity> QuerySingleAsync(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+	Task<Entity> QuerySingleAsync(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
-	Entity QuerySingleOrDefault(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+	Entity QuerySingleOrDefault(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
 	Task<Entity> QuerySingleOrDefaultAsync(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder);
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default);
 
 	Entity RefreshRecord(Entity record);
 

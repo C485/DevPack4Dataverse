@@ -194,15 +194,6 @@ public class DataverseClientProxy : IDataverseClientProxy
 				cancellationToken);
 	}
 
-	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
-	{
-		using ConnectionLease connectionLease = GetConnection();
-
-		return connectionLease
-		   .Connection
-		   .CreateQuery_Unsafe_Unprotected(entityLogicalName);
-	}
-
 	public Guid CreateRecord(Entity record, RequestSettings requestSettings)
 	{
 		using ConnectionLease connectionLease = GetConnection();
@@ -290,68 +281,6 @@ public class DataverseClientProxy : IDataverseClientProxy
 		return await connectionLease
 		   .Connection
 		   .ExecuteAsync(executeMultipleRequestBuilder);
-	}
-
-	public Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = GetConnection();
-
-		return connectionLease
-		   .Connection
-		   .QueryMultiple(entityLogicalName, queryBuilder);
-	}
-
-	public async Task<Entity[]> QueryMultipleAsync(
-		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = await GetConnectionAsync();
-
-		return await connectionLease
-		   .Connection
-		   .QueryMultipleAsync(entityLogicalName, queryBuilder);
-	}
-
-	public Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = GetConnection();
-
-		return connectionLease
-		   .Connection
-		   .QuerySingle(entityLogicalName, queryBuilder);
-	}
-
-	public async Task<Entity> QuerySingleAsync(
-		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = await GetConnectionAsync();
-
-		return await connectionLease
-		   .Connection
-		   .QuerySingleAsync(entityLogicalName, queryBuilder);
-	}
-
-	public Entity QuerySingleOrDefault(
-		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = GetConnection();
-
-		return connectionLease
-		   .Connection
-		   .QuerySingleOrDefault(entityLogicalName, queryBuilder);
-	}
-
-	public async Task<Entity> QuerySingleOrDefaultAsync(
-		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
-	{
-		using ConnectionLease connectionLease = await GetConnectionAsync();
-
-		return await connectionLease
-		   .Connection
-		   .QuerySingleOrDefaultAsync(entityLogicalName, queryBuilder);
 	}
 
 	public Entity RefreshRecord(Entity record)
@@ -442,6 +371,89 @@ public class DataverseClientProxy : IDataverseClientProxy
 		return await connectionLease
 		   .Connection
 		   .UpsertRecordAsync(record, requestSettings);
+	}
+
+	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(
+		string entityLogicalName,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .CreateQuery_Unsafe_Unprotected(entityLogicalName, organizationServiceContextSettings);
+	}
+
+	public Entity[] QueryMultiple(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QueryMultiple(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public async Task<Entity[]> QueryMultipleAsync(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QueryMultipleAsync(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public Entity QuerySingle(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QuerySingle(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public async Task<Entity> QuerySingleAsync(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QuerySingleAsync(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public Entity QuerySingleOrDefault(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QuerySingleOrDefault(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public async Task<Entity> QuerySingleOrDefaultAsync(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QuerySingleOrDefaultAsync(entityLogicalName, queryBuilder, organizationServiceContextSettings);
 	}
 
 	public async Task AddNewConnection(IConnectionCreator connectionCreator)

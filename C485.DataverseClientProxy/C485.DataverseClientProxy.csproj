@@ -133,6 +133,7 @@
     <Compile Include="Connection.cs" />
     <Compile Include="ExecuteMultipleRequestBuilder.cs" />
     <Compile Include="Interfaces\IConnection.cs" />
+    <Compile Include="Models\OrganizationServiceContextSettings.cs" />
     <Compile Include="Models\RequestSettings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

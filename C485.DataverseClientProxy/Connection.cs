@@ -40,11 +40,24 @@ public class Connection : IConnection
 		   .RetryPauseTime = TimeSpan.FromSeconds(5);
 	}
 
-	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
+	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(
+		string entityLogicalName,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
 		Guard
 		   .Against
 		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
+
+		_xrmServiceContext
+		   .ClearChanges();
 
 		return _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
@@ -71,9 +84,7 @@ public class Connection : IConnection
 		_connection
 		   .BypassPluginExecution = requestSettings.SkipPluginExecution;
 
-		return Guard
-		   .Against
-		   .Null(_connection, nameof(_connection))
+		return _connection
 		   .Create(record);
 	}
 
@@ -108,9 +119,7 @@ public class Connection : IConnection
 		_connection
 		   .BypassPluginExecution = requestSettings.SkipPluginExecution;
 
-		Guard
-		   .Against
-		   .Null(_connection, nameof(_connection))
+		_connection
 		   .Delete(logicalName, id);
 	}
 
@@ -161,9 +170,7 @@ public class Connection : IConnection
 		_connection
 		   .BypassPluginExecution = requestSettings.SkipPluginExecution;
 
-		return Guard
-		   .Against
-		   .Null(_connection, nameof(_connection))
+		return _connection
 		   .Execute(request);
 	}
 
@@ -199,8 +206,12 @@ public class Connection : IConnection
 		   .IsEntered(_lockObj);
 	}
 
-	public Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+	public Entity[] QueryMultiple(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
 		Guard
 		   .Against
 		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
@@ -209,23 +220,58 @@ public class Connection : IConnection
 		   .Against
 		   .Null(queryBuilder, nameof(queryBuilder));
 
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext.ClearChanges();
+		}
+
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 
-		return queryBuilder(query)
+		Entity[] queryResults = queryBuilder(query)
 		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			return queryResults;
+		}
+
+		foreach (Entity entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		return queryResults;
 	}
 
 	public async Task<Entity[]> QueryMultipleAsync(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
 		return await Task
-		   .Run(() => QueryMultiple(entityLogicalName, queryBuilder));
+		   .Run(() => QueryMultiple(entityLogicalName, queryBuilder, organizationServiceContextSettings));
 	}
 
-	public Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+	public Entity QuerySingle(
+		string entityLogicalName,
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
 		Guard
 		   .Against
 		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
@@ -234,25 +280,67 @@ public class Connection : IConnection
 		   .Against
 		   .Null(queryBuilder, nameof(queryBuilder));
 
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 
-		return queryBuilder(query)
-		   .Single();
+		Entity[] queryResults = queryBuilder(query)
+		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			Guard
+			   .Against
+			   .InvalidInput(queryResults,
+					nameof(queryResults),
+					p => p.Length == 1,
+					$"Expected one record, retrieved {queryResults.Length}.");
+
+			return queryResults[0];
+		}
+
+		foreach (Entity entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		Guard
+		   .Against
+		   .InvalidInput(queryResults,
+				nameof(queryResults),
+				p => p.Length == 1,
+				$"Expected one record, retrieved {queryResults.Length}.");
+
+		return queryResults[0];
 	}
 
 	public async Task<Entity> QuerySingleAsync(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
 		return await Task
-		   .Run(() => QuerySingle(entityLogicalName, queryBuilder));
+		   .Run(() => QuerySingle(entityLogicalName, queryBuilder, organizationServiceContextSettings));
 	}
 
 	public Entity QuerySingleOrDefault(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
 		Guard
 		   .Against
 		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
@@ -261,19 +349,54 @@ public class Connection : IConnection
 		   .Against
 		   .Null(queryBuilder, nameof(queryBuilder));
 
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 
-		return queryBuilder(query)
+		Entity[] queryResults = queryBuilder(query)
+		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			Guard
+			   .Against
+			   .InvalidInput(queryResults,
+					nameof(queryResults),
+					p => p.Length <= 1,
+					$"Expected one record, retrieved {queryResults.Length}.");
+
+			return queryResults
+			   .SingleOrDefault();
+		}
+
+		Guard
+		   .Against
+		   .InvalidInput(queryResults,
+				nameof(queryResults),
+				p => p.Length <= 1,
+				$"Expected one record, retrieved {queryResults.Length}.");
+
+		foreach (Entity entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		return queryResults
 		   .SingleOrDefault();
 	}
 
 	public async Task<Entity> QuerySingleOrDefaultAsync(
 		string entityLogicalName,
-		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
+		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default)
 	{
 		return await Task
-		   .Run(() => QuerySingleOrDefault(entityLogicalName, queryBuilder));
+		   .Run(() => QuerySingleOrDefault(entityLogicalName, queryBuilder, organizationServiceContextSettings));
 	}
 
 	public Entity RefreshRecord(Entity record)
@@ -281,10 +404,6 @@ public class Connection : IConnection
 		Guard
 		   .Against
 		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
-
-		Guard
-		   .Against
-		   .Null(_connection, nameof(_connection));
 
 		if (!_disableLockingCheck && !IsLockedByThisThread())
 		{
@@ -295,7 +414,8 @@ public class Connection : IConnection
 
 		foreach (string fieldName in record.Attributes.Keys)
 		{
-			columns.AddColumn(fieldName);
+			columns
+			   .AddColumn(fieldName);
 		}
 
 		return _connection
@@ -320,10 +440,6 @@ public class Connection : IConnection
 		{
 			throw new ArgumentException("Lock not set for this connection.");
 		}
-
-		Guard
-		   .Against
-		   .Null(_connection, nameof(_connection));
 
 		Guard
 		   .Against
@@ -363,10 +479,6 @@ public class Connection : IConnection
 
 		IEnumerable<Entity> InnerRetrieveMultiple()
 		{
-			Guard
-			   .Against
-			   .Null(_connection, nameof(_connection));
-
 			queryExpression.PageInfo = new PagingInfo
 			{
 				Count = 5000,
@@ -376,21 +488,21 @@ public class Connection : IConnection
 
 			while (true)
 			{
-				EntityCollection ret = _connection
+				EntityCollection retrieveMultipleResult = _connection
 				   .RetrieveMultiple(queryExpression);
 
-				foreach (Entity record in ret.Entities)
+				foreach (Entity record in retrieveMultipleResult.Entities)
 				{
 					yield return record;
 				}
 
-				if (!ret.MoreRecords)
+				if (!retrieveMultipleResult.MoreRecords)
 				{
 					break;
 				}
 
 				queryExpression.PageInfo.PageNumber++;
-				queryExpression.PageInfo.PagingCookie = ret.PagingCookie;
+				queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
 			}
 		}
 	}
@@ -403,10 +515,6 @@ public class Connection : IConnection
 
 	public bool Test()
 	{
-		Guard
-		   .Against
-		   .Null(_connection, nameof(_connection));
-
 		WhoAmIResponse response = (WhoAmIResponse)_connection
 		   .Execute(new WhoAmIRequest());
 
@@ -447,9 +555,7 @@ public class Connection : IConnection
 		_connection
 		   .BypassPluginExecution = requestSettings.SkipPluginExecution;
 
-		Guard
-		   .Against
-		   .Null(_connection, nameof(_connection))
+		_connection
 		   .Update(record);
 
 		return record
