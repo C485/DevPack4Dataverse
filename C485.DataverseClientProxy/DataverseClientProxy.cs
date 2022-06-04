@@ -283,6 +283,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		   .ExecuteAsync(executeMultipleRequestBuilder);
 	}
 
+	public async Task<T> QuerySingleOrDefaultAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QuerySingleOrDefaultAsync(queryBuilder, organizationServiceContextSettings);
+	}
+
 	public Entity RefreshRecord(Entity record)
 	{
 		using ConnectionLease connectionLease = GetConnection();
@@ -384,6 +395,16 @@ public class DataverseClientProxy : IDataverseClientProxy
 		   .CreateQuery_Unsafe_Unprotected(entityLogicalName, organizationServiceContextSettings);
 	}
 
+	public IQueryable<T> CreateQuery_Unsafe_Unprotected<T>(
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .CreateQuery_Unsafe_Unprotected<T>(organizationServiceContextSettings);
+	}
+
 	public Entity[] QueryMultiple(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -394,6 +415,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		return connectionLease
 		   .Connection
 		   .QueryMultiple(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public T[] QueryMultiple<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QueryMultiple(queryBuilder, organizationServiceContextSettings);
 	}
 
 	public async Task<Entity[]> QueryMultipleAsync(
@@ -408,6 +440,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		   .QueryMultipleAsync(entityLogicalName, queryBuilder, organizationServiceContextSettings);
 	}
 
+	public async Task<T[]> QueryMultipleAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QueryMultipleAsync(queryBuilder, organizationServiceContextSettings);
+	}
+
 	public Entity QuerySingle(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -418,6 +461,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		return connectionLease
 		   .Connection
 		   .QuerySingle(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public T QuerySingle<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QuerySingle(queryBuilder, organizationServiceContextSettings);
 	}
 
 	public async Task<Entity> QuerySingleAsync(
@@ -432,6 +486,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		   .QuerySingleAsync(entityLogicalName, queryBuilder, organizationServiceContextSettings);
 	}
 
+	public async Task<T> QuerySingleAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = await GetConnectionAsync();
+
+		return await connectionLease
+		   .Connection
+		   .QuerySingleAsync(queryBuilder, organizationServiceContextSettings);
+	}
+
 	public Entity QuerySingleOrDefault(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -442,6 +507,17 @@ public class DataverseClientProxy : IDataverseClientProxy
 		return connectionLease
 		   .Connection
 		   .QuerySingleOrDefault(entityLogicalName, queryBuilder, organizationServiceContextSettings);
+	}
+
+	public T QuerySingleOrDefault<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		using ConnectionLease connectionLease = GetConnection();
+
+		return connectionLease
+		   .Connection
+		   .QuerySingleOrDefault(queryBuilder, organizationServiceContextSettings);
 	}
 
 	public async Task<Entity> QuerySingleOrDefaultAsync(

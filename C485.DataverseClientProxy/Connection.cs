@@ -63,6 +63,24 @@ public class Connection : IConnection
 		   .CreateQuery(entityLogicalName);
 	}
 
+	public IQueryable<T> CreateQuery_Unsafe_Unprotected<T>(
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
+		_xrmServiceContext
+		   .ClearChanges();
+
+		return _xrmServiceContext
+		   .CreateQuery<T>();
+	}
+
 	public Guid CreateRecord(Entity record, RequestSettings requestSettings)
 	{
 		Guard
@@ -250,6 +268,46 @@ public class Connection : IConnection
 		return queryResults;
 	}
 
+	public T[] QueryMultiple<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		Guard
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
+
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext.ClearChanges();
+		}
+
+		IQueryable<T> query = _xrmServiceContext
+		   .CreateQuery<T>();
+
+		T[] queryResults = queryBuilder(query)
+		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			return queryResults;
+		}
+
+		foreach (T entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		return queryResults;
+	}
+
 	public async Task<Entity[]> QueryMultipleAsync(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -257,6 +315,14 @@ public class Connection : IConnection
 	{
 		return await Task
 		   .Run(() => QueryMultiple(entityLogicalName, queryBuilder, organizationServiceContextSettings));
+	}
+
+	public async Task<T[]> QueryMultipleAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		return await Task
+		   .Run(() => QueryMultiple(queryBuilder, organizationServiceContextSettings));
 	}
 
 	public Entity QuerySingle(
@@ -319,6 +385,61 @@ public class Connection : IConnection
 		return queryResults[0];
 	}
 
+	public T QuerySingle<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
+		Guard
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
+
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
+		IQueryable<T> query = _xrmServiceContext
+		   .CreateQuery<T>();
+
+		T[] queryResults = queryBuilder(query)
+		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			Guard
+			   .Against
+			   .InvalidInput(queryResults,
+					nameof(queryResults),
+					p => p.Length == 1,
+					$"Expected one record, retrieved {queryResults.Length}.");
+
+			return queryResults[0];
+		}
+
+		foreach (T entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		Guard
+		   .Against
+		   .InvalidInput(queryResults,
+				nameof(queryResults),
+				p => p.Length == 1,
+				$"Expected one record, retrieved {queryResults.Length}.");
+
+		return queryResults[0];
+	}
+
 	public async Task<Entity> QuerySingleAsync(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -326,6 +447,14 @@ public class Connection : IConnection
 	{
 		return await Task
 		   .Run(() => QuerySingle(entityLogicalName, queryBuilder, organizationServiceContextSettings));
+	}
+
+	public async Task<T> QuerySingleAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		return await Task
+		   .Run(() => QuerySingle(queryBuilder, organizationServiceContextSettings));
 	}
 
 	public Entity QuerySingleOrDefault(
@@ -390,6 +519,63 @@ public class Connection : IConnection
 		   .SingleOrDefault();
 	}
 
+	public T QuerySingleOrDefault<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		organizationServiceContextSettings ??= OrganizationServiceContextSettings.Default;
+
+		if (organizationServiceContextSettings.ClearChangesEveryTime)
+		{
+			_xrmServiceContext
+			   .ClearChanges();
+		}
+
+		Guard
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
+
+		if (!_disableLockingCheck && !IsLockedByThisThread())
+		{
+			throw new ArgumentException("Lock not set for used connection.");
+		}
+
+		IQueryable<T> query = _xrmServiceContext
+		   .CreateQuery<T>();
+
+		T[] queryResults = queryBuilder(query)
+		   .ToArray();
+
+		if (!organizationServiceContextSettings.DetachRetrievedRecords)
+		{
+			Guard
+			   .Against
+			   .InvalidInput(queryResults,
+					nameof(queryResults),
+					p => p.Length <= 1,
+					$"Expected one record, retrieved {queryResults.Length}.");
+
+			return queryResults
+			   .SingleOrDefault();
+		}
+
+		Guard
+		   .Against
+		   .InvalidInput(queryResults,
+				nameof(queryResults),
+				p => p.Length <= 1,
+				$"Expected one record, retrieved {queryResults.Length}.");
+
+		foreach (T entity in queryResults)
+		{
+			_xrmServiceContext
+			   .Detach(entity, true);
+		}
+
+		return queryResults
+		   .SingleOrDefault();
+	}
+
 	public async Task<Entity> QuerySingleOrDefaultAsync(
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
@@ -397,6 +583,14 @@ public class Connection : IConnection
 	{
 		return await Task
 		   .Run(() => QuerySingleOrDefault(entityLogicalName, queryBuilder, organizationServiceContextSettings));
+	}
+
+	public async Task<T> QuerySingleOrDefaultAsync<T>(
+		Func<IQueryable<T>, IQueryable<T>> queryBuilder,
+		OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity
+	{
+		return await Task
+		   .Run(() => QuerySingleOrDefault(queryBuilder, organizationServiceContextSettings));
 	}
 
 	public Entity RefreshRecord(Entity record)
