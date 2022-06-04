@@ -1,11 +1,11 @@
 ﻿using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly:AssemblyTitle("C485.DataverseConnectionLayer")]
+[assembly:AssemblyTitle("C485.DataverseClientProxy")]
 [assembly:AssemblyDescription("")]
 [assembly:AssemblyConfiguration("")]
 [assembly:AssemblyCompany("C485/Kamil Skoracki")]
-[assembly:AssemblyProduct("C485.DataverseConnectionLayer")]
+[assembly:AssemblyProduct("C485.DataverseClientProxy")]
 [assembly:AssemblyCopyright("Copyright © C485/Kamil Skoracki 2022")]
 [assembly:AssemblyTrademark("C485/Kamil Skoracki")]
 [assembly:AssemblyCulture("")]
