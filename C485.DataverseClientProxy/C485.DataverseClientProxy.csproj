@@ -124,12 +124,12 @@
     <Compile Include="ConnectionLease.cs" />
     <Compile Include="Creators\ClientSecretConnectionCreator.cs" />
     <Compile Include="Creators\ConnectionStringConnectionCreator.cs" />
+    <Compile Include="DataverseClientProxy.cs" />
+    <Compile Include="Interfaces\IDataverseClientProxy.cs" />
     <Compile Include="Models\ExecuteMultipleRequestSettings.cs" />
     <Compile Include="Interfaces\IConnectionCreator.cs" />
     <Compile Include="Models\AdvancedExecuteMultipleRequestsStatistics.cs" />
-    <Compile Include="DataverseClientProxy.cs" />
-    <Compile Include="Interfaces\IDataverseClientProxy.cs" />
-    <Compile Include="Interfaces\IDataConnectionLayer.cs" />
+    <Compile Include="Interfaces\IDataverseConnectionLayer.cs" />
     <Compile Include="Connection.cs" />
     <Compile Include="ExecuteMultipleRequestBuilder.cs" />
     <Compile Include="Interfaces\IConnection.cs" />

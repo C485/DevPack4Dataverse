@@ -1,43 +1,44 @@
-﻿using Ardalis.GuardClauses;
+﻿using System;
+using Ardalis.GuardClauses;
 using C485.DataverseClientProxy.Interfaces;
-using System;
 
-namespace C485.DataverseClientProxy
+namespace C485.DataverseClientProxy;
+
+public class ConnectionLease : IDisposable
 {
-    public class ConnectionLease : IDisposable
-    {
-        private bool disposedValue;
+	private bool _disposedValue;
 
-        public ConnectionLease(IConnection connection)
-        {
-            Connection = connection;
-            Guard
-                .Against
-                .NullOrInvalidInput(connection, nameof(connection), p => p.IsLockedByThisThread());
-        }
+	public ConnectionLease(IConnection connection)
+	{
+		Connection = connection;
+		Guard
+		   .Against
+		   .NullOrInvalidInput(connection, nameof(connection), p => p.IsLockedByThisThread());
+	}
 
-        ~ConnectionLease()
-        {
-            Dispose(disposing: false);
-        }
+	public IConnection Connection { get; }
 
-        public IConnection Connection { get; }
+	public void Dispose()
+	{
+		Dispose(true);
+		GC.SuppressFinalize(this);
+	}
 
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
+	~ConnectionLease()
+	{
+		Dispose(false);
+	}
 
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposedValue)
-            {
-                return;
-            }
-            Connection
-                .ReleaseLock();
-            disposedValue = true;
-        }
-    }
+	protected virtual void Dispose(bool disposing)
+	{
+		if (_disposedValue)
+		{
+			return;
+		}
+
+		Connection
+		   .ReleaseLock();
+
+		_disposedValue = true;
+	}
 }

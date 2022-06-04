@@ -1,12 +1,15 @@
-﻿using C485.DataverseClientProxy.Models;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using C485.DataverseClientProxy.Models;
 
-namespace C485.DataverseClientProxy.Interfaces
+namespace C485.DataverseClientProxy.Interfaces;
+
+public interface IDataverseClientProxy : IDataverseConnectionLayer
 {
-    public interface IDataverseClientProxy : IDataConnectionLayer
-    {
-        AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings);
+	AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(
+		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+		ExecuteMultipleRequestSettings executeMultipleRequestSettings);
 
-        Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, ExecuteMultipleRequestSettings executeMultipleRequestSettings);
-    }
+	Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(
+		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+		ExecuteMultipleRequestSettings executeMultipleRequestSettings);
 }
