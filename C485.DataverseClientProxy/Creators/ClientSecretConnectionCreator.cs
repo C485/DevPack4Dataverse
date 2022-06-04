@@ -48,7 +48,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 		   .NullOrInvalidInput(crmServiceClient,
 				nameof(crmServiceClient),
 				p => p.IsReady,
-				$"{nameof(ClientSecretConnectionCreator)} - failed to make connection to Url: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient?.LastCrmError}");
+				$"{nameof(ClientSecretConnectionCreator)} - failed to make connection to Url: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastCrmError}");
 
 		return new Connection(crmServiceClient);
 	}

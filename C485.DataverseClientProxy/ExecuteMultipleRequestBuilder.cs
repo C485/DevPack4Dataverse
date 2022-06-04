@@ -37,7 +37,7 @@ public class ExecuteMultipleRequestBuilder
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty);
+		   .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		CreateRequest request = new()
 		{
@@ -53,7 +53,9 @@ public class ExecuteMultipleRequestBuilder
 	{
 		Guard
 		   .Against
-		   .Null(entityReference, nameof(entityReference));
+		   .NullOrInvalidInput(entityReference,
+				nameof(entityReference),
+				p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		DeleteRequest request = new()
 		{
@@ -93,7 +95,7 @@ public class ExecuteMultipleRequestBuilder
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty);
+		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		UpdateRequest request = new()
 		{
@@ -109,7 +111,7 @@ public class ExecuteMultipleRequestBuilder
 	{
 		Guard
 		   .Against
-		   .Null(record, nameof(record));
+		   .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
 		UpsertRequest request = new()
 		{

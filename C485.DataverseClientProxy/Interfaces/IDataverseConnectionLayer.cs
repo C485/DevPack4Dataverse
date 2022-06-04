@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using C485.DataverseClientProxy.Models;
@@ -56,7 +55,7 @@ public interface IDataverseConnectionLayer
 
 	Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet);
 
-	IEnumerable<Entity> RetrieveMultiple(QueryExpression queryExpression);
+	Entity[] RetrieveMultiple(QueryExpression queryExpression);
 
 	Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression);
 

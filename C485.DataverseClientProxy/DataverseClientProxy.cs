@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -27,7 +26,8 @@ public class DataverseClientProxy : IDataverseClientProxy
 
 	public AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(
 		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-		ExecuteMultipleRequestSettings executeMultipleRequestSettings)
+		ExecuteMultipleRequestSettings executeMultipleRequestSettings,
+		CancellationToken cancellationToken = default)
 	{
 		Guard
 		   .Against
@@ -95,7 +95,8 @@ public class DataverseClientProxy : IDataverseClientProxy
 			Parallel.ForEach(allRequestChunks,
 				new ParallelOptions
 				{
-					MaxDegreeOfParallelism = threadsCount
+					MaxDegreeOfParallelism = threadsCount,
+					CancellationToken = cancellationToken
 				},
 				packOfRequests =>
 				{
@@ -162,26 +163,35 @@ public class DataverseClientProxy : IDataverseClientProxy
 
 			cts
 			   .Dispose();
-
-			chunksStatistics
-			   .Stopwatch
-			   .Stop();
 		}
 
-		chunksStatistics.RecordsProcessed = executeMultipleRequestBuilder
+		chunksStatistics
+		   .Stopwatch
+		   .Stop();
+
+		chunksStatistics.RecordsRequested = executeMultipleRequestBuilder
 		   .RequestWithResults
 		   .Requests
 		   .Count;
+
+		chunksStatistics.RecordsProcessed = progress;
+
+		chunksStatistics.Cancelled = cancellationToken
+		   .IsCancellationRequested;
 
 		return chunksStatistics;
 	}
 
 	public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(
 		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-		ExecuteMultipleRequestSettings executeMultipleRequestSettings)
+		ExecuteMultipleRequestSettings executeMultipleRequestSettings,
+		CancellationToken cancellationToken = default)
 	{
 		return await Task
-		   .Run(() => AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder, executeMultipleRequestSettings));
+		   .Run(() => AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder,
+					executeMultipleRequestSettings,
+					cancellationToken),
+				cancellationToken);
 	}
 
 	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
@@ -380,7 +390,7 @@ public class DataverseClientProxy : IDataverseClientProxy
 		   .RetrieveAsync(entityName, id, columnSet);
 	}
 
-	public IEnumerable<Entity> RetrieveMultiple(QueryExpression queryExpression)
+	public Entity[] RetrieveMultiple(QueryExpression queryExpression)
 	{
 		using ConnectionLease connectionLease = GetConnection();
 

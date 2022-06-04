@@ -42,6 +42,10 @@ public class Connection : IConnection
 
 	public IQueryable<Entity> CreateQuery_Unsafe_Unprotected(string entityLogicalName)
 	{
+		Guard
+		   .Against
+		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
+
 		return _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 	}
@@ -50,7 +54,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty);
+		   .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		Guard
 		   .Against
@@ -114,9 +118,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(entityReference,
-				nameof(entityReference),
-				p => p.Id != Guid.Empty || !string.IsNullOrEmpty(p.LogicalName));
+		   .Null(entityReference, nameof(entityReference));
 
 		DeleteRecord(entityReference.LogicalName, entityReference.Id, requestSettings);
 	}
@@ -169,9 +171,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(executeMultipleRequestBuilder,
-				nameof(executeMultipleRequestBuilder),
-				p => p.RequestWithResults.Requests.Count != 0);
+		   .Null(executeMultipleRequestBuilder, nameof(executeMultipleRequestBuilder));
 
 		return Execute(executeMultipleRequestBuilder.RequestWithResults,
 			new RequestSettings
@@ -201,6 +201,14 @@ public class Connection : IConnection
 
 	public Entity[] QueryMultiple(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
 	{
+		Guard
+		   .Against
+		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
+
+		Guard
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
+
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 
@@ -219,11 +227,12 @@ public class Connection : IConnection
 	public Entity QuerySingle(string entityLogicalName, Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
 	{
 		Guard
-			.Against
-			.NullOrEmpty(entityLogicalName, nameof(entityLogicalName)); 
+		   .Against
+		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
+
 		Guard
-			.Against
-			.Null(queryBuilder, nameof(queryBuilder));
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
 
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
@@ -244,6 +253,14 @@ public class Connection : IConnection
 		string entityLogicalName,
 		Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder)
 	{
+		Guard
+		   .Against
+		   .NullOrEmpty(entityLogicalName, nameof(entityLogicalName));
+
+		Guard
+		   .Against
+		   .Null(queryBuilder, nameof(queryBuilder));
+
 		IQueryable<Entity> query = _xrmServiceContext
 		   .CreateQuery(entityLogicalName);
 
@@ -263,15 +280,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .Null(record, nameof(record));
-
-		Guard
-		   .Against
-		   .NullOrEmpty(record.LogicalName, nameof(Entity.LogicalName));
-
-		Guard
-		   .Against
-		   .Default(record.Id, nameof(Entity.Id));
+		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		Guard
 		   .Against
@@ -338,14 +347,19 @@ public class Connection : IConnection
 		   .Run(() => RetrieveAsync(entityName, id, columnSet));
 	}
 
-	public IEnumerable<Entity> RetrieveMultiple(QueryExpression queryExpression)
+	public Entity[] RetrieveMultiple(QueryExpression queryExpression)
 	{
+		Guard
+		   .Against
+		   .Null(queryExpression, nameof(queryExpression));
+
 		if (!_disableLockingCheck && !IsLockedByThisThread())
 		{
 			throw new ArgumentException("Lock not set for this connection.");
 		}
 
-		return InnerRetrieveMultiple();
+		return InnerRetrieveMultiple()
+		   .ToArray();
 
 		IEnumerable<Entity> InnerRetrieveMultiple()
 		{
@@ -363,7 +377,7 @@ public class Connection : IConnection
 			while (true)
 			{
 				EntityCollection ret = _connection
-					.RetrieveMultiple(queryExpression);
+				   .RetrieveMultiple(queryExpression);
 
 				foreach (Entity record in ret.Entities)
 				{
@@ -384,11 +398,15 @@ public class Connection : IConnection
 	public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
 	{
 		return await Task
-		   .Run(() => RetrieveMultiple(queryExpression).ToArray());
+		   .Run(() => RetrieveMultiple(queryExpression));
 	}
 
 	public bool Test()
 	{
+		Guard
+		   .Against
+		   .Null(_connection, nameof(_connection));
+
 		WhoAmIResponse response = (WhoAmIResponse)_connection
 		   .Execute(new WhoAmIRequest());
 
@@ -412,7 +430,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty);
+		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
 		Guard
 		   .Against
@@ -448,7 +466,7 @@ public class Connection : IConnection
 	{
 		Guard
 		   .Against
-		   .Null(record, nameof(record));
+		   .NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
 
 		Guard
 		   .Against
