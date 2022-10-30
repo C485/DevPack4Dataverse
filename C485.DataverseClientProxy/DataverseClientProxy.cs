@@ -31,11 +31,11 @@ public class DataverseClientProxy : IDataverseClientProxy
 	{
 		Guard
 		   .Against
-		   .Null(executeMultipleRequestSettings, nameof(executeMultipleRequestSettings));
+		   .Null(executeMultipleRequestSettings);
 
 		Guard
 		   .Against
-		   .Null(executeMultipleRequestBuilder, nameof(executeMultipleRequestBuilder));
+		   .Null(executeMultipleRequestBuilder);
 
 		if (executeMultipleRequestBuilder.Count == 0)
 		{
@@ -536,14 +536,14 @@ public class DataverseClientProxy : IDataverseClientProxy
 	{
 		Guard
 		   .Against
-		   .Null(connectionCreator, nameof(connectionCreator));
+		   .Null(connectionCreator);
 
 		IConnection newConnection = connectionCreator
 		   .Create();
 
 		Guard
 		   .Against
-		   .Null(newConnection, nameof(newConnection));
+		   .Null(newConnection);
 
 		bool isConnectionValid = await newConnection
 		   .TestAsync();

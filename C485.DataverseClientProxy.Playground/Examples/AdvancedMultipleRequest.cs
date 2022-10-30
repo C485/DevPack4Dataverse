@@ -1,7 +1,6 @@
-﻿using C485.DataverseClientProxy.Creators;
+﻿
+using C485.DataverseClientProxy.Creators;
 using C485.DataverseClientProxy.Models;
-using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Tooling.Connector;
 using System;
 using System.Linq;
 using System.Threading.Tasks;

@@ -1,5 +1,5 @@
-﻿using System;
-using Ardalis.GuardClauses;
+﻿using Ardalis.GuardClauses;
+using C485.DataverseClientProxy.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
@@ -7,119 +7,105 @@ namespace C485.DataverseClientProxy;
 
 public class ExecuteMultipleRequestBuilder
 {
-	public ExecuteMultipleRequestBuilder(
-		bool continueOnError = true,
-		bool skipPluginExecution = false,
-		Guid? impersonateAs = null)
-	{
-		SkipPluginExecution = skipPluginExecution;
-		ImpersonateAsUserById = impersonateAs;
-		RequestWithResults = new ExecuteMultipleRequest
-		{
-			Settings = new ExecuteMultipleSettings
-			{
-				ContinueOnError = continueOnError,
-				ReturnResponses = true
-			},
-			Requests = new OrganizationRequestCollection()
-		};
-	}
+    public ExecuteMultipleRequestBuilder(
+        bool continueOnError = true)
+    {
+        RequestWithResults = new ExecuteMultipleRequest
+        {
+            Settings = new ExecuteMultipleSettings
+            {
+                ContinueOnError = continueOnError,
+                ReturnResponses = true
+            },
+            Requests = new OrganizationRequestCollection()
+        };
+    }
 
-	public int Count => RequestWithResults.Requests.Count;
+    public int Count => RequestWithResults.Requests.Count;
 
-	public Guid? ImpersonateAsUserById { get; }
+    public ExecuteMultipleRequest RequestWithResults { get; }
 
-	public ExecuteMultipleRequest RequestWithResults { get; }
+    public void AddCreate(Entity record, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
-	public bool SkipPluginExecution { get; }
+        CreateRequest request = new()
+        {
+            Target = record
+        };
 
-	public void AddCreate(Entity record)
-	{
-		Guard
-		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        AddRequest(request, requestSettings);
+    }
 
-		CreateRequest request = new()
-		{
-			Target = record
-		};
+    public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .NullOrInvalidInput(entityReference,
+                nameof(entityReference),
+                p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
-		RequestWithResults
-		   .Requests
-		   .Add(request);
-	}
+        DeleteRequest request = new()
+        {
+            Target = entityReference
+        };
 
-	public void AddDelete(EntityReference entityReference)
-	{
-		Guard
-		   .Against
-		   .NullOrInvalidInput(entityReference,
-				nameof(entityReference),
-				p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        AddRequest(request, requestSettings);
+    }
 
-		DeleteRequest request = new()
-		{
-			Target = entityReference
-		};
+    public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .NullOrEmpty(logicalName);
 
-		RequestWithResults
-		   .Requests
-		   .Add(request);
-	}
+        Guard
+           .Against
+           .Default(id);
 
-	public void AddDelete(string logicalName, Guid id)
-	{
-		Guard
-		   .Against
-		   .NullOrEmpty(logicalName, nameof(logicalName));
+        AddDelete(new EntityReference(logicalName, id), requestSettings);
+    }
 
-		Guard
-		   .Against
-		   .Default(id, nameof(id));
+    public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .Null(request);
 
-		AddDelete(new EntityReference(logicalName, id));
-	}
+        requestSettings?.AddToOrganizationRequest(request);
 
-	public void AddRequest(OrganizationRequest request)
-	{
-		Guard
-		   .Against
-		   .Null(request, nameof(request));
+        RequestWithResults
+           .Requests
+           .Add(request);
+    }
 
-		RequestWithResults
-		   .Requests
-		   .Add(request);
-	}
+    public void AddUpdate(Entity record, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
-	public void AddUpdate(Entity record)
-	{
-		Guard
-		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        UpdateRequest request = new()
+        {
+            Target = record
+        };
 
-		UpdateRequest request = new()
-		{
-			Target = record
-		};
+        AddRequest(request, requestSettings);
+    }
 
-		RequestWithResults
-		   .Requests
-		   .Add(request);
-	}
+    public void AddUpsert(Entity record, RequestSettings requestSettings = null)
+    {
+        Guard
+           .Against
+           .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
-	public void AddUpsert(Entity record)
-	{
-		Guard
-		   .Against
-		   .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
+        UpsertRequest request = new()
+        {
+            Target = record
+        };
 
-		UpsertRequest request = new()
-		{
-			Target = record
-		};
-
-		RequestWithResults
-		   .Requests
-		   .Add(request);
-	}
+        AddRequest(request, requestSettings);
+    }
 }

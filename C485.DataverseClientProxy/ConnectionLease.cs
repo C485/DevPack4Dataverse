@@ -6,39 +6,39 @@ namespace C485.DataverseClientProxy;
 
 public class ConnectionLease : IDisposable
 {
-	private bool _disposedValue;
+    private bool _disposedValue;
 
-	public ConnectionLease(IConnection connection)
-	{
-		Connection = connection;
-		Guard
-		   .Against
-		   .NullOrInvalidInput(connection, nameof(connection), p => p.IsLockedByThisThread());
-	}
+    public ConnectionLease(IConnection connection)
+    {
+        Connection = connection;
+        Guard
+           .Against
+           .NullOrInvalidInput(connection, nameof(connection), p => p.IsLockedByThisThread());
+    }
 
-	public IConnection Connection { get; }
+    public IConnection Connection { get; }
 
-	public void Dispose()
-	{
-		Dispose(true);
-		GC.SuppressFinalize(this);
-	}
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 
-	~ConnectionLease()
-	{
-		Dispose(false);
-	}
+    ~ConnectionLease()
+    {
+        Dispose(false);
+    }
 
-	protected virtual void Dispose(bool disposing)
-	{
-		if (_disposedValue)
-		{
-			return;
-		}
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposedValue)
+        {
+            return;
+        }
 
-		Connection
-		   .ReleaseLock();
+        Connection
+           .ReleaseLock();
 
-		_disposedValue = true;
-	}
+        _disposedValue = true;
+    }
 }
