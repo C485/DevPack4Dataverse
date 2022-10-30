@@ -1,6 +1,7 @@
 ﻿
 using C485.DataverseClientProxy.Creators;
 using C485.DataverseClientProxy.Models;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,17 +20,17 @@ namespace C485.DataverseClientProxy.Playground.Examples
         {
             DataverseClientProxy connectionManager = new();
             Task.WaitAll(
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString(""))),
-                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", CrmServiceClient.MakeSecureString("")))
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString(""))),
+                 connectionManager.AddNewConnection(new ClientSecretConnectionCreator("", "", ServiceClient.MakeSecureString("")))
                 );
 
             ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(true, true);

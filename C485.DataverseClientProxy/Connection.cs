@@ -11,7 +11,7 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace C485.DataverseClientProxy;
 
-public class Connection : IConnection
+public sealed class Connection : IConnection
 {
     private readonly ServiceClient _connection;
     private readonly object _lockObj;
@@ -33,7 +33,7 @@ public class Connection : IConnection
            .MaxRetryCount = 10;
 
         _connection
-           .RetryPauseTime = TimeSpan.FromSeconds(5);
+           .RetryPauseTime = TimeSpan.FromSeconds(2);
         Logger = Guard
             .Against
             .Null(logger);
@@ -222,7 +222,7 @@ public class Connection : IConnection
            .ExecuteAsync(request)) as T;
     }
 
-    public async Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
+    public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
     {
         Guard
            .Against

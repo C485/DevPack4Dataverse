@@ -4,7 +4,7 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace C485.DataverseClientProxy
 {
-    public class ReplaceAndRestoreCallerId : IDisposable
+    public sealed class ReplaceAndRestoreCallerId : IDisposable
     {
         private readonly Guid? oldAADCallerId;
         private readonly Guid? oldCallerId;

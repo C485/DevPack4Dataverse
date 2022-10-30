@@ -2,7 +2,16 @@
 
 namespace C485.DataverseClientProxy.Models;
 
-public class RequestSettings
+public class RequestImpersonateSettings
+{
+    /// <summary>
+    ///  Guid of SystemUser record id
+    /// </summary>
+    public Guid? ImpersonateAsUserByDataverseId { get; set; }
+    public Guid? ImpersonateAsUserByAADId { get; set; }
+}
+
+public sealed class RequestSettings : RequestImpersonateSettings
 {
     /// <summary>
     /// <see cref="ConcurrencyBehavior"/>
@@ -10,12 +19,6 @@ public class RequestSettings
     /// https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.concurrencybehavior?view=dataverse-sdk-latest
     /// </summary>
     public ConcurrencyBehavior? ConcurrencyBehavior { get; set; }
-
-    /// <summary>
-    ///  Guid of SystemUser record id
-    /// </summary>
-    public Guid? ImpersonateAsUserByDataverseId { get; set; }
-    public Guid? ImpersonateAsUserByAADId { get; set; }
 
     /// <summary>
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#passing-optional-parameters-with-a-request

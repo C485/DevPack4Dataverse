@@ -5,7 +5,7 @@ using Microsoft.Xrm.Sdk.Messages;
 
 namespace C485.DataverseClientProxy;
 
-public class ExecuteMultipleRequestBuilder
+public sealed class ExecuteMultipleRequestBuilder
 {
     public ExecuteMultipleRequestBuilder(
         bool continueOnError = true)

@@ -1,5 +1,6 @@
 ﻿using C485.DataverseClientProxy.Models;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace C485.DataverseClientProxy.Interfaces;
@@ -25,13 +26,13 @@ public interface IDataverseConnectionLayer
 
     Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null);
 
-    OrganizationResponse Execute(OrganizationRequest request, RequestSettings requestSettings = null);
+    T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
 
-    OrganizationResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
+    ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
 
-    Task<OrganizationResponse> ExecuteAsync(OrganizationRequest request, RequestSettings requestSettings = null);
+    Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
 
-    Task<OrganizationResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
+    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
 
     Entity[] QueryMultiple(
         string entityLogicalName,
