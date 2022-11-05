@@ -4,7 +4,7 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace C485.DataverseClientProxy
 {
-    public sealed class ReplaceAndRestoreCallerId : IDisposable
+    internal sealed class ReplaceAndRestoreCallerId : IDisposable
     {
         private readonly Guid? oldAADCallerId;
         private readonly Guid? oldCallerId;
@@ -21,7 +21,7 @@ namespace C485.DataverseClientProxy
             serviceClient.CallerAADObjectId = aadCallerId;
         }
 
-        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, RequestSettings requestSettings = null)
+        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, RequestImpersonateSettings requestSettings = null)
         {
             ServiceClient = Guard
                 .Against
@@ -45,7 +45,7 @@ namespace C485.DataverseClientProxy
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (_disposedValue)
             {
