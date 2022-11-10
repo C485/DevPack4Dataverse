@@ -6,13 +6,13 @@ namespace C485.DataverseClientProxy.Interfaces;
 
 public interface IDataverseClientProxy : IDataverseConnectionLayer
 {
-	AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(
-		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-		ExecuteMultipleRequestSettings executeMultipleRequestSettings,
-		CancellationToken cancellationToken = default);
+	//AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(
+	//	ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+	//	ExecuteMultipleRequestSettings executeMultipleRequestSettings,
+	//	CancellationToken cancellationToken = default);
 
-	Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(
-		ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-		ExecuteMultipleRequestSettings executeMultipleRequestSettings,
-		CancellationToken cancellationToken = default);
+	//Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequestsAsync(
+	//	ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+	//	ExecuteMultipleRequestSettings executeMultipleRequestSettings,
+	//	CancellationToken cancellationToken = default);
 }

@@ -20,4 +20,12 @@ public interface IConnectionCreator
 	/// </summary>
 	/// <returns><see cref="IConnection" /> as instance of <see cref="Connection" /></returns>
 	IConnection Create();
+/// <summary>
+/// 
+/// </summary>
+	bool IsCreated { get; }
+/// <summary>
+/// 
+/// </summary>
+	bool IsValid { get; }
 }

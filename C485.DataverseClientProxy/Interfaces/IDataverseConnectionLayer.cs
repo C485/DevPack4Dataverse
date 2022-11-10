@@ -7,13 +7,6 @@ namespace C485.DataverseClientProxy.Interfaces;
 
 public interface IDataverseConnectionLayer
 {
-    IQueryable<Entity> CreateQuery_Unsafe_Unprotected(
-        string entityLogicalName,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    IQueryable<T> CreateQuery_Unsafe_Unprotected<T>(
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
     Guid CreateRecord(Entity record, RequestSettings requestSettings = null);
 
     Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null);
@@ -33,60 +26,6 @@ public interface IDataverseConnectionLayer
     Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
 
     Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
-
-    Entity[] QueryMultiple(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    T[] QueryMultiple<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
-    Task<Entity[]> QueryMultipleAsync(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    Task<T[]> QueryMultipleAsync<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
-    Entity QuerySingle(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    T QuerySingle<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
-    Task<Entity> QuerySingleAsync(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    Task<T> QuerySingleAsync<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
-    Entity QuerySingleOrDefault(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    T QuerySingleOrDefault<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
-
-    Task<Entity> QuerySingleOrDefaultAsync(
-        string entityLogicalName,
-        Func<IQueryable<Entity>, IQueryable<Entity>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default);
-
-    Task<T> QuerySingleOrDefaultAsync<T>(
-        Func<IQueryable<T>, IQueryable<T>> queryBuilder,
-        OrganizationServiceContextSettings organizationServiceContextSettings = default) where T : Entity;
 
     Entity RefreshRecord(Entity record);
 
