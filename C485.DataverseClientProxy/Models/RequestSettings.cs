@@ -4,11 +4,12 @@ namespace C485.DataverseClientProxy.Models;
 
 public class RequestImpersonateSettings
 {
+    public Guid? ImpersonateAsUserByAADId { get; set; }
+
     /// <summary>
     ///  Guid of SystemUser record id
     /// </summary>
     public Guid? ImpersonateAsUserByDataverseId { get; set; }
-    public Guid? ImpersonateAsUserByAADId { get; set; }
 }
 
 public sealed class RequestSettings : RequestImpersonateSettings

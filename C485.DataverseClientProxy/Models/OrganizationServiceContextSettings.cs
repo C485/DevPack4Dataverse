@@ -2,9 +2,9 @@
 
 public class OrganizationServiceContextSettings
 {
-	public static readonly OrganizationServiceContextSettings Default = new();
+    public static readonly OrganizationServiceContextSettings Default = new();
 
-	public bool ClearChangesEveryTime { get; set; } = true;
+    public bool ClearChangesEveryTime { get; set; } = true;
 
-	public bool DetachRetrievedRecords { get; set; } = true;
+    public bool DetachRetrievedRecords { get; set; } = true;
 }

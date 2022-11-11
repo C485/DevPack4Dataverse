@@ -1,18 +1,16 @@
-﻿using System.Threading.Tasks;
-
-namespace C485.DataverseClientProxy.Interfaces;
+﻿namespace C485.DataverseClientProxy.Interfaces;
 
 public interface IConnection : IDataverseConnectionLayer
 {
-	void DisableLockingCheck();
+    IConnection DisableLockingCheck();
 
-	bool IsLockedByThisThread();
+    bool IsLockedByThisThread();
 
-	void ReleaseLock();
+    void ReleaseLock();
 
-	bool Test();
+    bool Test();
 
-	Task<bool> TestAsync();
+    Task<bool> TestAsync();
 
-	bool TryLock();
+    bool TryLock();
 }

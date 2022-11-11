@@ -132,9 +132,10 @@ public sealed class Connection : IConnection
         await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings);
     }
 
-    public void DisableLockingCheck()
+    public IConnection DisableLockingCheck()
     {
         _disableLockingCheck = true;
+        return this;
     }
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
