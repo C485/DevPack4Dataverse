@@ -12,6 +12,9 @@
 	 <PackageProjectUrl>https://github.com/C485/DevPack4Dataverse</PackageProjectUrl>
 	 <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 	 <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+	 <PackageReadmeFile>README.md</PackageReadmeFile>
+	 <PackageIcon>motivation.png</PackageIcon>
+	 <PackageTags>dataverse;power platform;crm;dynamics;powerplatform;devpack4dataverse</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -37,7 +40,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\Icon\motivation.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Include="..\LICENSE.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
