@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\C485.DataverseClientProxy\C485.DataverseClientProxy.csproj" />
+    <ProjectReference Include="..\DevPack4Dataverse\DevPack4Dataverse.csproj" />
   </ItemGroup>
 
 </Project>
