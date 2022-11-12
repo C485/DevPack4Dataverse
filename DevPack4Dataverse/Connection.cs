@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Interfaces;
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Models;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
@@ -24,7 +24,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace C485.DataverseClientProxy;
+namespace DevPack4Dataverse;
 
 public sealed class Connection : IConnection
 {
@@ -197,8 +197,8 @@ public sealed class Connection : IConnection
 
         requestSettings?.AddToOrganizationRequest(request);
 
-        return (await _connection
-           .ExecuteAsync(request)) as T;
+        return await _connection
+           .ExecuteAsync(request) as T;
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)

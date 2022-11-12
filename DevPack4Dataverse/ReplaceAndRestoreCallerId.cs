@@ -15,10 +15,10 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Models;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
-namespace C485.DataverseClientProxy
+namespace DevPack4Dataverse
 {
     internal sealed class ReplaceAndRestoreCallerId : IDisposable
     {

@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse;
+using DevPack4Dataverse.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace C485.DataverseClientProxy.Interfaces;
+namespace DevPack4Dataverse.Interfaces;
 
 public interface IDataverseConnectionLayer
 {

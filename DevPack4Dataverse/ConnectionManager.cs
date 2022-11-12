@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Interfaces;
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
@@ -24,7 +24,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Security;
 
-namespace C485.DataverseClientProxy;
+namespace DevPack4Dataverse;
 
 public sealed class ConnectionManager : IDataverseConnectionLayer
 {

@@ -1,9 +1,10 @@
 ﻿using C485.DataverseClientProxy.Creators;
 using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Playground;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
-namespace C485.DataverseClientProxy.Playground.Examples
+namespace DevPack4Dataverse.Playground.Examples
 {
     public class AdvancedMultipleRequest : IExecute
     {

@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace C485.DataverseClientProxy.Playground
+namespace DevPack4Dataverse.Playground
 {
     public interface IExecute
     {

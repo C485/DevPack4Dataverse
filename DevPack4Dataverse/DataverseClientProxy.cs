@@ -14,13 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-namespace C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Logic;
 
-public class OrganizationServiceContextSettings
+namespace DevPack4Dataverse;
+
+public sealed class DataverseClientProxy : IDataverseClientProxy
 {
-    public static readonly OrganizationServiceContextSettings Default = new();
+    public readonly ConnectionManager ConnectionManager;
+    public readonly ExecuteMultipleLogic ExecuteMultipleLogic;
 
-    public bool ClearChangesEveryTime { get; set; } = true;
-
-    public bool DetachRetrievedRecords { get; set; } = true;
+    public DataverseClientProxy(params IConnectionCreator[] connectionCreators)
+    {
+        ConnectionManager = new ConnectionManager(connectionCreators);
+        ExecuteMultipleLogic = new ExecuteMultipleLogic(ConnectionManager);
+    }
 }

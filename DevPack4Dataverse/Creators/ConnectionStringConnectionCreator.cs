@@ -15,11 +15,11 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Interfaces;
+using DevPack4Dataverse.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
-namespace C485.DataverseClientProxy.Creators;
+namespace DevPack4Dataverse.Creators;
 
 public class ConnectionStringConnectionCreator : IConnectionCreator
 {

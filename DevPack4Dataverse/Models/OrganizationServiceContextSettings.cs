@@ -14,19 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-namespace C485.DataverseClientProxy.Interfaces;
+namespace DevPack4Dataverse.Models;
 
-public interface IConnection : IDataverseConnectionLayer
+public class OrganizationServiceContextSettings
 {
-    IConnection DisableLockingCheck();
+    public static readonly OrganizationServiceContextSettings Default = new();
 
-    bool IsLockedByThisThread();
+    public bool ClearChangesEveryTime { get; set; } = true;
 
-    void ReleaseLock();
-
-    bool Test();
-
-    Task<bool> TestAsync();
-
-    bool TryLock();
+    public bool DetachRetrievedRecords { get; set; } = true;
 }

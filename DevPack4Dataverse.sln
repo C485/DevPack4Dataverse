@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32319.34
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "C485.DataverseClientProxy.Playground", "C485.DataverseClientProxy.Playground\C485.DataverseClientProxy.Playground.csproj", "{F0E39688-07D1-40A6-BEA2-499F632B13EC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DevPack4Dataverse.Playground", "DevPack4Dataverse.Playground\DevPack4Dataverse.Playground.csproj", "{F0E39688-07D1-40A6-BEA2-499F632B13EC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "C485.DataverseClientProxy", "C485.DataverseClientProxy\C485.DataverseClientProxy.csproj", "{094A8169-F875-41C3-BF91-A41FE906C0E6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DevPack4Dataverse", "DevPack4Dataverse\DevPack4Dataverse.csproj", "{094A8169-F875-41C3-BF91-A41FE906C0E6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

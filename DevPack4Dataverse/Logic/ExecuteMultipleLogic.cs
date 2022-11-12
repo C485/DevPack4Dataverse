@@ -15,12 +15,12 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using System.Diagnostics;
 
-namespace C485.DataverseClientProxy.Logic
+namespace DevPack4Dataverse.Logic
 {
     public sealed class ExecuteMultipleLogic
     {

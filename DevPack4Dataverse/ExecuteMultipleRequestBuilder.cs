@@ -15,11 +15,11 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Models;
+using DevPack4Dataverse.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
-namespace C485.DataverseClientProxy;
+namespace DevPack4Dataverse;
 
 public sealed class ExecuteMultipleRequestBuilder
 {

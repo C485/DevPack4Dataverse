@@ -3,7 +3,7 @@ using Serilog;
 using Serilog.Extensions.Logging;
 using System.Threading.Tasks;
 
-namespace C485.DataverseClientProxy.Playground
+namespace DevPack4Dataverse.Playground
 {
     internal class Program
     {

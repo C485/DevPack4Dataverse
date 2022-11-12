@@ -17,7 +17,7 @@ limitations under the License.
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
-namespace C485.DataverseClientProxy.Models;
+namespace DevPack4Dataverse.Models;
 
 public class ExecuteMultipleRequestSettings
 {

@@ -16,7 +16,7 @@ limitations under the License.
 
 using System.Diagnostics;
 
-namespace C485.DataverseClientProxy.Models;
+namespace DevPack4Dataverse.Models;
 
 public class AdvancedExecuteMultipleRequestsStatistics
 {

@@ -14,19 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using C485.DataverseClientProxy.Interfaces;
-using C485.DataverseClientProxy.Logic;
+namespace DevPack4Dataverse.Interfaces;
 
-namespace C485.DataverseClientProxy;
-
-public sealed class DataverseClientProxy : IDataverseClientProxy
+public interface IDataverseClientProxy
 {
-    public readonly ConnectionManager ConnectionManager;
-    public readonly ExecuteMultipleLogic ExecuteMultipleLogic;
-
-    public DataverseClientProxy(params IConnectionCreator[] connectionCreators)
-    {
-        ConnectionManager = new ConnectionManager(connectionCreators);
-        ExecuteMultipleLogic = new ExecuteMultipleLogic(ConnectionManager);
-    }
 }

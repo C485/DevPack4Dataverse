@@ -16,7 +16,7 @@ limitations under the License.
 
 using Microsoft.Xrm.Sdk;
 
-namespace C485.DataverseClientProxy.Models;
+namespace DevPack4Dataverse.Models;
 
 public class RequestImpersonateSettings
 {

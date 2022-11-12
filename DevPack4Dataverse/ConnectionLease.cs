@@ -15,9 +15,9 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using C485.DataverseClientProxy.Interfaces;
+using DevPack4Dataverse.Interfaces;
 
-namespace C485.DataverseClientProxy;
+namespace DevPack4Dataverse;
 
 public sealed class ConnectionLease : IDisposable
 {

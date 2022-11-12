@@ -14,8 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-namespace C485.DataverseClientProxy.Interfaces;
+namespace DevPack4Dataverse.Interfaces;
 
-public interface IDataverseClientProxy
+public interface IConnection : IDataverseConnectionLayer
 {
+    IConnection DisableLockingCheck();
+
+    bool IsLockedByThisThread();
+
+    void ReleaseLock();
+
+    bool Test();
+
+    Task<bool> TestAsync();
+
+    bool TryLock();
 }
