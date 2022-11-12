@@ -5,6 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
 	 <LangVersion>latest</LangVersion>
+	 <Title>DevPack for Dataverse</Title>
+	 <Copyright>Kamil Skoracki/C485@GitHub</Copyright>
+	 <RepositoryUrl>https://github.com/C485/DevPack4Dataverse</RepositoryUrl>
+	 <RepositoryType>git</RepositoryType>
+	 <PackageProjectUrl>https://github.com/C485/DevPack4Dataverse</PackageProjectUrl>
+	 <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+	 <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -27,6 +34,13 @@
 
   <ItemGroup>
     <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
