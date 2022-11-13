@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
-namespace DevPack4Dataverse;
+namespace DevPack4Dataverse.ExecuteMultiple;
 
 public sealed class ExecuteMultipleRequestBuilder
 {
@@ -134,8 +134,8 @@ public sealed class ExecuteMultipleRequestBuilder
         using EntryExitLogger logGuard = new(_logger);
 
         Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
+            .Against
+            .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
         UpsertRequest request = new()
         {

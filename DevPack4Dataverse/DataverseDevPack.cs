@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Logic;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -23,13 +23,13 @@ namespace DevPack4Dataverse;
 
 public sealed class DataverseDevPack : IDataverseDevPack
 {
-    public readonly ConnectionManager ConnectionManager;
-    public readonly ExecuteMultipleLogic ExecuteMultipleLogic;
+    public readonly SdkProxy SdkProxy;
+    public readonly ExecuteMultipleLogic ExecuteMultiple;
 
     public DataverseDevPack(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
-        ConnectionManager = new ConnectionManager(logger, connectionCreators);
-        ExecuteMultipleLogic = new ExecuteMultipleLogic(ConnectionManager);
+        SdkProxy = new SdkProxy(logger, connectionCreators);
+        ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy);
     }
 }

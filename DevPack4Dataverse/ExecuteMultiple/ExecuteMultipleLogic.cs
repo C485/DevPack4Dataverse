@@ -20,13 +20,13 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using System.Diagnostics;
 
-namespace DevPack4Dataverse.Logic
+namespace DevPack4Dataverse.ExecuteMultiple
 {
     public sealed class ExecuteMultipleLogic
     {
-        private readonly ConnectionManager _connectionManager;
+        private readonly SdkProxy _connectionManager;
 
-        public ExecuteMultipleLogic(ConnectionManager connectionManager)
+        public ExecuteMultipleLogic(SdkProxy connectionManager)
         {
             _connectionManager = Guard.Against.Null(connectionManager);
         }

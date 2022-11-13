@@ -24,9 +24,9 @@ namespace DevPack4Dataverse.Playground.Examples
         public async Task Execute()
         {
             DataverseDevPack connectionManager = new(
-                new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
-                new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
-                new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger));
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger),
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger),
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger));
 
             //IEnumerable<Entity> recordsToDelete = await RetriveAllRecordsToDelete();
 

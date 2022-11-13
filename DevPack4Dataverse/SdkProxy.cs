@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
+using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
@@ -28,7 +29,7 @@ using System.Security;
 
 namespace DevPack4Dataverse;
 
-public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
+public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 {
     private readonly RepeatedTask _connectionCreator;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
@@ -37,7 +38,7 @@ public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
 
-    public ConnectionManager(ILogger logger, params IConnectionCreator[] connectionCreators)
+    public SdkProxy(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
 
