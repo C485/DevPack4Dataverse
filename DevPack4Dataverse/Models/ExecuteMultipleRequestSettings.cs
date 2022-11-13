@@ -58,8 +58,8 @@ public class ExecuteMultipleRequestSettings
     ///  <para>
     ///   Represents a number of records that will be send to Dataverse in one <see cref="ExecuteMultipleRequest" />
     ///  </para>
-    ///  <para>By default this number is set to 60, which in benchmarks gave best performance.</para>
+    ///  <para>By default this number is set to 6, which in benchmarks gave best performance.</para>
     ///  <para>See more information at project site.</para>
     /// </summary>
-    public int RequestSize { get; set; } = 60;
+    public int RequestSize { get; set; } = 6;
 }
