@@ -25,7 +25,7 @@ public class ExecuteMultipleRequestSettings
     ///  <para>Optional.</para>
     ///  <para>Callback used for reporting error.</para>
     ///  <para>
-    ///   Called each time when error occurs, please have in mind that thread may wary between errors.
+    ///   Called each time when error occurs, please have in mind that thread may vary between errors.
     ///  </para>
     /// </summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };

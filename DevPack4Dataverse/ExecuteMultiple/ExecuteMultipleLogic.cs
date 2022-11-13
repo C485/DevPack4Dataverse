@@ -35,7 +35,7 @@ public sealed class ExecuteMultipleLogic
         _logger = Guard.Against.Null(logger);
     }
 
-    public AdvancedExecuteMultipleRequestsStatistics AdvancedExecuteMultipleRequests(
+    public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequests(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default)
@@ -82,13 +82,13 @@ public sealed class ExecuteMultipleLogic
         {
             OrganizationRequest[][] allRequestChunks = RequestsToChunks(executeMultipleRequestBuilder, executeMultipleRequestSettings);
 
-            _ = Parallel.ForEach(allRequestChunks,
+            await Parallel.ForEachAsync(allRequestChunks,
                 new ParallelOptions
                 {
                     MaxDegreeOfParallelism = threadsCount,
                     CancellationToken = cancellationToken
                 },
-                packOfRequests =>
+                async (packOfRequests, _) =>
                 {
                     try
                     {
@@ -107,8 +107,8 @@ public sealed class ExecuteMultipleLogic
                            .AddRange(packOfRequests);
 
                         ExecuteMultipleResponse responseWithResults =
-                            _connectionManager
-                               .Execute<ExecuteMultipleResponse>(requestWithResults);
+                            await _connectionManager
+                               .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
 
                         foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                         {
@@ -138,9 +138,8 @@ public sealed class ExecuteMultipleLogic
         }
         finally
         {
-            repeatedTask
-                .StopAsync()
-                .RunSynchronously();
+            await repeatedTask
+                .StopAsync();
         }
 
         chunksStatistics
