@@ -17,6 +17,7 @@ limitations under the License.
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -30,9 +31,10 @@ namespace DevPack4Dataverse;
 public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
 {
     private readonly RepeatedTask _connectionCreator;
+    private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
     private readonly Dictionary<IConnection, List<DateTime>> _connectionUsage = new();
-    private readonly ConcurrentBag<IConnectionCreator> _connectionUsageCreators;
     private readonly ILogger _logger;
+    private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
 
     public ConnectionManager(ILogger logger, params IConnectionCreator[] connectionCreators)
@@ -40,10 +42,11 @@ public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
         using EntryExitLogger logGuard = new(logger);
 
         _logger = Guard.Against.Null(logger);
-        _connectionUsageCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
-        _connectionCreator = new RepeatedTask(TimeSpan.FromMilliseconds(100), () =>
+        _connectionCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
+        _connectionCreator = new RepeatedTask(_sleepTimeForConnectionCreator, () =>
         {
-            IConnectionCreator connectionToCreate = _connectionUsageCreators.FirstOrDefault(p => !p.IsCreated && !p.IsError);
+            IConnectionCreator connectionToCreate = _connectionCreators
+                .FirstOrDefault(p => !p.IsCreated && !p.IsError);
             if (connectionToCreate == null)
             {
                 return;
@@ -92,7 +95,7 @@ public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
            .Against
            .Null(connectionCreator);
 
-        _connectionUsageCreators
+        _connectionCreators
            .Add(connectionCreator);
     }
 
@@ -217,7 +220,7 @@ public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionUsageCreators, nameof(_connectionUsageCreators), p => p.IsEmpty, "Please add at least one connection.");
+        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => p.IsEmpty, "Please add at least one connection.");
 
         while (true)
         {
@@ -245,7 +248,7 @@ public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionUsageCreators, nameof(_connectionUsageCreators), p => p.IsEmpty, "Please add at least one connection.");
+        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => p.IsEmpty, "Please add at least one connection.");
 
         return await Task.Run(async () =>
         {

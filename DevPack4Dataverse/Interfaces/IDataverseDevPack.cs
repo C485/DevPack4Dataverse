@@ -16,6 +16,6 @@ limitations under the License.
 
 namespace DevPack4Dataverse.Interfaces;
 
-public interface IDataverseClientProxy
+public interface IDataverseDevPack
 {
 }

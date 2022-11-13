@@ -16,6 +16,7 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;

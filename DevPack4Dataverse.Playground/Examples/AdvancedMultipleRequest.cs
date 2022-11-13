@@ -22,7 +22,7 @@ namespace DevPack4Dataverse.Playground.Examples
         //Make sure they've ExecuteMultiple
         public async Task Execute()
         {
-            DataverseClientProxy connectionManager = new(
+            DataverseDevPack connectionManager = new(
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger));

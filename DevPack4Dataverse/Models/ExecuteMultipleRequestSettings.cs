@@ -33,7 +33,7 @@ public class ExecuteMultipleRequestSettings
     /// <summary>
     ///  <para>Optional.</para>
     ///  <para>Represents a number of record packs which size is defined by <see cref="RequestSize" />.</para>
-    ///  <para>This number should be equal or less to amount of connections in <see cref="DataverseClientProxy" />.</para>
+    ///  <para>This number should be equal or less to amount of connections in <see cref="DataverseDevPack" />.</para>
     /// </summary>
     public int MaxDegreeOfParallelism { get; set; } = -1;
 

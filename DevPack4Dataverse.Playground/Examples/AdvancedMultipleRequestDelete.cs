@@ -23,7 +23,7 @@ namespace DevPack4Dataverse.Playground.Examples
         //You'll need at least 4 accounts/application accounts
         public async Task Execute()
         {
-            DataverseClientProxy connectionManager = new(
+            DataverseDevPack connectionManager = new(
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger),
                 new ClientSecretConnectionCreator("", "", ConnectionManager.StringToSecureString(""), microsoftLogger));

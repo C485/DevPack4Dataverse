@@ -20,7 +20,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace DevPack4Dataverse;
+namespace DevPack4Dataverse.Utils;
 
 public sealed class EntryExitLogger : IDisposable
 {

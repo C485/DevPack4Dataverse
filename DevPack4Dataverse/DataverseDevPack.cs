@@ -16,16 +16,17 @@ limitations under the License.
 
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Logic;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace DevPack4Dataverse;
 
-public sealed class DataverseClientProxy : IDataverseClientProxy
+public sealed class DataverseDevPack : IDataverseDevPack
 {
     public readonly ConnectionManager ConnectionManager;
     public readonly ExecuteMultipleLogic ExecuteMultipleLogic;
 
-    public DataverseClientProxy(ILogger logger, params IConnectionCreator[] connectionCreators)
+    public DataverseDevPack(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
         ConnectionManager = new ConnectionManager(logger, connectionCreators);

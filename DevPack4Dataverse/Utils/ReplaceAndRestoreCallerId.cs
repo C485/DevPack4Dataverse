@@ -18,7 +18,7 @@ using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
-namespace DevPack4Dataverse
+namespace DevPack4Dataverse.Utils
 {
     internal sealed class ReplaceAndRestoreCallerId : IDisposable
     {
