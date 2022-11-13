@@ -30,6 +30,6 @@ public sealed class DataverseDevPack : IDataverseDevPack
     {
         using EntryExitLogger logGuard = new(logger);
         SdkProxy = new SdkProxy(logger, connectionCreators);
-        ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy);
+        ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
     }
 }
