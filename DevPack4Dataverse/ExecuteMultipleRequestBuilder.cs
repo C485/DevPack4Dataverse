@@ -16,6 +16,7 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
@@ -23,9 +24,15 @@ namespace DevPack4Dataverse;
 
 public sealed class ExecuteMultipleRequestBuilder
 {
+    private readonly ILogger _logger;
+
     public ExecuteMultipleRequestBuilder(
+        ILogger logger,
         bool continueOnError = true)
     {
+        using EntryExitLogger logGuard = new(logger);
+        _logger = Guard.Against.Null(logger);
+
         RequestWithResults = new ExecuteMultipleRequest
         {
             Settings = new ExecuteMultipleSettings
@@ -43,6 +50,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddCreate(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
@@ -57,6 +66,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .NullOrInvalidInput(entityReference,
@@ -73,6 +84,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .NullOrEmpty(logicalName);
@@ -86,6 +99,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .Null(request);
@@ -99,6 +114,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddUpdate(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
@@ -113,6 +130,8 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddUpsert(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));

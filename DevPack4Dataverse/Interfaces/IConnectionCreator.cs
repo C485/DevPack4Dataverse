@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using DevPack4Dataverse;
 using Microsoft.Crm.Sdk.Messages;
 
 namespace DevPack4Dataverse.Interfaces;
@@ -25,6 +24,11 @@ public interface IConnectionCreator
     ///
     /// </summary>
     bool IsCreated { get; }
+
+    /// <summary>
+    ///
+    /// </summary>
+    bool IsError { get; }
 
     /// <summary>
     ///

@@ -17,6 +17,7 @@ limitations under the License.
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
@@ -26,20 +27,46 @@ using System.Security;
 
 namespace DevPack4Dataverse;
 
-public sealed class ConnectionManager : IDataverseConnectionLayer
+public sealed class ConnectionManager : IDataverseConnectionLayer, IDisposable
 {
-    private readonly ConcurrentBag<IConnection> _connections;
-    private readonly ConcurrentBag<IConnectionCreator> _connectionsCreators;
-
+    private readonly RepeatedTask _connectionCreator;
+    private readonly Dictionary<IConnection, List<DateTime>> _connectionUsage = new();
+    private readonly ConcurrentBag<IConnectionCreator> _connectionUsageCreators;
+    private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
 
-    public ConnectionManager(params IConnectionCreator[] connectionCreators)
+    public ConnectionManager(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
-        _connections = new ConcurrentBag<IConnection>();
-        _connectionsCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
+        using EntryExitLogger logGuard = new(logger);
+
+        _logger = Guard.Against.Null(logger);
+        _connectionUsageCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
+        _connectionCreator = new RepeatedTask(TimeSpan.FromMilliseconds(100), () =>
+        {
+            IConnectionCreator connectionToCreate = _connectionUsageCreators.FirstOrDefault(p => !p.IsCreated && !p.IsError);
+            if (connectionToCreate == null)
+            {
+                return;
+            }
+            IConnection createdConnection = connectionToCreate.Create();
+            lock (_connectionUsage)
+            {
+                _connectionUsage[createdConnection] = new List<DateTime>();
+            }
+        }, _logger);
+        _connectionCreator.Start();
     }
 
-    public int ConnectionCount => _connections.Count;
+    public int ConnectionCount
+    {
+        get
+        {
+            lock (_connectionUsage)
+            {
+                return _connectionUsage.Count;
+            }
+        }
+    }
 
     public static SecureString StringToSecureString(string plainString)
     {
@@ -59,16 +86,20 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public void AddNewConnection(IConnectionCreator connectionCreator)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         Guard
            .Against
            .Null(connectionCreator);
 
-        _connectionsCreators
+        _connectionUsageCreators
            .Add(connectionCreator);
     }
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -78,6 +109,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -87,6 +120,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         connectionLease
@@ -96,6 +131,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         connectionLease
@@ -105,6 +142,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         await connectionLease
@@ -114,14 +153,23 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
         await connectionLease
            .Connection
            .DeleteRecordAsync(entityReference, requestSettings);
     }
 
+    public void Dispose()
+    {
+        _connectionCreator.StopAsync().RunSynchronously();
+    }
+
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -131,6 +179,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -140,6 +190,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -149,6 +201,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -161,14 +215,21 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
         Justification = "No locking in LINQ")]
     public ConnectionLease GetConnection()
     {
-        Guard.Against.InvalidInput(_connections, nameof(_connections), p => p.IsEmpty, "Please add at least one connection.");
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.InvalidInput(_connectionUsageCreators, nameof(_connectionUsageCreators), p => p.IsEmpty, "Please add at least one connection.");
+
         while (true)
         {
-            foreach (IConnection connection in _connections)
+            lock (_connectionUsage)
             {
-                if (connection.TryLock())
+                foreach (KeyValuePair<IConnection, List<DateTime>> connection in _connectionUsage.OrderByDescending(p => p.Value.Count(u => (u - DateTime.Now).TotalMinutes <= 1)))
                 {
-                    return new ConnectionLease(connection);
+                    if (connection.Key.TryLock())
+                    {
+                        connection.Value.Add(DateTime.Now);
+                        return new ConnectionLease(connection.Key);
+                    }
                 }
             }
 
@@ -182,17 +243,23 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
         Justification = "No locking in LINQ")]
     public async Task<ConnectionLease> GetConnectionAsync()
     {
-        Guard.Against.InvalidInput(_connections, nameof(_connections), p => p.IsEmpty, "Please add at least one connection.");
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.InvalidInput(_connectionUsageCreators, nameof(_connectionUsageCreators), p => p.IsEmpty, "Please add at least one connection.");
 
         return await Task.Run(async () =>
         {
             while (true)
             {
-                foreach (IConnection connection in _connections)
+                lock (_connectionUsage)
                 {
-                    if (connection.TryLock())
+                    foreach (KeyValuePair<IConnection, List<DateTime>> connection in _connectionUsage.OrderByDescending(p => p.Value.Count(u => (u - DateTime.Now).TotalMinutes <= 1)))
                     {
-                        return new ConnectionLease(connection);
+                        if (connection.Key.TryLock())
+                        {
+                            connection.Value.Add(DateTime.Now);
+                            return new ConnectionLease(connection.Key);
+                        }
                     }
                 }
 
@@ -204,6 +271,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public Entity RefreshRecord(Entity record)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -213,6 +282,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<Entity> RefreshRecordAsync(Entity record)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -222,6 +293,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -231,6 +304,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -240,6 +315,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -249,6 +326,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -258,6 +337,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -267,6 +348,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
@@ -276,6 +359,8 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
@@ -285,6 +370,7 @@ public sealed class ConnectionManager : IDataverseConnectionLayer
 
     public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
+        using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease

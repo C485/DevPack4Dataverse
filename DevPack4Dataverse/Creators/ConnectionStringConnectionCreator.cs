@@ -62,9 +62,11 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         _connectionString += ";RequireNewInstance=True";
     }
 
-    bool IConnectionCreator.IsCreated => _isCreated;
+    public bool IsError => _isError;
 
-    bool IConnectionCreator.IsValid => _isCreated && !_isError;
+    public bool IsCreated => _isCreated;
+
+    public bool IsValid => _isCreated && !_isError;
 
     public IConnection Create()
     {

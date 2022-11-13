@@ -55,9 +55,11 @@ public class ClientSecretConnectionCreator : IConnectionCreator
             .Null(logger);
     }
 
-    bool IConnectionCreator.IsCreated => _isCreated;
+    public bool IsError => _isError;
 
-    bool IConnectionCreator.IsValid => _isCreated && !_isError;
+    public bool IsCreated => _isCreated;
+
+    public bool IsValid => _isCreated && !_isError;
 
     public IConnection Create()
     {

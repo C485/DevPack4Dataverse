@@ -99,7 +99,7 @@ namespace DevPack4Dataverse.Logic
                        .ToArray())
                    .ToArray();
 
-                Parallel.ForEach(allRequestChunks,
+                _ = Parallel.ForEach(allRequestChunks,
                     new ParallelOptions
                     {
                         MaxDegreeOfParallelism = threadsCount,
@@ -123,15 +123,9 @@ namespace DevPack4Dataverse.Logic
                                .Requests
                                .AddRange(packOfRequests);
 
-                            ExecuteMultipleResponse responseWithResults = null;
-
-                            using (ConnectionLease connectionLease = _connectionManager.GetConnection())
-                            {
-                                responseWithResults =
-                                    connectionLease
-                                       .Connection
-                                       .Execute<ExecuteMultipleResponse>(requestWithResults);
-                            }
+                            ExecuteMultipleResponse responseWithResults =
+                                _connectionManager
+                                   .Execute<ExecuteMultipleResponse>(requestWithResults);
 
                             foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                             {
