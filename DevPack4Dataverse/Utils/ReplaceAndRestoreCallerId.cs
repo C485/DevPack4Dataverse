@@ -44,8 +44,8 @@ namespace DevPack4Dataverse.Utils
                 .Null(serviceClient);
             oldCallerId = serviceClient.CallerId;
             oldAADCallerId = serviceClient.CallerAADObjectId;
-            serviceClient.CallerAADObjectId = requestSettings.ImpersonateAsUserByAADId;
-            serviceClient.CallerId = requestSettings.ImpersonateAsUserByDataverseId ?? Guid.Empty;
+            serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
+            serviceClient.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
         }
 
         ~ReplaceAndRestoreCallerId()

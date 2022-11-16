@@ -44,10 +44,10 @@ public sealed class EntryExitLogger : IDisposable
         if (exceptionOccurred)
         {
             _logger.LogError("Method {MethodName} in object {ObjectName} exited with exception.", _callerMethod, _callerObjectName);
-            _logger.LogDebug("Method {MethodName} in object {ObjectName} exited sucesfully, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
+            _logger.LogDebug("Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
 
             return;
         }
-        _logger.LogDebug("Method {MethodName} in object {ObjectName} exited sucesfully, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
+        _logger.LogDebug("Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
     }
 }

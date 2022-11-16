@@ -65,10 +65,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         get
         {
-            lock (_connectionUsage)
-            {
-                return _connectionUsage.Count;
-            }
+            return _connectionCreators.Count;
         }
     }
 
@@ -221,7 +218,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => p.IsEmpty, "Please add at least one connection.");
+        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
 
         while (true)
         {
@@ -249,7 +246,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => p.IsEmpty, "Please add at least one connection.");
+        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
 
         return await Task.Run(async () =>
         {
