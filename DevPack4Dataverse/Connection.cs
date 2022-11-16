@@ -84,7 +84,8 @@ public sealed class Connection : IConnection
         using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
 
         return await _connection
-           .RetrieveAsync(record.LogicalName, createdRecordId, columns);
+           .RetrieveAsync(record.LogicalName, createdRecordId, columns)
+           .ConfigureAwait(true);
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -104,7 +105,7 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        return (await ExecuteAsync<CreateResponse>(createRequest, requestSettings)).id;
+        return (await ExecuteAsync<CreateResponse>(createRequest, requestSettings).ConfigureAwait(true)).id;
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
@@ -155,14 +156,16 @@ public sealed class Connection : IConnection
             Target = new EntityReference(logicalName, id)
         };
 
-        _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings);
+        _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings)
+            .ConfigureAwait(true);
     }
 
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings);
+        await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings)
+            .ConfigureAwait(true);
     }
 
     public IConnection DisableLockingCheck()
@@ -223,7 +226,8 @@ public sealed class Connection : IConnection
         requestSettings?.AddToOrganizationRequest(request);
 
         return await _connection
-           .ExecuteAsync(request) as T;
+           .ExecuteAsync(request)
+           .ConfigureAwait(true) as T;
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -234,7 +238,8 @@ public sealed class Connection : IConnection
            .Against
            .Null(executeMultipleRequestBuilder);
 
-        return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings)
+            .ConfigureAwait(true);
     }
 
     public bool IsLockedByThisThread()
@@ -280,7 +285,8 @@ public sealed class Connection : IConnection
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
         return await _connection
-           .RetrieveAsync(record.LogicalName, record.Id, columns);
+           .RetrieveAsync(record.LogicalName, record.Id, columns)
+           .ConfigureAwait(true);
     }
 
     public void ReleaseLock()
@@ -338,7 +344,8 @@ public sealed class Connection : IConnection
            .Null(columnSet);
 
         return await _connection
-           .RetrieveAsync(entityName, id, columnSet);
+           .RetrieveAsync(entityName, id, columnSet)
+           .ConfigureAwait(true);
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression)
@@ -391,8 +398,48 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        return await Task
-           .Run(() => RetrieveMultiple(queryExpression));
+        Guard
+           .Against
+           .Null(queryExpression);
+
+        if (!_disableLockingCheck && !IsLockedByThisThread())
+        {
+            throw new ArgumentException("Lock not set for this connection.");
+        }
+
+        return await InnerRetrieveMultiple()
+           .ToArrayAsync()
+           .ConfigureAwait(true);
+
+        async IAsyncEnumerable<Entity> InnerRetrieveMultiple()
+        {
+            queryExpression.PageInfo = new PagingInfo
+            {
+                Count = 5000,
+                PageNumber = 1,
+                PagingCookie = null
+            };
+
+            while (true)
+            {
+                EntityCollection retrieveMultipleResult = await _connection
+                   .RetrieveMultipleAsync(queryExpression)
+                   .ConfigureAwait(true);
+
+                foreach (Entity record in retrieveMultipleResult.Entities)
+                {
+                    yield return record;
+                }
+
+                if (!retrieveMultipleResult.MoreRecords)
+                {
+                    break;
+                }
+
+                queryExpression.PageInfo.PageNumber++;
+                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
+            }
+        }
     }
 
     public bool Test()
@@ -411,7 +458,8 @@ public sealed class Connection : IConnection
         using EntryExitLogger logGuard = new(_logger);
 
         WhoAmIResponse response = (WhoAmIResponse)await _connection
-           .ExecuteAsync(new WhoAmIRequest());
+           .ExecuteAsync(new WhoAmIRequest())
+           .ConfigureAwait(true);
 
         return response != null
             && response.UserId != Guid.Empty;
@@ -466,7 +514,8 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings);
+        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings)
+            .ConfigureAwait(true);
 
         return record.Id;
     }
@@ -515,7 +564,8 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings);
+        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings)
+            .ConfigureAwait(true);
 
         return Guard
            .Against
