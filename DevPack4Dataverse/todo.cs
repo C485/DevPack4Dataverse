@@ -32,7 +32,7 @@ public static class PredicateBuilder
 
 	public static Expression<Func<T, bool>> Empty<T>()
 	{
-		return _ => true;
+		return _ => false;
 	}
 
 	private class ReplaceExpressionVisitor
