@@ -242,38 +242,6 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
-    //[SuppressMessage("Minor Code Smell",
-    //    "S3267:Loops should be simplified with \"LINQ\" expressions",
-    //    Justification = "No locking in LINQ")]
-    //public async Task<ConnectionLease> GetConnectionAsync()
-    //{
-    //    using EntryExitLogger logGuard = new(_logger);
-
-    //    Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
-
-    //    return await Task.Run(async () =>
-    //    {
-    //        while (true)
-    //        {
-    //            lock (_connectionUsage)
-    //            {
-    //                foreach (KeyValuePair<IConnection, List<DateTime>> connection in _connectionUsage.OrderByDescending(p => p.Value.Count(u => (u - DateTime.Now).TotalMinutes <= 1)))
-    //                {
-    //                    if (connection.Key.TryLock())
-    //                    {
-    //                        connection.Value.Add(DateTime.Now);
-    //                        return new ConnectionLease(connection.Key);
-    //                    }
-    //                }
-    //            }
-
-    //            await Task
-    //               .Delay(_sleepTimeForConnectionGetter)
-    //               ;
-    //        }
-    //    });
-    //}
-
     public Entity RefreshRecord(Entity record)
     {
         using EntryExitLogger logGuard = new(_logger);
