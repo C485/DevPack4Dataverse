@@ -46,7 +46,7 @@ namespace DevPack4Dataverse
         public T Retreive<T>(EntityReference obj, params string[] pathParts)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard.Against.InvalidInput(pathParts, nameof(pathParts), p => p.Any(u => string.IsNullOrEmpty(u)), "One of path elements is null or empty.");
+            Guard.Against.InvalidInput(pathParts, nameof(pathParts), p => p.All(u => !string.IsNullOrEmpty(u)), "One of path elements is null or empty.");
             EntityReference drillReference = Guard.Against.Null(obj, message: "Drilling object cannot start with reference that is null.");
             for (int i = 0; i < pathParts.Length; i++)
             {
@@ -89,7 +89,7 @@ namespace DevPack4Dataverse
         public async Task<T> RetreiveAsync<T>(EntityReference obj, params string[] pathParts)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard.Against.InvalidInput(pathParts, nameof(pathParts), p => p.Any(u => string.IsNullOrEmpty(u)), "One of path elements is null or empty.");
+            Guard.Against.InvalidInput(pathParts, nameof(pathParts), p => p.All(u => !string.IsNullOrEmpty(u)), "One of path elements is null or empty.");
             EntityReference drillReference = Guard.Against.Null(obj, message: "Drilling object cannot start with reference that is null.");
             for (int i = 0; i < pathParts.Length; i++)
             {
