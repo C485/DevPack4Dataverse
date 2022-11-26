@@ -1,17 +1,34 @@
-﻿using C485.DataverseClientProxy.Creators;
-using C485.DataverseClientProxy.Models;
-using DevPack4Dataverse.Playground;
+﻿/*
+Copyright 2022 Kamil Skoracki / C485@GitHub
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+using DevPack4Dataverse.Creators;
+using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse.Playground.Examples
 {
     public class AdvancedMultipleRequest : IExecute
     {
-        private const string EntityName = "crf87_test";
-        private const string EntityNameFieldName = "crf87_name";
-        private const int RecordsToCreate = 10000;
-        private ILogger microsoftLogger;
+        private const string EntityName = "cr4cc_test";
+        private const string EntityNameFieldName = "cr4cc_name";
+        private const int RecordsToCreate = 2000;
+        private readonly ILogger microsoftLogger;
 
         public AdvancedMultipleRequest(ILogger microsoftLogger)
         {
@@ -22,26 +39,50 @@ namespace DevPack4Dataverse.Playground.Examples
         //Make sure they've ExecuteMultiple
         public async Task Execute()
         {
-            DataverseDevPack connectionManager = new(
-                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger),
-                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger),
-                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger));
+            DataverseDevPack connectionManager = new(microsoftLogger,
+                new ClientSecretConnectionCreator("https://???", "-----", SdkProxy.StringToSecureString("-----"), microsoftLogger));
+            await DeleteRecords(connectionManager);
 
+            await AddNewRecords(connectionManager);
+        }
 
-            ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(true);
+        private async Task AddNewRecords(DataverseDevPack connectionManager)
+        {
+            ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(microsoftLogger, true);
             foreach (int item in Enumerable.Range(0, RecordsToCreate))
             {
                 Entity et = new(EntityName);
                 et[EntityNameFieldName] = $"Record [{item}]";
                 executeMultipleRequestBuilder.AddCreate(et);
             }
-            //AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.AdvancedExecuteMultipleRequestsAsync(executeMultipleRequestBuilder,
-            //    new ExecuteMultipleRequestSettings
-            //    {
-            //        ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
-            //        ReportProgress = (int cur, int max) => Console.Title = $"Progress[{cur}/{max}]",
-            //        ReportProgressInterval = TimeSpan.FromMilliseconds(100)
-            //    });
+            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.ExecuteMultiple.AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder,
+                new ExecuteMultipleRequestSettings
+                {
+                    ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
+                    ReportProgress = (int cur, int max) => Console.Title = $"Progress[{cur}/{max}]",
+                    ReportProgressInterval = TimeSpan.FromMilliseconds(100)
+                });
+        }
+
+        private async Task DeleteRecords(DataverseDevPack connectionManager)
+        {
+            var recordsInCrm = connectionManager.SdkProxy.RetrieveMultiple(new QueryExpression
+            {
+                EntityName = EntityName,
+                ColumnSet = new ColumnSet(false)
+            });
+            ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(microsoftLogger, true);
+            foreach (var item in recordsInCrm)
+            {
+                executeMultipleRequestBuilder.AddDelete(item.ToEntityReference());
+            }
+            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.ExecuteMultiple.AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder,
+                new ExecuteMultipleRequestSettings
+                {
+                    ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
+                    ReportProgress = (int cur, int max) => Console.Title = $"Progress[{cur}/{max}]",
+                    ReportProgressInterval = TimeSpan.FromMilliseconds(100)
+                });
         }
     }
 }
