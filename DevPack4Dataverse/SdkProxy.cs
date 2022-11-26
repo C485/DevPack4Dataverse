@@ -33,7 +33,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 {
     private readonly RepeatedTask _connectionCreator;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
-    private readonly Dictionary<IConnection, List<DateTime>> _connectionUsage = new();
+    private readonly ConcurrentBag<IConnection> _connections = new();
     private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
@@ -53,10 +53,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 return;
             }
             IConnection createdConnection = connectionToCreate.Create();
-            lock (_connectionUsage)
-            {
-                _connectionUsage[createdConnection] = new List<DateTime>();
-            }
+            _connections.Add(createdConnection);
         }, _logger);
         _connectionCreator.Start();
     }
@@ -216,15 +213,11 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
-            lock (_connectionUsage)
+            foreach (IConnection connection in _connections)
             {
-                foreach (KeyValuePair<IConnection, List<DateTime>> connection in _connectionUsage.OrderByDescending(p => p.Value.Count(u => (u - DateTime.Now).TotalMinutes <= 1)))
+                if (connection.TryLock())
                 {
-                    if (connection.Key.TryLock())
-                    {
-                        connection.Value.Add(DateTime.Now);
-                        return new ConnectionLease(connection.Key);
-                    }
+                    return new ConnectionLease(connection);
                 }
             }
 
