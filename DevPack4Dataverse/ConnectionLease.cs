@@ -28,7 +28,7 @@ public sealed class ConnectionLease : IDisposable
         Connection = connection;
         Guard
            .Against
-           .NullOrInvalidInput(connection, nameof(connection), p => p.IsLockedByThisThread());
+           .Null(connection);
     }
 
     ~ConnectionLease()

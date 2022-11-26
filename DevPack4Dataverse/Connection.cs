@@ -31,9 +31,8 @@ namespace DevPack4Dataverse;
 public sealed class Connection : IConnection
 {
     private readonly ServiceClient _connection;
-    private readonly object _lockObj;
     private readonly ILogger _logger;
-    private bool _disableLockingCheck;
+    private readonly SemaphoreSlim _semaphoreSlim;
 
     public Connection(ServiceClient connection, ILogger logger)
     {
@@ -41,8 +40,7 @@ public sealed class Connection : IConnection
         _logger = Guard
             .Against
             .Null(logger);
-
-        _lockObj = new object();
+        _semaphoreSlim = new SemaphoreSlim(1, 1);
         _connection = Guard
            .Against
            .Null(connection);
@@ -83,9 +81,7 @@ public sealed class Connection : IConnection
 
         using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
 
-        return await _connection
-           .RetrieveAsync(record.LogicalName, createdRecordId, columns)
-           .ConfigureAwait(true);
+        return await _connection.RetrieveAsync(record.LogicalName, createdRecordId, columns);
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -105,7 +101,8 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        return (await ExecuteAsync<CreateResponse>(createRequest, requestSettings).ConfigureAwait(true)).id;
+        CreateResponse createResponse = await ExecuteAsync<CreateResponse>(createRequest, requestSettings);
+        return createResponse.id;
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
@@ -156,24 +153,14 @@ public sealed class Connection : IConnection
             Target = new EntityReference(logicalName, id)
         };
 
-        _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings)
-            .ConfigureAwait(true);
+        _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings);
     }
 
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings)
-            .ConfigureAwait(true);
-    }
-
-    public IConnection DisableLockingCheck()
-    {
-        using EntryExitLogger logGuard = new(_logger);
-
-        _disableLockingCheck = true;
-        return this;
+        await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings);
     }
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
@@ -183,11 +170,6 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .Null(request);
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
 
         using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
 
@@ -216,18 +198,13 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
-
         using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request);
 
         return await _connection
            .ExecuteAsync(request)
-           .ConfigureAwait(true) as T;
+            as T;
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -238,16 +215,7 @@ public sealed class Connection : IConnection
            .Against
            .Null(executeMultipleRequestBuilder);
 
-        return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings)
-            .ConfigureAwait(true);
-    }
-
-    public bool IsLockedByThisThread()
-    {
-        using EntryExitLogger logGuard = new(_logger);
-
-        return Monitor
-           .IsEntered(_lockObj);
+        return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
     }
 
     public Entity RefreshRecord(Entity record)
@@ -257,11 +225,6 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
@@ -277,34 +240,23 @@ public sealed class Connection : IConnection
            .Against
            .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
-
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
         return await _connection
-           .RetrieveAsync(record.LogicalName, record.Id, columns)
-           .ConfigureAwait(true);
+            .RetrieveAsync(record.LogicalName, record.Id, columns)
+            ;
     }
 
     public void ReleaseLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-
-        Monitor
-           .Exit(_lockObj);
+        _semaphoreSlim
+            .Release();
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
     {
         using EntryExitLogger logGuard = new(_logger);
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
 
         Guard
            .Against
@@ -326,11 +278,6 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
-
         Guard
            .Against
            .NullOrEmpty(entityName);
@@ -344,8 +291,7 @@ public sealed class Connection : IConnection
            .Null(columnSet);
 
         return await _connection
-           .RetrieveAsync(entityName, id, columnSet)
-           .ConfigureAwait(true);
+            .RetrieveAsync(entityName, id, columnSet);
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression)
@@ -355,11 +301,6 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .Null(queryExpression);
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
 
         return InnerRetrieveMultiple()
            .ToArray();
@@ -402,14 +343,8 @@ public sealed class Connection : IConnection
            .Against
            .Null(queryExpression);
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for this connection.");
-        }
-
         return await InnerRetrieveMultiple()
-           .ToArrayAsync()
-           .ConfigureAwait(true);
+           .ToArrayAsync();
 
         async IAsyncEnumerable<Entity> InnerRetrieveMultiple()
         {
@@ -423,8 +358,8 @@ public sealed class Connection : IConnection
             while (true)
             {
                 EntityCollection retrieveMultipleResult = await _connection
-                   .RetrieveMultipleAsync(queryExpression)
-                   .ConfigureAwait(true);
+                    .RetrieveMultipleAsync(queryExpression)
+                    ;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -457,9 +392,7 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        WhoAmIResponse response = (WhoAmIResponse)await _connection
-           .ExecuteAsync(new WhoAmIRequest())
-           .ConfigureAwait(true);
+        WhoAmIResponse response = (WhoAmIResponse)await _connection.ExecuteAsync(new WhoAmIRequest());
 
         return response != null
             && response.UserId != Guid.Empty;
@@ -468,9 +401,8 @@ public sealed class Connection : IConnection
     public bool TryLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-
-        return Monitor
-           .TryEnter(_lockObj);
+        return _semaphoreSlim
+            .Wait(0);
     }
 
     public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
@@ -480,11 +412,6 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for used connection.");
-        }
 
         UpdateRequest request = new()
         {
@@ -504,18 +431,13 @@ public sealed class Connection : IConnection
             .Against
             .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for used connection.");
-        }
-
         UpdateRequest request = new()
         {
             Target = record
         };
 
         _ = await ExecuteAsync<UpdateResponse>(request, requestSettings)
-            .ConfigureAwait(true);
+            ;
 
         return record.Id;
     }
@@ -527,11 +449,6 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
-
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for used connection.");
-        }
 
         UpsertRequest request = new()
         {
@@ -554,18 +471,13 @@ public sealed class Connection : IConnection
            .Against
            .NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
 
-        if (!_disableLockingCheck && !IsLockedByThisThread())
-        {
-            throw new ArgumentException("Lock not set for used connection.");
-        }
-
         UpsertRequest request = new()
         {
             Target = record
         };
 
         UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings)
-            .ConfigureAwait(true);
+            ;
 
         return Guard
            .Against

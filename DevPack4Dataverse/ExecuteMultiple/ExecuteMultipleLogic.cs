@@ -26,12 +26,12 @@ namespace DevPack4Dataverse.ExecuteMultiple;
 
 public sealed class ExecuteMultipleLogic
 {
-    private readonly SdkProxy _connectionManager;
     private readonly ILogger _logger;
+    private readonly SdkProxy _sdkProxy;
 
-    public ExecuteMultipleLogic(SdkProxy connectionManager, ILogger logger)
+    public ExecuteMultipleLogic(SdkProxy sdkProxy, ILogger logger)
     {
-        _connectionManager = Guard.Against.Null(connectionManager);
+        _sdkProxy = Guard.Against.Null(sdkProxy);
         _logger = Guard.Against.Null(logger);
     }
 
@@ -61,7 +61,7 @@ public sealed class ExecuteMultipleLogic
         }
 
         int threadsCount = executeMultipleRequestSettings.MaxDegreeOfParallelism <= 0
-            ? _connectionManager.ConnectionCount
+            ? _sdkProxy.ConnectionCount
             : executeMultipleRequestSettings.MaxDegreeOfParallelism;
 
         AdvancedExecuteMultipleRequestsStatistics chunksStatistics = new()
@@ -107,7 +107,7 @@ public sealed class ExecuteMultipleLogic
                            .AddRange(packOfRequests);
 
                         ExecuteMultipleResponse responseWithResults =
-                            await _connectionManager
+                            await _sdkProxy
                                .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
 
                         foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
@@ -116,8 +116,6 @@ public sealed class ExecuteMultipleLogic
                             {
                                 continue;
                             }
-
-                            //TODO fix, parse index from error message
 
                             OrganizationRequest requestOrigin = requestWithResults
                                .Requests[responseItem.RequestIndex];

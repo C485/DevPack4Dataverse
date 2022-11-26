@@ -26,12 +26,14 @@ public sealed class EntryExitLogger : IDisposable
 {
     private readonly string _callerMethod;
     private readonly string _callerObjectName;
+    private readonly int _entrenceThreadId;
     private readonly ILogger _logger;
     private readonly Stopwatch _stopwatch;
 
     public EntryExitLogger(ILogger logger = null, [CallerFilePath] string callerFilePath = null, [CallerMemberName] string caller = null)
     {
         _logger = Guard.Against.Null(logger);
+        _entrenceThreadId = Environment.CurrentManagedThreadId;
         _callerObjectName = Path.GetFileNameWithoutExtension(callerFilePath);
         _stopwatch = Stopwatch.StartNew();
         _callerMethod = caller;
@@ -43,11 +45,11 @@ public sealed class EntryExitLogger : IDisposable
         bool exceptionOccurred = Marshal.GetExceptionPointers() != IntPtr.Zero;
         if (exceptionOccurred)
         {
-            _logger.LogError("Method {MethodName} in object {ObjectName} exited with exception.", _callerMethod, _callerObjectName);
-            _logger.LogDebug("Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
+            _logger.LogError("Method {MethodName} in object {ObjectName} exited with exception. Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _entrenceThreadId, Environment.CurrentManagedThreadId);
+            _logger.LogDebug("Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
 
             return;
         }
-        _logger.LogDebug("Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}", _callerMethod, _callerObjectName, _stopwatch.Elapsed);
+        _logger.LogDebug("Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
     }
 }

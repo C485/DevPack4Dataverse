@@ -18,10 +18,6 @@ namespace DevPack4Dataverse.Interfaces;
 
 public interface IConnection : IDataverseConnectionLayer
 {
-    IConnection DisableLockingCheck();
-
-    bool IsLockedByThisThread();
-
     void ReleaseLock();
 
     bool Test();
