@@ -25,11 +25,11 @@ internal static class ExpressionCombiner
     {
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
-        ReplaceExpressionVisitor leftVisitor = new(mainExpression.Parameters[0], parameter);
-        Expression visitedMainExpression = leftVisitor.Visit(mainExpression.Body);
+        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter);
+        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
 
-        ReplaceExpressionVisitor rightVisitor = new(expressionToAdd.Parameters[0], parameter);
-        Expression visitedExpressionToAdd = rightVisitor.Visit(expressionToAdd.Body);
+        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter);
+        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
 
         return Expression.Lambda<Func<T, bool>>(Expression.AndAlso(visitedMainExpression, visitedExpressionToAdd), parameter);
     }
@@ -44,11 +44,11 @@ internal static class ExpressionCombiner
     {
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
-        ReplaceExpressionVisitor leftVisitor = new(mainExpression.Parameters[0], parameter);
-        Expression visitedMainExpression = leftVisitor.Visit(mainExpression.Body);
+        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter);
+        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
 
-        ReplaceExpressionVisitor rightVisitor = new(expressionToAdd.Parameters[0], parameter);
-        Expression visitedExpressionToAdd = rightVisitor.Visit(expressionToAdd.Body);
+        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter);
+        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
 
         return Expression.Lambda<Func<T, bool>>(Expression.OrElse(visitedMainExpression, visitedExpressionToAdd), parameter);
     }
