@@ -25,7 +25,7 @@ namespace DevPack4Dataverse.Creators;
 public class ConnectionStringConnectionCreator : IConnectionCreator
 {
     private const string ConnectionStringInvalidError =
-        "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is requred to be properly detected.";
+        "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
 
     private readonly string _connectionString;
     private readonly ILogger _logger;

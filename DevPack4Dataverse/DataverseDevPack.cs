@@ -26,6 +26,7 @@ namespace DevPack4Dataverse;
 public sealed class DataverseDevPack
 {
     public readonly ExecuteMultipleLogic ExecuteMultiple;
+    public readonly FieldDrill FieldDrill;
     public readonly SdkProxy SdkProxy;
     private readonly ILogger _logger;
 
@@ -34,6 +35,7 @@ public sealed class DataverseDevPack
         using EntryExitLogger logGuard = new(logger);
         SdkProxy = new SdkProxy(logger, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
+        FieldDrill = new FieldDrill(SdkProxy, logger);
         _logger = logger;
     }
 

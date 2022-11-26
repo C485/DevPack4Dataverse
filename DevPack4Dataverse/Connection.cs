@@ -28,11 +28,47 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
+public class AccessStatistic
+{
+    public AccessStatistic()
+    {
+        FirstOccuranceDate = DateTime.Now;
+    }
+
+    public int Count { get; private set; }
+
+    public DateTime FirstOccuranceDate { get; }
+
+    public void Increase()
+    {
+        Count++;
+    }
+}
+
+public class UsageStatistic
+{
+    public UsageStatistic()
+    {
+        FirstOccuranceDate = DateTime.Now;
+    }
+
+    public int Count { get; private set; }
+
+    public DateTime FirstOccuranceDate { get; }
+
+    public void Increase()
+    {
+        Count++;
+    }
+}
+
 public sealed class Connection : IConnection
 {
+    private readonly Dictionary<int, AccessStatistic> _accessStatistics = new();
     private readonly ServiceClient _connection;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
+    private readonly Dictionary<int, UsageStatistic> _usageStatistics = new();
 
     public Connection(ServiceClient connection, ILogger logger)
     {
@@ -358,8 +394,7 @@ public sealed class Connection : IConnection
             while (true)
             {
                 EntityCollection retrieveMultipleResult = await _connection
-                    .RetrieveMultipleAsync(queryExpression)
-                    ;
+                    .RetrieveMultipleAsync(queryExpression);
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {

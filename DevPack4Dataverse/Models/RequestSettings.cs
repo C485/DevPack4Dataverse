@@ -91,12 +91,12 @@ public sealed class RequestSettings : RequestImpersonateSettings
     internal static class RequestHeaders
     {
         /// <summary>
-        /// This key used to indicate if the custom plugins need to be bypassed during the execution of the request.
+        /// This key used to indicate if the custom plug-ins need to be bypassed during the execution of the request.
         /// </summary>
         public const string BypassCustomPluginExecutionName = "BypassCustomPluginExecution";
 
         /// <summary>
-        /// used to identify concurrencybehavior property in an organization request.
+        /// used to identify concurrency behavior property in an organization request.
         /// </summary>
         public const string ConcurrencyBehaviorName = "ConcurrencyBehavior";
 
@@ -115,7 +115,7 @@ public sealed class RequestSettings : RequestImpersonateSettings
         public const string SuppressDuplicateDetectioname = "SuppressDuplicateDetection";
 
         /// <summary>
-        /// used to pass data though Dataverse to a plugin or downstream system on a request.
+        /// used to pass data though Dataverse to a plug-in or downstream system on a request.
         /// See: https://docs.microsoft.com/en-us/powerapps/developer/common-data-service/org-service/use-messages#add-a-shared-variable-from-the-organization-service
         /// </summary>
         public const string TagName = "tag";

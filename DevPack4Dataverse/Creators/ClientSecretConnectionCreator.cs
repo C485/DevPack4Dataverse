@@ -41,7 +41,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
            .InvalidInput(crmUrl,
                 nameof(crmUrl),
                 p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
-                $"{nameof(crmUrl)} - is null or not valid url.");
+                $"{nameof(crmUrl)} - is null or not valid URL.");
 
         _appId = Guard
            .Against
@@ -58,10 +58,8 @@ public class ClientSecretConnectionCreator : IConnectionCreator
             .Null(logger);
     }
 
-    public bool IsError => _isError;
-
     public bool IsCreated => _isCreated;
-
+    public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
     public IConnection Create()
@@ -81,7 +79,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
                .NullOrInvalidInput(crmServiceClient,
                     nameof(crmServiceClient),
                     p => p.IsReady,
-                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to Url: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}");
+                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}");
             Connection connection = new(crmServiceClient, _logger);
 
             bool isConnectionValid = connection.Test();
