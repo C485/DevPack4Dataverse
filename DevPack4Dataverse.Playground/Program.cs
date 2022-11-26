@@ -24,8 +24,17 @@ namespace DevPack4Dataverse.Playground
     {
         private static async Task Main(string[] args)
         {
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Information().Enrich.FromLogContext().WriteTo.Console().CreateLogger();
+                .MinimumLevel
+                .Information()
+                .Enrich
+                .FromLogContext()
+                .WriteTo
+                .Console()
+                .WriteTo
+                .File($"log{timestamp}.txt")
+                .CreateLogger();
             
             var microsoftLogger = new SerilogLoggerFactory(Log.Logger)
                 .CreateLogger("");
