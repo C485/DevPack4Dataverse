@@ -35,5 +35,5 @@ public sealed class DataverseDevPack : IDataverseDevPack
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
     }
 
-    public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity => LinqExpressionBuilder.Create<T>();
+    public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() => LinqExpressionBuilder.Create<T>();
 }

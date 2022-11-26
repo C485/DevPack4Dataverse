@@ -23,12 +23,18 @@ namespace DevPack4Dataverse.ExpressionBuilder;
 
 public static class LinqExpressionBuilder
 {
-    public static ILinqExpressionBuilder<U> Create<U>() where U : Entity
+    /// <summary>
+    /// Creates a instance of expression builder.<br />
+    /// Result can be used in early-bound and late-bound, on <see cref="IQueryable"/> and <see cref="IEnumerable"/> interfaces in Where method.
+    /// </summary>
+    /// <typeparam name="U">Can be <see cref="Entity"/> or any class that inherits from <see cref="Entity"/>.</typeparam>
+    /// <returns></returns>
+    public static ILinqExpressionBuilder<U> Create<U>() where U : Entity, new()
     {
         return new LinqExpressionBuilderInner<U>();
     }
 
-    private sealed class LinqExpressionBuilderInner<U> : ILinqExpressionBuilder<U> where U : Entity
+    private sealed class LinqExpressionBuilderInner<U> : ILinqExpressionBuilder<U> where U : Entity, new()
     {
         private readonly int _maximumExpressions = 500;
         private Expression<Func<U, bool>> _expression;

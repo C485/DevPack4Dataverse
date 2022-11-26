@@ -19,8 +19,47 @@ using System.Linq.Expressions;
 
 namespace DevPack4Dataverse.Interfaces;
 
-public interface ILinqExpressionBuilder<U> where U : Entity
+public interface ILinqExpressionBuilder<U> where U : Entity, new()
 {
-    Expression<Func<U, bool>> Result { get; }
+    /// <summary>
+    /// Returns how many expressions were added, counts inner expressions as well.
+    /// </summary>
     uint ExpressionsAdded { get; }
+
+    /// <summary>
+    /// Final expression that can be used in Where LINQ method.
+    /// </summary>
+    Expression<Func<U, bool>> Result { get; }
+
+    /// <summary>
+    /// Adds <see cref="ILinqExpressionBuilder{U}"/> expression as new AND block to top of <see cref="ILinqExpressionBuilder{U}"/>.
+    /// </summary>
+    /// <param name="expressionToAdd">Instance of <see cref="ILinqExpressionBuilder{U}"/>, cannot be empty or null.</param>
+    /// <exception cref="ArgumentNullException">Exception thrown when <paramref name="expressionToAdd"/> is null.</exception>
+    /// <exception cref="ArgumentException">Exception thrown when maximum limit is exceeded or <paramref name="expressionToAdd"/> is empty.</exception>
+    void AddAnd(ILinqExpressionBuilder<U> expressionToAdd);
+
+    /// <summary>
+    /// Adds <see cref="Expression"/> as new AND block to top of <see cref="ILinqExpressionBuilder{U}"/>.
+    /// </summary>
+    /// <param name="expressionToAdd">Instance of <see cref="Expression"/>, cannot be null.</param>
+    /// <exception cref="ArgumentNullException">Exception thrown when <paramref name="expressionToAdd"/> is null.</exception>
+    /// <exception cref="ArgumentException">Exception thrown when maximum limit is exceeded.</exception>
+    void AddAnd(Expression<Func<U, bool>> expressionToAdd);
+
+    /// <summary>
+    /// Adds <see cref="Expression"/> as new OR block to top of <see cref="ILinqExpressionBuilder{U}"/>.
+    /// </summary>
+    /// <param name="expressionToAdd">Instance of <see cref="Expression"/>, cannot be null.</param>
+    /// <exception cref="ArgumentNullException">Exception thrown when <paramref name="expressionToAdd"/> is null.</exception>
+    /// <exception cref="ArgumentException">Exception thrown when maximum limit is exceeded.</exception>
+    void AddOr(Expression<Func<U, bool>> expressionToAdd);
+
+    /// <summary>
+    /// Adds <see cref="ILinqExpressionBuilder{U}"/> expression as new OR block to top of <see cref="ILinqExpressionBuilder{U}"/>.
+    /// </summary>
+    /// <param name="expressionToAdd">Instance of <see cref="ILinqExpressionBuilder{U}"/>, cannot be empty or null.</param>
+    /// <exception cref="ArgumentNullException">Exception thrown when <paramref name="expressionToAdd"/> is null.</exception>
+    /// <exception cref="ArgumentException">Exception thrown when maximum limit is exceeded or <paramref name="expressionToAdd"/> is empty.</exception>
+    void AddOr(ILinqExpressionBuilder<U> expressionToAdd);
 }
