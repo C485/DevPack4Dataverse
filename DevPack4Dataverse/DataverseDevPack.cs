@@ -23,7 +23,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse;
 
-public sealed class DataverseDevPack : IDataverseDevPack
+public sealed class DataverseDevPack
 {
     public readonly ExecuteMultipleLogic ExecuteMultiple;
     public readonly SdkProxy SdkProxy;
