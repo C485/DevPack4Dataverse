@@ -22,4 +22,5 @@ namespace DevPack4Dataverse.Interfaces;
 public interface ILinqExpressionBuilder<U> where U : Entity
 {
     Expression<Func<U, bool>> Result { get; }
+    uint ExpressionsAdded { get; }
 }
