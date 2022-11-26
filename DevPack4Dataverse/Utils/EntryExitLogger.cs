@@ -45,11 +45,11 @@ public sealed class EntryExitLogger : IDisposable
         bool exceptionOccurred = Marshal.GetExceptionPointers() != IntPtr.Zero;
         if (exceptionOccurred)
         {
-            _logger.LogError("Method {MethodName} in object {ObjectName} exited with exception. Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _entrenceThreadId, Environment.CurrentManagedThreadId);
-            _logger.LogDebug("Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
+            _logger.LogError("{LibName}: Method {MethodName} in object {ObjectName} exited with exception. Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _entrenceThreadId, Environment.CurrentManagedThreadId);
+            _logger.LogDebug("{LibName}: Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
 
             return;
         }
-        _logger.LogDebug("Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
+        _logger.LogDebug("{LibName}: Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
     }
 }

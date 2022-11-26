@@ -77,6 +77,7 @@ public sealed class ExecuteMultipleLogic
             executeMultipleRequestSettings.ReportProgress(Thread.VolatileRead(ref progress),
                 executeMultipleRequestBuilder.Count);
         }, _logger);
+        repeatedTask.Start();
 
         try
         {
@@ -153,6 +154,8 @@ public sealed class ExecuteMultipleLogic
 
         chunksStatistics.Cancelled = cancellationToken
            .IsCancellationRequested;
+
+        executeMultipleRequestSettings.ReportProgress(progress, executeMultipleRequestBuilder.Count);
 
         return chunksStatistics;
     }

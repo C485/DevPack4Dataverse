@@ -194,40 +194,24 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
     {
-        try
-        {
-            using EntryExitLogger logGuard = new(_logger);
+        using EntryExitLogger logGuard = new(_logger);
 
-            using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = GetConnection();
 
-            return await connectionLease
-               .Connection
-               .ExecuteAsync(executeMultipleRequestBuilder, requestSettings)
-               ;
-        }
-        catch (Exception e)
-        {
-            throw;
-        }
+        return await connectionLease
+           .Connection
+           .ExecuteAsync(executeMultipleRequestBuilder, requestSettings);
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
     {
-        try
-        {
-            using EntryExitLogger logGuard = new(_logger);
+        using EntryExitLogger logGuard = new(_logger);
 
-            using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = GetConnection();
 
-            return await connectionLease
-               .Connection
-               .ExecuteAsync<T>(request, requestSettings)
-               ;
-        }
-        catch (Exception e)
-        {
-            throw;
-        }
+        return await connectionLease
+           .Connection
+           .ExecuteAsync<T>(request, requestSettings);
     }
 
     [SuppressMessage("Minor Code Smell",
