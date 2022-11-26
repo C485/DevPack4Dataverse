@@ -15,16 +15,18 @@ limitations under the License.
 */
 
 using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse;
 
 public sealed class DataverseDevPack : IDataverseDevPack
 {
-    public readonly SdkProxy SdkProxy;
     public readonly ExecuteMultipleLogic ExecuteMultiple;
+    public readonly SdkProxy SdkProxy;
 
     public DataverseDevPack(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
@@ -32,4 +34,6 @@ public sealed class DataverseDevPack : IDataverseDevPack
         SdkProxy = new SdkProxy(logger, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
     }
+
+    public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity => LinqExpressionBuilder.Create<T>();
 }
