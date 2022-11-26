@@ -46,6 +46,9 @@ public static class LinqExpressionBuilder
         {
             Guard
                 .Against
+                .Null(expressionToAdd);
+            Guard
+                .Against
                 .AgainstExpression(p => p + 1 <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
             _expression = _expression.And(expressionToAdd);
             _expressionsAdded++;
@@ -53,6 +56,9 @@ public static class LinqExpressionBuilder
 
         public void AddAnd(ILinqExpressionBuilder<U> expressionToAdd)
         {
+            Guard
+                .Against
+                .Null(expressionToAdd);
             Guard
                 .Against
                 .Zero(expressionToAdd.ExpressionsAdded);
@@ -67,6 +73,9 @@ public static class LinqExpressionBuilder
         {
             Guard
                 .Against
+                .Null(expressionToAdd);
+            Guard
+                .Against
                 .AgainstExpression(p => p + 1 <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
             _expression = _expression.Or(expressionToAdd);
             _expressionsAdded++;
@@ -74,6 +83,9 @@ public static class LinqExpressionBuilder
 
         public void AddOr(ILinqExpressionBuilder<U> expressionToAdd)
         {
+            Guard
+                .Against
+                .Null(expressionToAdd);
             Guard
                 .Against
                 .Zero(expressionToAdd.ExpressionsAdded);
