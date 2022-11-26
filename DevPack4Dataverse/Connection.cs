@@ -79,7 +79,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
 
         return await _connection.RetrieveAsync(record.LogicalName, createdRecordId, columns);
     }
@@ -171,9 +171,9 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
 
-        requestSettings?.AddToOrganizationRequest(request);
+        requestSettings?.AddToOrganizationRequest(request, _logger);
 
         return _connection
            .Execute(request) as T;
@@ -198,9 +198,9 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
 
-        requestSettings?.AddToOrganizationRequest(request);
+        requestSettings?.AddToOrganizationRequest(request, _logger);
 
         return await _connection
            .ExecuteAsync(request)

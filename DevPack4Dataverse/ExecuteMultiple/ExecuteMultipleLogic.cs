@@ -31,6 +31,7 @@ public sealed class ExecuteMultipleLogic
 
     public ExecuteMultipleLogic(SdkProxy sdkProxy, ILogger logger)
     {
+        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         _logger = Guard.Against.Null(logger);
     }
@@ -160,9 +161,10 @@ public sealed class ExecuteMultipleLogic
         return chunksStatistics;
     }
 
-    private static OrganizationRequest[][] RequestsToChunks(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+    private OrganizationRequest[][] RequestsToChunks(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings)
     {
+        using EntryExitLogger logGuard = new(_logger);
         return executeMultipleRequestBuilder
            .RequestWithResults
            .Requests

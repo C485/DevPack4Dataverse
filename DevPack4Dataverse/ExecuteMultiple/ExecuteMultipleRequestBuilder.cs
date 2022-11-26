@@ -106,7 +106,7 @@ public sealed class ExecuteMultipleRequestBuilder
            .Against
            .Null(request);
 
-        requestSettings?.AddToOrganizationRequest(request);
+        requestSettings?.AddToOrganizationRequest(request, _logger);
 
         RequestWithResults
            .Requests

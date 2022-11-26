@@ -27,13 +27,15 @@ public sealed class DataverseDevPack
 {
     public readonly ExecuteMultipleLogic ExecuteMultiple;
     public readonly SdkProxy SdkProxy;
+    private readonly ILogger _logger;
 
     public DataverseDevPack(ILogger logger, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
         SdkProxy = new SdkProxy(logger, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
+        _logger = logger;
     }
 
-    public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() => LinqExpressionBuilder.Create<T>();
+    public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() => LinqExpressionBuilder.Create<T>(_logger);
 }

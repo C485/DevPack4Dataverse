@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using DevPack4Dataverse.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
@@ -61,27 +63,28 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// </summary>
     public bool SuppressDuplicateDetection { private get; set; }
 
-    public void AddToOrganizationRequest(OrganizationRequest organizationRequest)
+    public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
+        using EntryExitLogger logGuard = new(logger);
         if (!string.IsNullOrEmpty(SharedVariable))
         {
-            organizationRequest[RequestHeaders.TAG] = SharedVariable;
+            organizationRequest[RequestHeaders.TagName] = SharedVariable;
         }
         if (!string.IsNullOrEmpty(PartitionId))
         {
-            organizationRequest[RequestHeaders.PartitionId] = PartitionId;
+            organizationRequest[RequestHeaders.PartitionIdName] = PartitionId;
         }
         if (SuppressDuplicateDetection)
         {
-            organizationRequest[RequestHeaders.SUPPRESSDUPLICATEDETECTION] = true;
+            organizationRequest[RequestHeaders.SuppressDuplicateDetectioname] = true;
         }
         if (SkipPluginExecution)
         {
-            organizationRequest[RequestHeaders.BYPASSCUSTOMPLUGINEXECUTION] = true;
+            organizationRequest[RequestHeaders.BypassCustomPluginExecutionName] = true;
         }
         if (ConcurrencyBehavior.HasValue)
         {
-            organizationRequest[RequestHeaders.CONCURRENCYBEHAVIOR] = ConcurrencyBehavior.Value;
+            organizationRequest[RequestHeaders.ConcurrencyBehaviorName] = ConcurrencyBehavior.Value;
         }
     }
 
@@ -90,31 +93,31 @@ public sealed class RequestSettings : RequestImpersonateSettings
         /// <summary>
         /// This key used to indicate if the custom plugins need to be bypassed during the execution of the request.
         /// </summary>
-        public const string BYPASSCUSTOMPLUGINEXECUTION = "BypassCustomPluginExecution";
+        public const string BypassCustomPluginExecutionName = "BypassCustomPluginExecution";
 
         /// <summary>
         /// used to identify concurrencybehavior property in an organization request.
         /// </summary>
-        public const string CONCURRENCYBEHAVIOR = "ConcurrencyBehavior";
+        public const string ConcurrencyBehaviorName = "ConcurrencyBehavior";
 
-        public const string PartitionId = "PartitionId";
+        public const string PartitionIdName = "PartitionId";
 
         /// <summary>
         /// key used to apply the operation to a given solution.
         /// See: https://docs.microsoft.com/powerapps/developer/common-data-service/org-service/use-messages#passing-optional-parameters-with-a-request
         /// </summary>
-        public const string SOLUTIONUNIQUENAME = "SolutionUniqueName";
+        public const string SolutionUniqueNameName = "SolutionUniqueName";
 
         /// <summary>
         /// used to apply duplicate detection behavior to a given request.
         /// See: https://docs.microsoft.com/powerapps/developer/common-data-service/org-service/use-messages#passing-optional-parameters-with-a-request
         /// </summary>
-        public const string SUPPRESSDUPLICATEDETECTION = "SuppressDuplicateDetection";
+        public const string SuppressDuplicateDetectioname = "SuppressDuplicateDetection";
 
         /// <summary>
         /// used to pass data though Dataverse to a plugin or downstream system on a request.
         /// See: https://docs.microsoft.com/en-us/powerapps/developer/common-data-service/org-service/use-messages#add-a-shared-variable-from-the-organization-service
         /// </summary>
-        public const string TAG = "tag";
+        public const string TagName = "tag";
     }
 }

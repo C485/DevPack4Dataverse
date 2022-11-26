@@ -65,6 +65,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         get
         {
+            using EntryExitLogger logGuard = new(_logger);
             return _connectionCreators.Count;
         }
     }

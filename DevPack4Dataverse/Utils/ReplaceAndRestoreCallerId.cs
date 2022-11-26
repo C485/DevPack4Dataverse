@@ -16,6 +16,7 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Utils
@@ -26,8 +27,9 @@ namespace DevPack4Dataverse.Utils
         private readonly Guid? oldCallerId;
         private bool _disposedValue;
 
-        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, Guid? callerId = null, Guid? aadCallerId = null)
+        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, Guid? callerId = null, Guid? aadCallerId = null)
         {
+            using EntryExitLogger logGuard = new(logger);
             ServiceClient = Guard
                 .Against
                 .Null(serviceClient);
@@ -37,8 +39,9 @@ namespace DevPack4Dataverse.Utils
             serviceClient.CallerAADObjectId = aadCallerId;
         }
 
-        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, RequestImpersonateSettings requestSettings = null)
+        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, RequestImpersonateSettings requestSettings = null)
         {
+            using EntryExitLogger logGuard = new(logger);
             ServiceClient = Guard
                 .Against
                 .Null(serviceClient);

@@ -16,6 +16,7 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using System.Security;
@@ -33,6 +34,8 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 
     public ClientSecretConnectionCreator(string crmUrl, string appId, SecureString secret, ILogger logger)
     {
+        using EntryExitLogger logGuard = new(logger);
+
         _crmUrl = Guard
            .Against
            .InvalidInput(crmUrl,
@@ -63,6 +66,8 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 
     public IConnection Create()
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         try
         {
             ServiceClient crmServiceClient = new(new Uri(_crmUrl),
@@ -88,8 +93,9 @@ public class ClientSecretConnectionCreator : IConnectionCreator
             _isCreated = true;
             return connection;
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
             _isError = true;
             throw;
         }

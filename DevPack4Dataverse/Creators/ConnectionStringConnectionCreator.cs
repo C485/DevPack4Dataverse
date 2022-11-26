@@ -16,6 +16,7 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
@@ -33,6 +34,8 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
 
     public ConnectionStringConnectionCreator(string connectionString, ILogger logger)
     {
+        using EntryExitLogger logGuard = new(logger);
+
         _connectionString = Guard
            .Against
            .NullOrEmpty(connectionString);
@@ -62,14 +65,14 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         _connectionString += ";RequireNewInstance=True";
     }
 
-    public bool IsError => _isError;
-
     public bool IsCreated => _isCreated;
-
+    public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
     public IConnection Create()
     {
+        using EntryExitLogger logGuard = new(_logger);
+
         try
         {
             ServiceClient crmServiceClient = new(_connectionString, _logger);
@@ -90,8 +93,9 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
             _isCreated = true;
             return connection;
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
             _isError = true;
             throw;
         }
