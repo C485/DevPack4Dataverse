@@ -21,7 +21,9 @@ A --> |Can use ExecuteMultiple.CreateRequestBuilder|B
 A --> C
 A --> D
 A --> E
-E --> |Used by LINQ expressions|D
+E --> |LINQ expressions as param|A
+C --> D
+B --> D
 ```
 
 ### ExecuteMultiple
