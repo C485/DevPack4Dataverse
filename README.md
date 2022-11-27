@@ -50,9 +50,9 @@ Gives ability to quickly call dataverse endpoint with optimized packs of request
                 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
-For example when we have lookup that points to record X, we can call FieldDrill by these parameters
+For example when we have lookup that points to record X, we can call FieldDrill with these parameters
 `await dataverseDevPack.FieldDrill.RetreiveAsync<string>(item.ToEntityReference(), "ownerid.fullname");`
-This will retrieve field fullname from lookup named ownerid in starting record entity reference.
+It will retrieve field fullname from lookup named ownerid in starting record entity reference.
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint. 
 ### CreateLinqExpressionBuilder
