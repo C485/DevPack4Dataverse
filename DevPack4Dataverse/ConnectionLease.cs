@@ -16,6 +16,8 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
+using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.Xrm.Sdk.Client;
 
 namespace DevPack4Dataverse;
 
@@ -38,10 +40,19 @@ public sealed class ConnectionLease : IDisposable
 
     public IConnection Connection { get; }
 
+    public ServiceClient PureServiceClient => Connection.PureServiceClient;
+
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    public OrganizationServiceContext GetOrganizationServiceContext() => new(PureServiceClient);
+
+    public T GetOrganizationServiceContext<T>() where T : OrganizationServiceContext
+    {
+        return (T)Activator.CreateInstance(typeof(T), PureServiceClient);
     }
 
     private void Dispose(bool disposing)
