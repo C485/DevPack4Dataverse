@@ -28,47 +28,17 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
-public class AccessStatistic
-{
-    public AccessStatistic()
-    {
-        FirstOccuranceDate = DateTime.Now;
-    }
-
-    public int Count { get; private set; }
-
-    public DateTime FirstOccuranceDate { get; }
-
-    public void Increase()
-    {
-        Count++;
-    }
-}
-
-public class UsageStatistic
-{
-    public UsageStatistic()
-    {
-        FirstOccuranceDate = DateTime.Now;
-    }
-
-    public int Count { get; private set; }
-
-    public DateTime FirstOccuranceDate { get; }
-
-    public void Increase()
-    {
-        Count++;
-    }
-}
-
 public sealed class Connection : IConnection
 {
-    private readonly Dictionary<int, AccessStatistic> _accessStatistics = new(); //TODO
+    //TODO Throttling informations
+    /*
+     Combined execution time of incoming requests exceeded limit of 1200000 milliseconds over time window of 300 seconds.
+     */
+    private readonly Statistics _accessStatistics = new();
     private readonly ServiceClient _connection;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
-    private readonly Dictionary<int, UsageStatistic> _usageStatistics = new(); //TODO
+    private readonly Statistics _usageStatistics = new();
 
     public Connection(ServiceClient connection, ILogger logger)
     {
@@ -118,6 +88,8 @@ public sealed class Connection : IConnection
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
         using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
+
+        _usageStatistics.Increase();
 
         return await _connection.RetrieveAsync(record.LogicalName, createdRecordId, columns);
     }
@@ -213,6 +185,8 @@ public sealed class Connection : IConnection
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
+        _usageStatistics.Increase();
+
         return _connection
            .Execute(request) as T;
     }
@@ -240,6 +214,8 @@ public sealed class Connection : IConnection
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
+        _usageStatistics.Increase();
+
         return await _connection
            .ExecuteAsync(request)
             as T;
@@ -266,6 +242,8 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
+        _usageStatistics.Increase();
+
         return _connection
            .Retrieve(record.LogicalName, record.Id, columns);
     }
@@ -280,9 +258,10 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
+        _usageStatistics.Increase();
+
         return await _connection
-            .RetrieveAsync(record.LogicalName, record.Id, columns)
-            ;
+            .RetrieveAsync(record.LogicalName, record.Id, columns);
     }
 
     public void ReleaseLock()
@@ -308,6 +287,8 @@ public sealed class Connection : IConnection
            .Against
            .Null(columnSet);
 
+        _usageStatistics.Increase();
+
         return _connection
            .Retrieve(entityName, id, columnSet);
     }
@@ -327,6 +308,8 @@ public sealed class Connection : IConnection
         Guard
            .Against
            .Null(columnSet);
+
+        _usageStatistics.Increase();
 
         return await _connection
             .RetrieveAsync(entityName, id, columnSet);
@@ -354,6 +337,8 @@ public sealed class Connection : IConnection
 
             while (true)
             {
+                _usageStatistics.Increase();
+
                 EntityCollection retrieveMultipleResult = _connection
                    .RetrieveMultiple(queryExpression);
 
@@ -395,6 +380,8 @@ public sealed class Connection : IConnection
 
             while (true)
             {
+                _usageStatistics.Increase();
+
                 EntityCollection retrieveMultipleResult = await _connection
                     .RetrieveMultipleAsync(queryExpression);
 
@@ -418,6 +405,8 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
+        _usageStatistics.Increase();
+
         WhoAmIResponse response = (WhoAmIResponse)_connection
            .Execute(new WhoAmIRequest());
 
@@ -429,6 +418,8 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
+        _usageStatistics.Increase();
+
         WhoAmIResponse response = (WhoAmIResponse)await _connection.ExecuteAsync(new WhoAmIRequest());
 
         return response != null
@@ -438,8 +429,13 @@ public sealed class Connection : IConnection
     public bool TryLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-        return _semaphoreSlim
+        bool lockSucessed = _semaphoreSlim
             .Wait(0);
+        if (lockSucessed)
+        {
+            _accessStatistics.Increase();
+        }
+        return lockSucessed;
     }
 
     public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
@@ -473,8 +469,7 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings)
-            ;
+        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings);
 
         return record.Id;
     }
@@ -513,8 +508,7 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings)
-            ;
+        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings);
 
         return Guard
            .Against
