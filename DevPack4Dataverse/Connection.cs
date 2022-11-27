@@ -64,11 +64,11 @@ public class UsageStatistic
 
 public sealed class Connection : IConnection
 {
-    private readonly Dictionary<int, AccessStatistic> _accessStatistics = new();
+    private readonly Dictionary<int, AccessStatistic> _accessStatistics = new(); //TODO
     private readonly ServiceClient _connection;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
-    private readonly Dictionary<int, UsageStatistic> _usageStatistics = new();
+    private readonly Dictionary<int, UsageStatistic> _usageStatistics = new(); //TODO
 
     public Connection(ServiceClient connection, ILogger logger)
     {

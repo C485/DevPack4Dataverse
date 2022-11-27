@@ -36,7 +36,12 @@ public sealed class ExecuteMultipleLogic
         _logger = Guard.Against.Null(logger);
     }
 
-    public async Task<AdvancedExecuteMultipleRequestsStatistics> AdvancedExecuteMultipleRequests(
+    public ExecuteMultipleRequestBuilder CreateRequestBuilder(bool continueOnError = true)
+    {
+        return new ExecuteMultipleRequestBuilder(_logger, continueOnError);
+    }
+
+    public async Task<AdvancedExecuteMultipleRequestsStatistics> Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default)
