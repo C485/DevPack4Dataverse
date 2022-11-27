@@ -91,6 +91,8 @@ public sealed class Connection : IConnection
            .RetryPauseTime = TimeSpan.FromSeconds(2);
     }
 
+    public ServiceClient PureServiceClient => _connection;
+
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
