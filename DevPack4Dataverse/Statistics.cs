@@ -18,17 +18,42 @@ namespace DevPack4Dataverse;
 
 public class Statistics
 {
+    private const int InitialCount = 1;
     private readonly Dictionary<int, Statistic> _Statistics = new();
+
+    public Dictionary<int, Statistic> GetStatistics() => _Statistics;
+
+    public int GetEntriesFromLastMinutes(uint lastMinutes)
+    {
+        if (lastMinutes == 0)
+        {
+            return 0;
+        }
+        int key = StatisticKeyLogic.GetKey();
+        int sum = 0;
+        while (true)
+        {
+            if (_Statistics.TryGetValue(key, out Statistic value))
+            {
+                sum += value.Count;
+            }
+            key--;
+            if (--lastMinutes == 0)
+            {
+                return sum;
+            }
+        }
+    }
 
     public void Increase()
     {
-        var key = StatisticKeyLogic.GetKey();
+        int key = StatisticKeyLogic.GetKey();
         if (_Statistics.TryGetValue(key, out Statistic value))
         {
             value.Increase();
             return;
         }
-        _Statistics[key] = new Statistic(1);
+        _Statistics[key] = new Statistic(InitialCount);
     }
 
     private static class StatisticKeyLogic

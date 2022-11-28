@@ -30,10 +30,6 @@ namespace DevPack4Dataverse;
 
 public sealed class Connection : IConnection
 {
-    //TODO Throttling informations
-    /*
-     Combined execution time of incoming requests exceeded limit of 1200000 milliseconds over time window of 300 seconds.
-     */
     private readonly Statistics _accessStatistics = new();
     private readonly ServiceClient _connection;
     private readonly ILogger _logger;
@@ -62,6 +58,13 @@ public sealed class Connection : IConnection
     }
 
     public ServiceClient PureServiceClient => _connection;
+    public int UsageWeight => _usageStatistics.GetEntriesFromLastMinutes(2);
+
+    public void ApplyConnectionOptimalization()
+    {
+        _connection
+            .EnableAffinityCookie = false;
+    }
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
@@ -431,6 +434,18 @@ public sealed class Connection : IConnection
         using EntryExitLogger logGuard = new(_logger);
         bool lockSucessed = _semaphoreSlim
             .Wait(0);
+        if (lockSucessed)
+        {
+            _accessStatistics.Increase();
+        }
+        return lockSucessed;
+    }
+
+    public async Task<bool> TryLockAsync()
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        bool lockSucessed = await _semaphoreSlim
+            .WaitAsync(0);
         if (lockSucessed)
         {
             _accessStatistics.Increase();

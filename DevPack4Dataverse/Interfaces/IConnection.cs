@@ -22,6 +22,8 @@ public interface IConnection : IDataverseConnectionLayer
 {
     ServiceClient PureServiceClient { get; }
 
+    void ApplyConnectionOptimalization();
+
     void ReleaseLock();
 
     bool Test();
@@ -29,4 +31,6 @@ public interface IConnection : IDataverseConnectionLayer
     Task<bool> TestAsync();
 
     bool TryLock();
+
+    Task<bool> TryLockAsync();
 }

@@ -25,9 +25,20 @@ using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Security;
 
 namespace DevPack4Dataverse;
+
+public sealed class ThrotllingSettings
+{
+    // https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits#service-protection-api-limit-errors-returned
+    //TODO Throttling informations
+    /*
+     Combined execution time of incoming requests exceeded limit of 1200000 milliseconds over time window of 300 seconds.
+     */
+    public int MaximumRequestsPerMinute => 100;
+}
 
 public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 {
@@ -37,12 +48,19 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
+    private readonly bool _applyConnectionOptimalization;
 
-    public SdkProxy(ILogger logger, params IConnectionCreator[] connectionCreators)
+    public SdkProxy(ILogger logger, bool applyConnectionOptimalization = true, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
 
+        if (applyConnectionOptimalization)
+        {
+            OptimalizeConnections();
+        }
+
         _logger = Guard.Against.Null(logger);
+        _applyConnectionOptimalization = applyConnectionOptimalization;
         _connectionCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
         _connectionCreator = new RepeatedTask(_sleepTimeForConnectionCreator, () =>
         {
@@ -75,9 +93,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
 
         SecureString secureString = new();
-        foreach (char c in plainString)
+        foreach (char singleChar in plainString)
         {
-            secureString.AppendChar(c);
+            secureString.AppendChar(singleChar);
         }
         secureString.MakeReadOnly();
         return secureString;
@@ -108,7 +126,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -138,7 +156,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         await connectionLease
            .Connection
@@ -148,7 +166,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         await connectionLease
            .Connection
@@ -185,7 +203,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -195,7 +213,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -226,6 +244,31 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
+    public async Task<ConnectionLease> GetConnectionAsync()
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
+
+        while (true)
+        {
+            foreach (IConnection connection in _connections)
+            {
+                if (await connection.TryLockAsync())
+                {
+                    if (_applyConnectionOptimalization)
+                    {
+                        connection.ApplyConnectionOptimalization();
+                    }
+                    return new ConnectionLease(connection);
+                }
+            }
+
+            await Task
+               .Delay(_sleepTimeForConnectionGetter);
+        }
+    }
+
     public Entity RefreshRecord(Entity record)
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -239,7 +282,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Entity> RefreshRecordAsync(Entity record)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -259,7 +302,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -279,7 +322,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -299,7 +342,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
@@ -319,10 +362,18 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = GetConnection();
+        using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
            .UpsertRecordAsync(record, requestSettings);
+    }
+
+    private static void OptimalizeConnections()
+    {
+        ServicePointManager.DefaultConnectionLimit = 65000;
+        ThreadPool.SetMinThreads(100, 100);
+        ServicePointManager.Expect100Continue = false;
+        ServicePointManager.UseNagleAlgorithm = false;
     }
 }
