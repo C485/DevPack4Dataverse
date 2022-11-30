@@ -14,60 +14,58 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Diagnostics;
+
 namespace DevPack4Dataverse;
 
 public class Statistics
 {
-    private const int InitialCount = 1;
-    private readonly Dictionary<int, Statistic> _Statistics = new();
+    private readonly object _lock = new();
+    private readonly List<Statistic> _statistics = new();
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
-    public Dictionary<int, Statistic> GetStatistics() => _Statistics;
-
-    public int GetEntriesFromLastMinutes(uint lastMinutes)
+    public void Finish(Statistic statistic)
     {
-        if (lastMinutes == 0)
+        statistic.SetEnd(_stopwatch.Elapsed);
+    }
+
+    public Statistic StartNew()
+    {
+        lock (_lock)
         {
-            return 0;
-        }
-        int key = StatisticKeyLogic.GetKey();
-        int sum = 0;
-        while (true)
-        {
-            if (_Statistics.TryGetValue(key, out Statistic value))
-            {
-                sum += value.Count;
-            }
-            key--;
-            if (--lastMinutes == 0)
-            {
-                return sum;
-            }
+            Statistic statsEntry = new(_stopwatch.Elapsed);
+            _statistics.Add(statsEntry);
+            return statsEntry;
         }
     }
 
-    public void Increase()
+    public long UsageWeightFromLastXMinutes(uint minutes)
     {
-        int key = StatisticKeyLogic.GetKey();
-        if (_Statistics.TryGetValue(key, out Statistic value))
+        lock (_lock)
         {
-            value.Increase();
-            return;
-        }
-        _Statistics[key] = new Statistic(InitialCount);
-    }
+            if (minutes == 0)
+            {
+                return 0;
+            }
+            long totalSeconds = 0;
+            uint skippedStatistics = 0;
+            TimeSpan minimalTimeSpan = _stopwatch.Elapsed - TimeSpan.FromMinutes(minutes);
+            for (int i = _statistics.Count - 1; i >= 0; i--)
+            {
+                if (skippedStatistics >= 100)
+                {
+                    break;
+                }
 
-    private static class StatisticKeyLogic
-    {
-        private static readonly DateTime startingDate = new(2000, 1, 1);
-
-        public static int GetKey()
-        {
-            return (int)DateTime.Now.Subtract(startingDate).TotalMinutes;
-        }
-
-        public static DateTime RestoreDateTime(int key)
-        {
-            return startingDate.AddMinutes(key);
+                Statistic statistic = _statistics[i];
+                if (!statistic.IsBeetwenTimeSpans(minimalTimeSpan))
+                {
+                    skippedStatistics++;
+                    continue;
+                }
+                totalSeconds += statistic.ElapsedSeconds;
+            }
+            return totalSeconds;
         }
     }
 }

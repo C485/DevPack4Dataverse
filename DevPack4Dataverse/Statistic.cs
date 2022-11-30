@@ -14,21 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using Ardalis.GuardClauses;
+
 namespace DevPack4Dataverse;
 
 public class Statistic
 {
-    public Statistic(int initialCount = 0)
+    private readonly TimeSpan _start;
+    private TimeSpan _end;
+
+    public Statistic(TimeSpan startTimeSpan)
     {
-        FirstOccuranceDate = DateTime.Now;
+        _start = Guard.Against.Zero(startTimeSpan);
     }
 
-    public int Count { get; private set; }
+    public int ElapsedMinutes => Convert.ToInt32((_end - _start).TotalMinutes);
 
-    public DateTime FirstOccuranceDate { get; }
+    public int ElapsedSeconds => Convert.ToInt32((_end - _start).TotalSeconds);
 
-    public void Increase()
+    public bool IsBeetwenTimeSpans(TimeSpan timeSpan)
     {
-        Count++;
+        return timeSpan >= _start && timeSpan <= _end;
+    }
+
+    public void SetEnd(TimeSpan endTimeSpan)
+    {
+        _end = Guard.Against.Zero(endTimeSpan);
     }
 }

@@ -30,8 +30,6 @@ namespace DevPack4Dataverse;
 
 public sealed class Connection : IConnection
 {
-    private readonly Statistics _accessStatistics = new();
-    private readonly ServiceClient _connection;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly Statistics _usageStatistics = new();
@@ -43,26 +41,25 @@ public sealed class Connection : IConnection
             .Against
             .Null(logger);
         _semaphoreSlim = new SemaphoreSlim(1, 1);
-        _connection = Guard
+        PureServiceClient = Guard
            .Against
            .Null(connection);
 
-        _connection
+        PureServiceClient
            .DisableCrossThreadSafeties = true;
 
-        _connection
+        PureServiceClient
            .MaxRetryCount = 10;
 
-        _connection
+        PureServiceClient
            .RetryPauseTime = TimeSpan.FromSeconds(2);
     }
 
-    public ServiceClient PureServiceClient => _connection;
-    public int UsageWeight => _usageStatistics.GetEntriesFromLastMinutes(2);
+    public ServiceClient PureServiceClient { get; }
 
     public void ApplyConnectionOptimalization()
     {
-        _connection
+        PureServiceClient
             .EnableAffinityCookie = false;
     }
 
@@ -90,11 +87,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
-
-        _usageStatistics.Increase();
-
-        return await _connection.RetrieveAsync(record.LogicalName, createdRecordId, columns);
+        return await RetrieveAsync(record.LogicalName, createdRecordId, columns); ;
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -184,13 +177,11 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        _usageStatistics.Increase();
-
-        return _connection
+        return PureServiceClient
            .Execute(request) as T;
     }
 
@@ -213,13 +204,11 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        _usageStatistics.Increase();
-
-        return await _connection
+        return await PureServiceClient
            .ExecuteAsync(request)
             as T;
     }
@@ -235,7 +224,7 @@ public sealed class Connection : IConnection
         return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
     }
 
-    public Entity RefreshRecord(Entity record)
+    public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -245,13 +234,10 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        _usageStatistics.Increase();
-
-        return _connection
-           .Retrieve(record.LogicalName, record.Id, columns);
+        return Retrieve(record.LogicalName, record.Id, columns, requestSettings);
     }
 
-    public async Task<Entity> RefreshRecordAsync(Entity record)
+    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -261,10 +247,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        _usageStatistics.Increase();
-
-        return await _connection
-            .RetrieveAsync(record.LogicalName, record.Id, columns);
+        return await RetrieveAsync(record.LogicalName, record.Id, columns, requestSettings);
     }
 
     public void ReleaseLock()
@@ -274,7 +257,7 @@ public sealed class Connection : IConnection
             .Release();
     }
 
-    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
+    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -290,13 +273,15 @@ public sealed class Connection : IConnection
            .Against
            .Null(columnSet);
 
-        _usageStatistics.Increase();
-
-        return _connection
-           .Retrieve(entityName, id, columnSet);
+        RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(new RetrieveRequest
+        {
+            ColumnSet = columnSet,
+            Target = new EntityReference(entityName, id)
+        }, requestSettings);
+        return retrieveResponse?.Entity;
     }
 
-    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet)
+    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -312,13 +297,15 @@ public sealed class Connection : IConnection
            .Against
            .Null(columnSet);
 
-        _usageStatistics.Increase();
-
-        return await _connection
-            .RetrieveAsync(entityName, id, columnSet);
+        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(new RetrieveRequest
+        {
+            ColumnSet = columnSet,
+            Target = new EntityReference(entityName, id)
+        }, requestSettings);
+        return retrieveResponse?.Entity;
     }
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression)
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -340,10 +327,10 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                _usageStatistics.Increase();
-
-                EntityCollection retrieveMultipleResult = _connection
-                   .RetrieveMultiple(queryExpression);
+                EntityCollection retrieveMultipleResult = Execute<RetrieveMultipleResponse>(new RetrieveMultipleRequest
+                {
+                    Query = queryExpression
+                }, requestSettings).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -361,7 +348,7 @@ public sealed class Connection : IConnection
         }
     }
 
-    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
+    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -383,10 +370,11 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                _usageStatistics.Increase();
-
-                EntityCollection retrieveMultipleResult = await _connection
-                    .RetrieveMultipleAsync(queryExpression);
+                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(new RetrieveMultipleRequest
+                {
+                    Query = queryExpression
+                }, requestSettings);
+                EntityCollection retrieveMultipleResult = retrieveMultipleResponse.EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -408,9 +396,7 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        _usageStatistics.Increase();
-
-        WhoAmIResponse response = (WhoAmIResponse)_connection
+        WhoAmIResponse response = (WhoAmIResponse)PureServiceClient
            .Execute(new WhoAmIRequest());
 
         return response != null
@@ -421,9 +407,7 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        _usageStatistics.Increase();
-
-        WhoAmIResponse response = (WhoAmIResponse)await _connection.ExecuteAsync(new WhoAmIRequest());
+        WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
 
         return response != null
             && response.UserId != Guid.Empty;
@@ -432,28 +416,18 @@ public sealed class Connection : IConnection
     public bool TryLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-        bool lockSucessed = _semaphoreSlim
+        return _semaphoreSlim
             .Wait(0);
-        if (lockSucessed)
-        {
-            _accessStatistics.Increase();
-        }
-        return lockSucessed;
     }
 
     public async Task<bool> TryLockAsync()
     {
         using EntryExitLogger logGuard = new(_logger);
-        bool lockSucessed = await _semaphoreSlim
+        return await _semaphoreSlim
             .WaitAsync(0);
-        if (lockSucessed)
-        {
-            _accessStatistics.Increase();
-        }
-        return lockSucessed;
     }
 
-    public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -467,11 +441,9 @@ public sealed class Connection : IConnection
         };
 
         _ = Execute<UpdateResponse>(request, requestSettings);
-
-        return record.Id;
     }
 
-    public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -485,8 +457,6 @@ public sealed class Connection : IConnection
         };
 
         _ = await ExecuteAsync<UpdateResponse>(request, requestSettings);
-
-        return record.Id;
     }
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)

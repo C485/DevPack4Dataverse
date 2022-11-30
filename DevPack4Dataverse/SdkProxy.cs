@@ -30,25 +30,15 @@ using System.Security;
 
 namespace DevPack4Dataverse;
 
-public sealed class ThrotllingSettings
-{
-    // https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits#service-protection-api-limit-errors-returned
-    //TODO Throttling informations
-    /*
-     Combined execution time of incoming requests exceeded limit of 1200000 milliseconds over time window of 300 seconds.
-     */
-    public int MaximumRequestsPerMinute => 100;
-}
-
 public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 {
+    private readonly bool _applyConnectionOptimalization;
     private readonly RepeatedTask _connectionCreator;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
     private readonly ConcurrentBag<IConnection> _connections = new();
     private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
-    private readonly bool _applyConnectionOptimalization;
 
     public SdkProxy(ILogger logger, bool applyConnectionOptimalization = true, params IConnectionCreator[] connectionCreators)
     {
@@ -235,6 +225,10 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             {
                 if (connection.TryLock())
                 {
+                    if (_applyConnectionOptimalization)
+                    {
+                        connection.ApplyConnectionOptimalization();
+                    }
                     return new ConnectionLease(connection);
                 }
             }
@@ -269,82 +263,82 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
-    public Entity RefreshRecord(Entity record)
+    public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
            .Connection
-           .RefreshRecord(record);
+           .RefreshRecord(record, requestSettings);
     }
 
-    public async Task<Entity> RefreshRecordAsync(Entity record)
+    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
-           .RefreshRecordAsync(record);
+           .RefreshRecordAsync(record, requestSettings);
     }
 
-    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
+    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
            .Connection
-           .Retrieve(entityName, id, columnSet);
+           .Retrieve(entityName, id, columnSet, requestSettings);
     }
 
-    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet)
+    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
-           .RetrieveAsync(entityName, id, columnSet);
+           .RetrieveAsync(entityName, id, columnSet, requestSettings);
     }
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression)
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease
            .Connection
-           .RetrieveMultiple(queryExpression);
+           .RetrieveMultiple(queryExpression, requestSettings);
     }
 
-    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
+    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease
            .Connection
-           .RetrieveMultipleAsync(queryExpression);
+           .RetrieveMultipleAsync(queryExpression, requestSettings);
     }
 
-    public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = GetConnection();
 
-        return connectionLease
+        connectionLease
            .Connection
            .UpdateRecord(record, requestSettings);
     }
 
-    public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
-        return await connectionLease
+        await connectionLease
            .Connection
            .UpdateRecordAsync(record, requestSettings);
     }
