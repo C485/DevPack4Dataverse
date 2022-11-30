@@ -87,7 +87,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return await RetrieveAsync(record.LogicalName, createdRecordId, columns); ;
+        return await RetrieveAsync(record.LogicalName, createdRecordId, columns);
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -108,7 +108,10 @@ public sealed class Connection : IConnection
         };
 
         CreateResponse createResponse = await ExecuteAsync<CreateResponse>(createRequest, requestSettings);
-        return createResponse.id;
+        return Guard
+            .Against
+            .Null(createResponse)
+            .id;
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
@@ -181,8 +184,16 @@ public sealed class Connection : IConnection
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        return PureServiceClient
-           .Execute(request) as T;
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return PureServiceClient
+               .Execute(request) as T;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -193,7 +204,15 @@ public sealed class Connection : IConnection
            .Against
            .Null(executeMultipleRequestBuilder);
 
-        return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
@@ -207,10 +226,17 @@ public sealed class Connection : IConnection
         using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
-
-        return await PureServiceClient
-           .ExecuteAsync(request)
-            as T;
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return await PureServiceClient
+               .ExecuteAsync(request)
+                as T;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -278,7 +304,10 @@ public sealed class Connection : IConnection
             ColumnSet = columnSet,
             Target = new EntityReference(entityName, id)
         }, requestSettings);
-        return retrieveResponse?.Entity;
+        return Guard
+            .Against
+            .Null(retrieveResponse)
+            .Entity;
     }
 
     public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
@@ -302,7 +331,10 @@ public sealed class Connection : IConnection
             ColumnSet = columnSet,
             Target = new EntityReference(entityName, id)
         }, requestSettings);
-        return retrieveResponse?.Entity;
+        return Guard
+            .Against
+            .Null(retrieveResponse)
+            .Entity;
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
@@ -327,10 +359,14 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                EntityCollection retrieveMultipleResult = Execute<RetrieveMultipleResponse>(new RetrieveMultipleRequest
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(new RetrieveMultipleRequest
                 {
                     Query = queryExpression
-                }, requestSettings).EntityCollection;
+                }, requestSettings);
+                EntityCollection retrieveMultipleResult = Guard
+                    .Against
+                    .Null(retrieveMultipleResponse)
+                    .EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -374,7 +410,10 @@ public sealed class Connection : IConnection
                 {
                     Query = queryExpression
                 }, requestSettings);
-                EntityCollection retrieveMultipleResult = retrieveMultipleResponse.EntityCollection;
+                EntityCollection retrieveMultipleResult = Guard
+                    .Against
+                    .Null(retrieveMultipleResponse)
+                    .EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -396,21 +435,37 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        WhoAmIResponse response = (WhoAmIResponse)PureServiceClient
-           .Execute(new WhoAmIRequest());
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            WhoAmIResponse response = (WhoAmIResponse)PureServiceClient
+               .Execute(new WhoAmIRequest());
 
-        return response != null
-            && response.UserId != Guid.Empty;
+            return response != null
+                && response.UserId != Guid.Empty;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<bool> TestAsync()
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
 
-        return response != null
-            && response.UserId != Guid.Empty;
+            return response != null
+                && response.UserId != Guid.Empty;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public bool TryLock()
