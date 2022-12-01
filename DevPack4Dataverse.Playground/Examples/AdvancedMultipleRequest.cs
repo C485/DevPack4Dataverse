@@ -25,7 +25,7 @@ namespace DevPack4Dataverse.Playground.Examples
 {
     public class AdvancedMultipleRequest : IExecute
     {
-        private const string EntityName = "cr4cc_test";
+        private const string EntityName = "cr4cc_autocountervc";
         private const string EntityNameFieldName = "cr4cc_name";
         private const int RecordsToCreate = 2000;
         private readonly ILogger microsoftLogger;
@@ -40,7 +40,12 @@ namespace DevPack4Dataverse.Playground.Examples
         public async Task Execute()
         {
             DataverseDevPack connectionManager = new(microsoftLogger,
-                new ClientSecretConnectionCreator("https://???", "-----", SdkProxy.StringToSecureString("-----"), microsoftLogger));
+                true,
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger, 6),
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger, 6),
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger, 6),
+                new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), microsoftLogger, 6)
+                );
             await DeleteRecords(connectionManager);
 
             await AddNewRecords(connectionManager);
@@ -55,33 +60,38 @@ namespace DevPack4Dataverse.Playground.Examples
                 et[EntityNameFieldName] = $"Record [{item}]";
                 executeMultipleRequestBuilder.AddCreate(et);
             }
-            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.ExecuteMultiple.AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder,
+            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.ExecuteMultiple.Execute(executeMultipleRequestBuilder,
                 new ExecuteMultipleRequestSettings
                 {
                     ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
                     ReportProgress = (int cur, int max) => Console.Title = $"Progress[{cur}/{max}]",
-                    ReportProgressInterval = TimeSpan.FromMilliseconds(100)
+                    ReportProgressInterval = TimeSpan.FromMilliseconds(100),
+                    MaxDegreeOfParallelism = 4 * 6,
+                    RequestSize = 30
                 });
         }
 
-        private async Task DeleteRecords(DataverseDevPack connectionManager)
+        private async Task DeleteRecords(DataverseDevPack dataverseDevPack)
         {
-            var recordsInCrm = connectionManager.SdkProxy.RetrieveMultiple(new QueryExpression
+            Entity[] recordsInCrm = dataverseDevPack.SdkProxy.RetrieveMultiple(new QueryExpression
             {
                 EntityName = EntityName,
                 ColumnSet = new ColumnSet(false)
             });
-            ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(microsoftLogger, true);
+            ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = dataverseDevPack.ExecuteMultiple
+                .CreateRequestBuilder();
             foreach (var item in recordsInCrm)
             {
                 executeMultipleRequestBuilder.AddDelete(item.ToEntityReference());
             }
-            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await connectionManager.ExecuteMultiple.AdvancedExecuteMultipleRequests(executeMultipleRequestBuilder,
+            AdvancedExecuteMultipleRequestsStatistics executeStatistic = await dataverseDevPack.ExecuteMultiple
+                .Execute(executeMultipleRequestBuilder,
                 new ExecuteMultipleRequestSettings
                 {
                     ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
-                    ReportProgress = (int cur, int max) => Console.Title = $"Progress[{cur}/{max}]",
-                    ReportProgressInterval = TimeSpan.FromMilliseconds(100)
+                    ReportProgress = (int cur, int max) => Console.Title = $"Progress delete[{cur}/{max}]",
+                    ReportProgressInterval = TimeSpan.FromMilliseconds(100),
+                    MaxDegreeOfParallelism = 4 * 2
                 });
         }
     }

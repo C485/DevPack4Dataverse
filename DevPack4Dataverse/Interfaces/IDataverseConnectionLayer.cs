@@ -44,21 +44,21 @@ public interface IDataverseConnectionLayer
 
     Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
 
-    Entity RefreshRecord(Entity record);
+    Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
 
-    Task<Entity> RefreshRecordAsync(Entity record);
+    Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null);
 
-    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet);
+    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
 
-    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet);
+    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
 
-    Entity[] RetrieveMultiple(QueryExpression queryExpression);
+    Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null);
 
-    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression);
+    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null);
 
-    Guid UpdateRecord(Entity record, RequestSettings requestSettings = null);
+    void UpdateRecord(Entity record, RequestSettings requestSettings = null);
 
-    Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null);
+    Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null);
 
     EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null);
 

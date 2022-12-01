@@ -28,70 +28,48 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
-public class AccessStatistic
-{
-    public AccessStatistic()
-    {
-        FirstOccuranceDate = DateTime.Now;
-    }
-
-    public int Count { get; private set; }
-
-    public DateTime FirstOccuranceDate { get; }
-
-    public void Increase()
-    {
-        Count++;
-    }
-}
-
-public class UsageStatistic
-{
-    public UsageStatistic()
-    {
-        FirstOccuranceDate = DateTime.Now;
-    }
-
-    public int Count { get; private set; }
-
-    public DateTime FirstOccuranceDate { get; }
-
-    public void Increase()
-    {
-        Count++;
-    }
-}
-
 public sealed class Connection : IConnection
 {
-    private readonly Dictionary<int, AccessStatistic> _accessStatistics = new(); //TODO
-    private readonly ServiceClient _connection;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
-    private readonly Dictionary<int, UsageStatistic> _usageStatistics = new(); //TODO
+    private readonly Statistics _usageStatistics = new();
 
-    public Connection(ServiceClient connection, ILogger logger)
+    public Connection(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
     {
         using EntryExitLogger logGuard = new(logger);
+
+        Guard
+            .Against
+            .NegativeOrZero(maximumConcurrentlyUsage);
+
         _logger = Guard
             .Against
             .Null(logger);
-        _semaphoreSlim = new SemaphoreSlim(1, 1);
-        _connection = Guard
+
+        _semaphoreSlim = new SemaphoreSlim(maximumConcurrentlyUsage, maximumConcurrentlyUsage);
+
+        PureServiceClient = Guard
            .Against
            .Null(connection);
 
-        _connection
+        PureServiceClient
            .DisableCrossThreadSafeties = true;
 
-        _connection
+        PureServiceClient
            .MaxRetryCount = 10;
 
-        _connection
+        PureServiceClient
            .RetryPauseTime = TimeSpan.FromSeconds(2);
     }
 
-    public ServiceClient PureServiceClient => _connection;
+    public ServiceClient PureServiceClient { get; }
+    public IStatistics Statistics => _usageStatistics;
+
+    public void ApplyConnectionOptimalization()
+    {
+        PureServiceClient
+            .EnableAffinityCookie = false;
+    }
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
@@ -117,9 +95,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
-
-        return await _connection.RetrieveAsync(record.LogicalName, createdRecordId, columns);
+        return await RetrieveAsync(record.LogicalName, createdRecordId, columns);
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -140,7 +116,10 @@ public sealed class Connection : IConnection
         };
 
         CreateResponse createResponse = await ExecuteAsync<CreateResponse>(createRequest, requestSettings);
-        return createResponse.id;
+        return Guard
+            .Against
+            .Null(createResponse)
+            .id;
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
@@ -209,12 +188,20 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        return _connection
-           .Execute(request) as T;
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return PureServiceClient
+               .Execute(request) as T;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -225,7 +212,15 @@ public sealed class Connection : IConnection
            .Against
            .Null(executeMultipleRequestBuilder);
 
-        return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
@@ -236,13 +231,20 @@ public sealed class Connection : IConnection
            .Against
            .Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(_connection, _logger, requestSettings);
+        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
-
-        return await _connection
-           .ExecuteAsync(request)
-            as T;
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            return await PureServiceClient
+               .ExecuteAsync(request)
+                as T;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
@@ -256,7 +258,9 @@ public sealed class Connection : IConnection
         return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
     }
 
-    public Entity RefreshRecord(Entity record)
+    public ulong GetConnectionWeight() => _usageStatistics.UsageWeightFromLastMinutes(2);
+
+    public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -266,11 +270,10 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return _connection
-           .Retrieve(record.LogicalName, record.Id, columns);
+        return Retrieve(record.LogicalName, record.Id, columns, requestSettings);
     }
 
-    public async Task<Entity> RefreshRecordAsync(Entity record)
+    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -280,9 +283,7 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return await _connection
-            .RetrieveAsync(record.LogicalName, record.Id, columns)
-            ;
+        return await RetrieveAsync(record.LogicalName, record.Id, columns, requestSettings);
     }
 
     public void ReleaseLock()
@@ -292,7 +293,7 @@ public sealed class Connection : IConnection
             .Release();
     }
 
-    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
+    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -308,11 +309,18 @@ public sealed class Connection : IConnection
            .Against
            .Null(columnSet);
 
-        return _connection
-           .Retrieve(entityName, id, columnSet);
+        RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(new RetrieveRequest
+        {
+            ColumnSet = columnSet,
+            Target = new EntityReference(entityName, id)
+        }, requestSettings);
+        return Guard
+            .Against
+            .Null(retrieveResponse)
+            .Entity;
     }
 
-    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet)
+    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -328,11 +336,18 @@ public sealed class Connection : IConnection
            .Against
            .Null(columnSet);
 
-        return await _connection
-            .RetrieveAsync(entityName, id, columnSet);
+        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(new RetrieveRequest
+        {
+            ColumnSet = columnSet,
+            Target = new EntityReference(entityName, id)
+        }, requestSettings);
+        return Guard
+            .Against
+            .Null(retrieveResponse)
+            .Entity;
     }
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression)
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -354,8 +369,14 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                EntityCollection retrieveMultipleResult = _connection
-                   .RetrieveMultiple(queryExpression);
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(new RetrieveMultipleRequest
+                {
+                    Query = queryExpression
+                }, requestSettings);
+                EntityCollection retrieveMultipleResult = Guard
+                    .Against
+                    .Null(retrieveMultipleResponse)
+                    .EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -373,7 +394,7 @@ public sealed class Connection : IConnection
         }
     }
 
-    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
+    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -395,8 +416,14 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                EntityCollection retrieveMultipleResult = await _connection
-                    .RetrieveMultipleAsync(queryExpression);
+                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(new RetrieveMultipleRequest
+                {
+                    Query = queryExpression
+                }, requestSettings);
+                EntityCollection retrieveMultipleResult = Guard
+                    .Against
+                    .Null(retrieveMultipleResponse)
+                    .EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -418,21 +445,37 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        WhoAmIResponse response = (WhoAmIResponse)_connection
-           .Execute(new WhoAmIRequest());
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            WhoAmIResponse response = (WhoAmIResponse)PureServiceClient
+               .Execute(new WhoAmIRequest());
 
-        return response != null
-            && response.UserId != Guid.Empty;
+            return response != null
+                && response.UserId != Guid.Empty;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public async Task<bool> TestAsync()
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        WhoAmIResponse response = (WhoAmIResponse)await _connection.ExecuteAsync(new WhoAmIRequest());
+        Statistic statisticEntry = _usageStatistics.StartNew();
+        try
+        {
+            WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
 
-        return response != null
-            && response.UserId != Guid.Empty;
+            return response != null
+                && response.UserId != Guid.Empty;
+        }
+        finally
+        {
+            _usageStatistics.Finish(statisticEntry);
+        }
     }
 
     public bool TryLock()
@@ -442,7 +485,14 @@ public sealed class Connection : IConnection
             .Wait(0);
     }
 
-    public Guid UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    public async Task<bool> TryLockAsync()
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        return await _semaphoreSlim
+            .WaitAsync(0);
+    }
+
+    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -456,11 +506,9 @@ public sealed class Connection : IConnection
         };
 
         _ = Execute<UpdateResponse>(request, requestSettings);
-
-        return record.Id;
     }
 
-    public async Task<Guid> UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
@@ -473,10 +521,7 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings)
-            ;
-
-        return record.Id;
+        _ = await ExecuteAsync<UpdateResponse>(request, requestSettings);
     }
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
@@ -513,8 +558,7 @@ public sealed class Connection : IConnection
             Target = record
         };
 
-        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings)
-            ;
+        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings);
 
         return Guard
            .Against

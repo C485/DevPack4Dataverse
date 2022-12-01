@@ -30,10 +30,10 @@ public sealed class DataverseDevPack
     public readonly SdkProxy SdkProxy;
     private readonly ILogger _logger;
 
-    public DataverseDevPack(ILogger logger, params IConnectionCreator[] connectionCreators)
+    public DataverseDevPack(ILogger logger, bool applyConnectionOptimalization = true, params IConnectionCreator[] connectionCreators)
     {
         using EntryExitLogger logGuard = new(logger);
-        SdkProxy = new SdkProxy(logger, connectionCreators);
+        SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
         FieldDrill = new FieldDrill(SdkProxy, logger);
         _logger = logger;

@@ -34,6 +34,9 @@ public class ExecuteMultipleRequestSettings
     ///  <para>Optional.</para>
     ///  <para>Represents a number of record packs which size is defined by <see cref="RequestSize" />.</para>
     ///  <para>This number should be equal or less to amount of connections in <see cref="DataverseDevPack" />.</para>
+    ///  <para>By default it's set to automatic, will always try to use all connections.</para>
+    ///  <para>When, concurrent settings for connection are ignored in automatic mode - for example</para>
+    ///  <para> in scenario when you've 4 connections with 4 concurrent setting, maximum threads used will be 4.</para>
     /// </summary>
     public int MaxDegreeOfParallelism { get; set; } = -1;
 

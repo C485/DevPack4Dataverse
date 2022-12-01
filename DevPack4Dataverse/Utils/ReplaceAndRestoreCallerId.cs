@@ -19,62 +19,61 @@ using DevPack4Dataverse.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
-namespace DevPack4Dataverse.Utils
+namespace DevPack4Dataverse.Utils;
+
+internal sealed class ReplaceAndRestoreCallerId : IDisposable
 {
-    internal sealed class ReplaceAndRestoreCallerId : IDisposable
+    private readonly Guid? oldAADCallerId;
+    private readonly Guid? oldCallerId;
+    private bool _disposedValue;
+
+    public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, Guid? callerId = null, Guid? aadCallerId = null)
     {
-        private readonly Guid? oldAADCallerId;
-        private readonly Guid? oldCallerId;
-        private bool _disposedValue;
+        using EntryExitLogger logGuard = new(logger);
+        ServiceClient = Guard
+            .Against
+            .Null(serviceClient);
+        oldCallerId = serviceClient.CallerId;
+        oldAADCallerId = serviceClient.CallerAADObjectId;
+        serviceClient.CallerId = callerId ?? Guid.Empty;
+        serviceClient.CallerAADObjectId = aadCallerId;
+    }
 
-        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, Guid? callerId = null, Guid? aadCallerId = null)
+    public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, RequestImpersonateSettings requestSettings = null)
+    {
+        using EntryExitLogger logGuard = new(logger);
+        ServiceClient = Guard
+            .Against
+            .Null(serviceClient);
+        oldCallerId = serviceClient.CallerId;
+        oldAADCallerId = serviceClient.CallerAADObjectId;
+        serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
+        serviceClient.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
+    }
+
+    ~ReplaceAndRestoreCallerId()
+    {
+        Dispose(false);
+    }
+
+    private ServiceClient ServiceClient { get; set; }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (_disposedValue)
         {
-            using EntryExitLogger logGuard = new(logger);
-            ServiceClient = Guard
-                .Against
-                .Null(serviceClient);
-            oldCallerId = serviceClient.CallerId;
-            oldAADCallerId = serviceClient.CallerAADObjectId;
-            serviceClient.CallerId = callerId ?? Guid.Empty;
-            serviceClient.CallerAADObjectId = aadCallerId;
+            return;
         }
 
-        public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, RequestImpersonateSettings requestSettings = null)
-        {
-            using EntryExitLogger logGuard = new(logger);
-            ServiceClient = Guard
-                .Against
-                .Null(serviceClient);
-            oldCallerId = serviceClient.CallerId;
-            oldAADCallerId = serviceClient.CallerAADObjectId;
-            serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
-            serviceClient.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
-        }
-
-        ~ReplaceAndRestoreCallerId()
-        {
-            Dispose(false);
-        }
-
-        private ServiceClient ServiceClient { get; set; }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            if (_disposedValue)
-            {
-                return;
-            }
-
-            ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
-            ServiceClient.CallerAADObjectId = oldAADCallerId;
-            ServiceClient = null;
-            _disposedValue = true;
-        }
+        ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
+        ServiceClient.CallerAADObjectId = oldAADCallerId;
+        ServiceClient = null;
+        _disposedValue = true;
     }
 }
