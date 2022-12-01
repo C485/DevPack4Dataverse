@@ -16,25 +16,30 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 
-namespace DevPack4Dataverse;
+namespace DevPack4Dataverse.Models;
 
 public class Statistic
 {
     private readonly TimeSpan _start;
-    private TimeSpan _end;
+    private TimeSpan? _end;
 
     public Statistic(TimeSpan startTimeSpan)
     {
         _start = Guard.Against.Zero(startTimeSpan);
     }
 
-    public int ElapsedMinutes => Convert.ToInt32((_end - _start).TotalMinutes);
+    public ulong ElapsedMilliseconds => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMilliseconds) : 0;
+    public ulong ElapsedMinutes => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMinutes) : 0;
+    public ulong ElapsedSeconds => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalSeconds) : 0;
 
-    public int ElapsedSeconds => Convert.ToInt32((_end - _start).TotalSeconds);
-
-    public bool IsBeetwenTimeSpans(TimeSpan timeSpan)
+    public bool IsFromLastNMinutes(TimeSpan currentTimeSpan, uint minutes)
     {
-        return timeSpan >= _start && timeSpan <= _end;
+        if(ElapsedMilliseconds == 0)
+        {
+            return false;
+        }
+        TimeSpan minimalTimeSpan = currentTimeSpan - TimeSpan.FromMinutes(minutes);
+        return _end >= minimalTimeSpan && _end <= currentTimeSpan;
     }
 
     public void SetEnd(TimeSpan endTimeSpan)

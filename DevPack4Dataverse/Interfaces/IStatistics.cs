@@ -14,27 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Microsoft.PowerPlatform.Dataverse.Client;
-
 namespace DevPack4Dataverse.Interfaces;
 
-public interface IConnection : IDataverseConnectionLayer
+public interface IStatistics
 {
-    ServiceClient PureServiceClient { get; }
-
-    IStatistics Statistics { get; }
-
-    void ApplyConnectionOptimalization();
-
-    ulong GetConnectionWeight();
-
-    void ReleaseLock();
-
-    bool Test();
-
-    Task<bool> TestAsync();
-
-    bool TryLock();
-
-    Task<bool> TryLockAsync();
+    ulong TotalUsageInSeconds();
 }

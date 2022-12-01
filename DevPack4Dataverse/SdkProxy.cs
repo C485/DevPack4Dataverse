@@ -71,7 +71,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         get
         {
             using EntryExitLogger logGuard = new(_logger);
-            return _connectionCreators.Count;
+            return _connections.Count;
         }
     }
 
@@ -217,11 +217,13 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
+        Guard
+            .Against
+            .InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
 
         while (true)
         {
-            foreach (IConnection connection in _connections)
+            foreach (IConnection connection in _connections.OrderBy(p => p.GetConnectionWeight()))
             {
                 if (connection.TryLock())
                 {
@@ -242,11 +244,13 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
+        Guard
+            .Against
+            .InvalidInput(_connectionCreators, nameof(_connectionCreators), p => !p.IsEmpty, "Please add at least one connection.");
 
         while (true)
         {
-            foreach (IConnection connection in _connections)
+            foreach (IConnection connection in _connections.OrderBy(p => p.GetConnectionWeight()))
             {
                 if (await connection.TryLockAsync())
                 {
@@ -254,6 +258,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                     {
                         connection.ApplyConnectionOptimalization();
                     }
+
                     return new ConnectionLease(connection);
                 }
             }

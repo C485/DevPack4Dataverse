@@ -29,10 +29,11 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
 
     private readonly string _connectionString;
     private readonly ILogger _logger;
+    private readonly int _maximumConcurrentlyUsage;
     private bool _isCreated;
     private bool _isError;
 
-    public ConnectionStringConnectionCreator(string connectionString, ILogger logger)
+    public ConnectionStringConnectionCreator(string connectionString, ILogger logger, int maximumConcurrentlyUsage = 1)
     {
         using EntryExitLogger logGuard = new(logger);
 
@@ -63,6 +64,9 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
 
         _connectionString += ";RequireNewInstance=True";
+        _maximumConcurrentlyUsage = Guard
+            .Against
+            .NegativeOrZero(maximumConcurrentlyUsage);
     }
 
     public bool IsCreated => _isCreated;
@@ -83,7 +87,7 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
                     p => p.IsReady,
                     $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}");
 
-            Connection connection = new(crmServiceClient, _logger);
+            Connection connection = new(crmServiceClient, _logger, _maximumConcurrentlyUsage);
             bool isConnectionValid = connection.Test();
             if (!isConnectionValid)
             {

@@ -34,13 +34,20 @@ public sealed class Connection : IConnection
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly Statistics _usageStatistics = new();
 
-    public Connection(ServiceClient connection, ILogger logger)
+    public Connection(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
     {
         using EntryExitLogger logGuard = new(logger);
+
+        Guard
+            .Against
+            .NegativeOrZero(maximumConcurrentlyUsage);
+
         _logger = Guard
             .Against
             .Null(logger);
-        _semaphoreSlim = new SemaphoreSlim(1, 1);
+
+        _semaphoreSlim = new SemaphoreSlim(maximumConcurrentlyUsage, maximumConcurrentlyUsage);
+
         PureServiceClient = Guard
            .Against
            .Null(connection);
@@ -56,6 +63,7 @@ public sealed class Connection : IConnection
     }
 
     public ServiceClient PureServiceClient { get; }
+    public IStatistics Statistics => _usageStatistics;
 
     public void ApplyConnectionOptimalization()
     {
@@ -249,6 +257,8 @@ public sealed class Connection : IConnection
 
         return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
     }
+
+    public ulong GetConnectionWeight() => _usageStatistics.UsageWeightFromLastMinutes(2);
 
     public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
     {

@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Models;
 using System.Diagnostics;
 
 namespace DevPack4Dataverse;
 
-public class Statistics
+internal class Statistics : IStatistics
 {
     private readonly object _lock = new();
     private readonly List<Statistic> _statistics = new();
@@ -39,7 +41,20 @@ public class Statistics
         }
     }
 
-    public long UsageWeightFromLastXMinutes(uint minutes)
+    public ulong TotalUsageInSeconds()
+    {
+        lock (_lock)
+        {
+            ulong totalSeconds = 0;
+            foreach (var item in _statistics)
+            {
+                totalSeconds += item.ElapsedSeconds;
+            }
+            return totalSeconds;
+        }
+    }
+
+    public ulong UsageWeightFromLastMinutes(uint minutes)
     {
         lock (_lock)
         {
@@ -47,9 +62,8 @@ public class Statistics
             {
                 return 0;
             }
-            long totalSeconds = 0;
+            ulong totalSeconds = 0;
             uint skippedStatistics = 0;
-            TimeSpan minimalTimeSpan = _stopwatch.Elapsed - TimeSpan.FromMinutes(minutes);
             for (int i = _statistics.Count - 1; i >= 0; i--)
             {
                 if (skippedStatistics >= 100)
@@ -58,12 +72,12 @@ public class Statistics
                 }
 
                 Statistic statistic = _statistics[i];
-                if (!statistic.IsBeetwenTimeSpans(minimalTimeSpan))
+                if (!statistic.IsFromLastNMinutes(_stopwatch.Elapsed, minutes))
                 {
                     skippedStatistics++;
                     continue;
                 }
-                totalSeconds += statistic.ElapsedSeconds;
+                totalSeconds += (statistic.ElapsedMilliseconds / 10ul);
             }
             return totalSeconds;
         }
