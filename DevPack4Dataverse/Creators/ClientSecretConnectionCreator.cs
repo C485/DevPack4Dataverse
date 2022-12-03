@@ -27,16 +27,13 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 {
     private readonly string _appId;
     private readonly string _crmUrl;
-    private readonly ILogger _logger;
     private readonly int _maximumConcurrentlyUsage;
     private readonly SecureString _secret;
     private bool _isCreated;
     private bool _isError;
 
-    public ClientSecretConnectionCreator(string crmUrl, string appId, SecureString secret, ILogger logger, int maximumConcurrentlyUsage = 1)
+    public ClientSecretConnectionCreator(string crmUrl, string appId, SecureString secret, int maximumConcurrentlyUsage = 1)
     {
-        using EntryExitLogger logGuard = new(logger);
-
         _crmUrl = Guard
            .Against
            .InvalidInput(crmUrl,
@@ -54,9 +51,6 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 
         _secret
            .MakeReadOnly();
-        _logger = Guard
-            .Against
-            .Null(logger);
         _maximumConcurrentlyUsage = Guard
             .Against
             .NegativeOrZero(maximumConcurrentlyUsage);
@@ -66,9 +60,12 @@ public class ClientSecretConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
-    public IConnection Create()
+    public IConnection Create(ILogger logger)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        using EntryExitLogger logGuard = new(logger);
+        Guard
+            .Against
+            .Null(logger);
 
         try
         {
@@ -76,7 +73,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
                 _appId,
                 _secret,
                 true,
-                _logger);
+                logger);
 
             Guard
                .Against
@@ -84,7 +81,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
                     nameof(crmServiceClient),
                     p => p.IsReady,
                     $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}");
-            Connection connection = new(crmServiceClient, _logger, _maximumConcurrentlyUsage);
+            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
 
             bool isConnectionValid = connection.Test();
             if (!isConnectionValid)
@@ -97,7 +94,7 @@ public class ClientSecretConnectionCreator : IConnectionCreator
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
+            logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
             _isError = true;
             throw;
         }
