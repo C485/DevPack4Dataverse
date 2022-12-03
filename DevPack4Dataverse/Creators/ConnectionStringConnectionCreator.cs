@@ -28,21 +28,15 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
 
     private readonly string _connectionString;
-    private readonly ILogger _logger;
     private readonly int _maximumConcurrentlyUsage;
     private bool _isCreated;
     private bool _isError;
 
-    public ConnectionStringConnectionCreator(string connectionString, ILogger logger, int maximumConcurrentlyUsage = 1)
+    public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
     {
-        using EntryExitLogger logGuard = new(logger);
-
         _connectionString = Guard
            .Against
            .NullOrEmpty(connectionString);
-        _logger = Guard
-            .Against
-            .Null(logger);
 
         if (_connectionString.Contains("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase))
         {
@@ -73,13 +67,17 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
-    public IConnection Create()
+    public IConnection Create(ILogger logger)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        using EntryExitLogger logGuard = new(logger);
+
+        Guard
+            .Against
+            .Null(logger);
 
         try
         {
-            ServiceClient crmServiceClient = new(_connectionString, _logger);
+            ServiceClient crmServiceClient = new(_connectionString, logger);
             Guard
                .Against
                .NullOrInvalidInput(crmServiceClient,
@@ -87,7 +85,7 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
                     p => p.IsReady,
                     $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}");
 
-            Connection connection = new(crmServiceClient, _logger, _maximumConcurrentlyUsage);
+            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
             bool isConnectionValid = connection.Test();
             if (!isConnectionValid)
             {
@@ -99,7 +97,7 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
+            logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
             _isError = true;
             throw;
         }

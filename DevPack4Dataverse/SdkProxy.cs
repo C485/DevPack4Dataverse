@@ -49,7 +49,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             OptimalizeConnections();
         }
 
-        _logger = Guard.Against.Null(logger);
+        _logger = Guard
+            .Against
+            .Null(logger);
         _applyConnectionOptimalization = applyConnectionOptimalization;
         _connectionCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
         _connectionCreator = new RepeatedTask(_sleepTimeForConnectionCreator, () =>
@@ -60,7 +62,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             {
                 return;
             }
-            IConnection createdConnection = connectionToCreate.Create();
+            IConnection createdConnection = connectionToCreate.Create(_logger);
             _connections.Add(createdConnection);
         }, _logger);
         _connectionCreator.Start();
