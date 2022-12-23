@@ -14,14 +14,181 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
+using System.Collections.Concurrent;
 
 namespace DevPack4Dataverse;
+
+public sealed class ChoiceFieldTypeMethods
+{
+    private const int NoLanguageFilter = -1;
+    private readonly ConcurrentDictionary<string, OptionMetadataCollection> _cachedMetadata; //TODO use cache
+    private readonly SdkProxy _sdkProxy;
+    //TODO add string to optionset logic
+
+    public ChoiceFieldTypeMethods(SdkProxy sdkProxy)
+    {
+        _sdkProxy = sdkProxy;
+        _cachedMetadata = new ConcurrentDictionary<string, OptionMetadataCollection>();
+    }
+    /// <summary>
+    /// Utilizes SDK functionality called FormattedValues that contains label for optionset in users language. <para />
+    /// Type of field is not checked, cache is not used.
+    /// </summary>
+    /// <param name="sourceRecord">Required.</param>
+    /// <param name="fieldName">Required.</param>
+    /// <returns>Label for field.</returns>
+    /// <exception cref="KeyNotFoundException"></exception>
+    public static string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
+    {
+        Guard
+            .Against
+            .Null(sourceRecord);
+        Guard
+            .Against
+            .NullOrEmpty(fieldName);
+        if (sourceRecord.FormattedValues.Contains(fieldName))
+        {
+            return sourceRecord.FormattedValues[fieldName];
+        }
+        throw new KeyNotFoundException($"Formated value for field[{fieldName}] was not found, check image/query settings.");
+    }
+
+    public async Task<string> MapOptionSetToString(string tableName, string fieldName, OptionSetValue valueToMap, int languageCode = NoLanguageFilter)
+    {
+        Guard
+            .Against
+            .Null(valueToMap);
+        return await MapOptionSetToString(tableName, fieldName, valueToMap.Value, languageCode);
+    }
+
+    public async Task<string> MapOptionSetToString(string tableName, string fieldName, bool valueToMap, int languageCode = NoLanguageFilter)
+    {
+        Guard
+            .Against
+            .Null(valueToMap);
+        return await MapOptionSetToString(tableName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+    }
+
+    public async Task<string> MapOptionSetToString<T>(string tableName, string fieldName, T valueToMap, int languageCode = NoLanguageFilter) where T : struct, Enum
+    {
+        Guard
+            .Against
+            .Null(valueToMap);
+        return await MapOptionSetToString(tableName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+    }
+
+    /// <summary>
+    /// It'll map int value to optionset label. Language code can be provided to get exact label for language.
+    /// </summary>
+    /// <param name="tableName">Required.</param>
+    /// <param name="fieldName">Required.</param>
+    /// <param name="valueToMap">Value of optionset as <see cref="int"/>. Required.</param>
+    /// <param name="languageCode">Optional, by default UserLocalizedLabel will be used, otherwise LocalizedLabels will be searched for label.</param>
+    /// <returns>Returns label of value.</returns>
+    /// <exception cref="KeyNotFoundException"></exception>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="ArgumentNullException"></exception>
+    public async Task<string> MapOptionSetToString(string tableName, string fieldName, int valueToMap, int languageCode = NoLanguageFilter)
+    {
+        Guard
+            .Against
+            .NullOrEmpty(tableName);
+        Guard
+            .Against
+            .NullOrEmpty(fieldName);
+        string key = $"{tableName.ToLower()}_{fieldName.ToLower()}";
+
+        await DownloadMetadataForField(tableName, fieldName, key);
+        if (!_cachedMetadata.ContainsKey(key))
+        {
+            throw new KeyNotFoundException($"Key[{key}] was not found in dataverse metadata.");
+        }
+        OptionMetadataCollection metadataResponse = _cachedMetadata[key];
+        OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
+        Guard
+            .Against
+            .Null(mappedFieldValueMetadata, message: $"Metadata for field was valid but optionset value of {valueToMap} was not found.");
+        if (languageCode == NoLanguageFilter)
+        {
+            return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
+        }
+        LocalizedLabel languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(p => p.LanguageCode == languageCode);
+        return Guard
+            .Against
+            .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
+            .Label;
+    }
+
+    private async Task DownloadMetadataForField(string tableName, string fieldName, string key)
+    {
+        if (_cachedMetadata.ContainsKey(key))
+        {
+            return;
+        }
+        RetrieveAttributeResponse metadataInfo = await _sdkProxy
+            .ExecuteAsync<RetrieveAttributeResponse>(new RetrieveAttributeRequest
+            {
+                EntityLogicalName = tableName,
+                LogicalName = fieldName,
+                RetrieveAsIfPublished = true
+            });
+        if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
+        {
+            return;
+        }
+        Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
+        Guard.Against.AgainstExpression((attributeType) =>
+        {
+            return attributeType is AttributeTypeCode.State or AttributeTypeCode.Status
+            or AttributeTypeCode.Picklist or AttributeTypeCode.Boolean;
+        }, metadataInfo.AttributeMetadata.AttributeType.Value, $"Field[{fieldName}] in table {tableName} is not a valid optionset or state/status field.");
+        switch (metadataInfo.AttributeMetadata)
+        {
+            case StatusAttributeMetadata statusAttributeMetadata:
+                _cachedMetadata.TryAdd(key, statusAttributeMetadata.OptionSet.Options);
+                break;
+
+            case StateAttributeMetadata stateAttributeMetadata:
+                _cachedMetadata.TryAdd(key, stateAttributeMetadata.OptionSet.Options);
+
+                break;
+
+            case PicklistAttributeMetadata picklistAttributeMetadata:
+                _cachedMetadata.TryAdd(key, picklistAttributeMetadata.OptionSet.Options);
+
+                break;
+
+            case BooleanAttributeMetadata booleanAttributeMetadata:
+                _cachedMetadata.TryAdd(key, new OptionMetadataCollection(new OptionMetadata[]{
+                    booleanAttributeMetadata.OptionSet.TrueOption,
+                    booleanAttributeMetadata.OptionSet.FalseOption
+                }));
+
+                break;
+
+            case EnumAttributeMetadata enumAttributeMetadata:
+                _cachedMetadata.TryAdd(key, enumAttributeMetadata.OptionSet.Options);
+
+                break;
+
+            default:
+                throw new InvalidCastException($"Field[{fieldName}] in table {tableName} is not a valid option set, enum, boolean or state/status field.");
+        }
+    }
+}
+
+public sealed class FileFieldTypeMethods
+{
+}
 
 public sealed class DataverseDevPack
 {
