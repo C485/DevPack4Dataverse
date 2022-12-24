@@ -19,6 +19,7 @@ using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Utils;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -39,6 +40,7 @@ public sealed class ChoiceFieldTypeMethods
         _sdkProxy = sdkProxy;
         _cachedMetadata = new ConcurrentDictionary<string, OptionMetadataCollection>();
     }
+
     /// <summary>
     /// Utilizes SDK functionality called FormattedValues that contains label for optionset in users language. <para />
     /// Type of field is not checked, cache is not used.
@@ -188,6 +190,79 @@ public sealed class ChoiceFieldTypeMethods
 
 public sealed class FileFieldTypeMethods
 {
+    private readonly SdkProxy _sdkProxy;
+
+    public FileFieldTypeMethods(SdkProxy sdkProxy)
+    {
+        _sdkProxy = sdkProxy;
+    }
+
+    public async Task<FileData> ReceiveFieldContent(Guid recordId, string tableName, string fieldName)
+    {
+        Guard.Against.NullOrEmpty(tableName);
+        Guard.Against.Default(recordId);
+        return await ReceiveFieldContent(new EntityReference(tableName, recordId), fieldName);
+    }
+
+    //TODO add read function for files bigger than 2gb
+
+    public async Task<FileData> ReceiveFieldContent(EntityReference recordId, string fieldName)
+    {
+        Guard.Against.NullOrEmpty(fieldName);
+        Guard.Against.Null(recordId);
+        InitializeFileBlocksDownloadRequest fileBlocksRequest = new()
+        {
+            Target = recordId,
+            FileAttributeName = fieldName
+        };
+
+        InitializeFileBlocksDownloadResponse fileBlockResponse = await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
+        if (fileBlockResponse.FileSizeInBytes > int.MaxValue)
+        {
+            throw new InvalidProgramException($"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Consider using version of this method with callback.");
+        }
+
+        int sizeOfFileToDownload = Convert.ToInt32(fileBlockResponse.FileSizeInBytes);
+
+        using MemoryStream fileContentStream = new(sizeOfFileToDownload);
+
+        DownloadBlockRequest downloadBlockRequest = new()
+        {
+            FileContinuationToken = fileBlockResponse.FileContinuationToken
+        };
+
+        DownloadBlockResponse downloadBlockResponse = await _sdkProxy.ExecuteAsync<DownloadBlockResponse>(downloadBlockRequest);
+
+        await fileContentStream.WriteAsync(downloadBlockResponse.Data);
+
+        long downloadedBytes = downloadBlockResponse.Data.LongLength;
+        while (downloadedBytes < fileBlockResponse.FileSizeInBytes)
+        {
+            DownloadBlockRequest downloadBlockRequestNext = new()
+            {
+                FileContinuationToken = fileBlockResponse.FileContinuationToken,
+                Offset = downloadedBytes
+            };
+
+            DownloadBlockResponse downloadBlockResponseNext = await _sdkProxy.ExecuteAsync<DownloadBlockResponse>(downloadBlockRequestNext);
+            await fileContentStream.WriteAsync(downloadBlockResponse.Data);
+            downloadedBytes += downloadBlockResponseNext.Data.LongLength;
+        }
+
+        return new FileData
+        {
+            Data = fileContentStream.ToArray(),
+            Name = fileBlockResponse.FileName,
+            Size = fileBlockResponse.FileSizeInBytes
+        };
+    }
+
+    public sealed class FileData
+    {
+        public byte[] Data { get; set; }
+        public string Name { get; set; }
+        public long Size { get; set; }
+    }
 }
 
 public sealed class DataverseDevPack
