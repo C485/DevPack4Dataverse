@@ -20,6 +20,7 @@ using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace DevPack4Dataverse.ExecuteMultiple;
@@ -41,7 +42,7 @@ public sealed class ExecuteMultipleLogic
         return new ExecuteMultipleRequestBuilder(_logger, continueOnError);
     }
 
-    public async Task<AdvancedExecuteMultipleRequestsStatistics> Execute(
+    public async Task<ExecuteMultipleLogicResult> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default)
@@ -58,7 +59,7 @@ public sealed class ExecuteMultipleLogic
 
         if (executeMultipleRequestBuilder.Count == 0)
         {
-            return new AdvancedExecuteMultipleRequestsStatistics
+            return new ExecuteMultipleLogicResult
             {
                 RecordsProcessed = 0,
                 Stopwatch = new Stopwatch(),
@@ -70,7 +71,7 @@ public sealed class ExecuteMultipleLogic
             ? _sdkProxy.ConnectionCount
             : executeMultipleRequestSettings.MaxDegreeOfParallelism;
 
-        AdvancedExecuteMultipleRequestsStatistics chunksStatistics = new()
+        ExecuteMultipleLogicResult logicResult = new()
         {
             Stopwatch = Stopwatch.StartNew(),
             ThreadsUsed = threadsCount
@@ -84,6 +85,8 @@ public sealed class ExecuteMultipleLogic
                 executeMultipleRequestBuilder.Count);
         }, _logger);
         repeatedTask.Start();
+
+        ConcurrentBag<ExecuteMultipleResponseItem> responsesList = new();
 
         try
         {
@@ -119,6 +122,8 @@ public sealed class ExecuteMultipleLogic
 
                         foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                         {
+                            responsesList.Add(responseItem);
+
                             if (responseItem.Fault == null)
                             {
                                 continue;
@@ -147,27 +152,120 @@ public sealed class ExecuteMultipleLogic
                 .StopAsync();
         }
 
-        chunksStatistics
+        logicResult
            .Stopwatch
            .Stop();
-
-        chunksStatistics.RecordsRequested = executeMultipleRequestBuilder
+        logicResult.RecordsRequested = executeMultipleRequestBuilder
            .RequestWithResults
            .Requests
            .Count;
-
-        chunksStatistics.RecordsProcessed = progress;
-
-        chunksStatistics.Cancelled = cancellationToken
+        logicResult.RecordsProcessed = progress;
+        logicResult.Results = responsesList;
+        logicResult.Cancelled = cancellationToken
            .IsCancellationRequested;
-
         executeMultipleRequestSettings.ReportProgress(progress, executeMultipleRequestBuilder.Count);
 
-        return chunksStatistics;
+        return logicResult;
+    }
+
+    public async Task<ExecuteMultipleLogicResult> ExecuteAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings,
+        CancellationToken cancellationToken = default)
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard
+           .Against
+           .Null(executeMultipleRequestSettings);
+
+        Guard
+           .Against
+           .Null(executeMultipleRequestBuilder);
+
+        if (executeMultipleRequestBuilder.Count == 0)
+        {
+            return new ExecuteMultipleLogicResult
+            {
+                RecordsProcessed = 0,
+                Stopwatch = new Stopwatch(),
+                ThreadsUsed = 0
+            };
+        }
+
+        int threadsCount = executeMultipleRequestSettings.MaxDegreeOfParallelism <= 0
+            ? _sdkProxy.ConnectionCount
+            : executeMultipleRequestSettings.MaxDegreeOfParallelism;
+
+        ExecuteMultipleLogicResult logicResult = new()
+        {
+            Stopwatch = Stopwatch.StartNew(),
+            ThreadsUsed = threadsCount
+        };
+
+        int progress = 0;
+
+        OrganizationRequest[][] allRequestChunks = RequestsToChunks(executeMultipleRequestBuilder, executeMultipleRequestSettings);
+
+        ConcurrentBag<ExecuteMultipleResponseItem> responsesList = new();
+
+        await Parallel.ForEachAsync(allRequestChunks,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = threadsCount,
+                CancellationToken = cancellationToken
+            },
+            async (packOfRequests, _) =>
+            {
+                ExecuteMultipleRequest requestWithResults = new()
+                {
+                    Settings = new ExecuteMultipleSettings
+                    {
+                        ContinueOnError = false,
+                        ReturnResponses = true
+                    },
+                    Requests = new OrganizationRequestCollection()
+                };
+
+                requestWithResults
+                   .Requests
+                   .AddRange(packOfRequests);
+
+                ExecuteMultipleResponse responseWithResults =
+                    await _sdkProxy
+                       .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
+
+                foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
+                {
+                    responsesList.Add(responseItem);
+                    if (responseItem.Fault == null)
+                    {
+                        continue;
+                    }
+
+                    throw new InvalidProgramException($"Request on index {responseItem.RequestIndex} failed with error, {responseItem.Fault}");
+                }
+
+                Interlocked.Add(ref progress, packOfRequests.Length);
+            });
+
+        logicResult
+           .Stopwatch
+           .Stop();
+        logicResult.RecordsRequested = executeMultipleRequestBuilder
+           .RequestWithResults
+           .Requests
+           .Count;
+        logicResult.RecordsProcessed = progress;
+        logicResult.Results = responsesList;
+        logicResult.Cancelled = cancellationToken
+           .IsCancellationRequested;
+
+        return logicResult;
     }
 
     private OrganizationRequest[][] RequestsToChunks(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        ExecuteMultipleRequestSettings executeMultipleRequestSettings)
+        ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings)
     {
         using EntryExitLogger logGuard = new(_logger);
         return executeMultipleRequestBuilder

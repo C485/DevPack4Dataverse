@@ -42,6 +42,7 @@ Random fixes and stability improvements</PackageReleaseNotes>
     <PackageReference Include="Ardalis.GuardClauses" Version="4.0.1" />
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.0.26" />
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.0.26" />
+    <PackageReference Include="MimeMapping" Version="1.0.1.50" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
 

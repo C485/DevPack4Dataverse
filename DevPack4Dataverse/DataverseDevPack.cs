@@ -24,6 +24,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
+using Microsoft.Xrm.Sdk.Query;
 using System.Collections.Concurrent;
 
 namespace DevPack4Dataverse;
@@ -34,7 +35,8 @@ public sealed class ChoiceFieldTypeMethods
     private readonly ConcurrentDictionary<string, OptionMetadataCollection> _cachedMetadata; //TODO use cache
     private readonly SdkProxy _sdkProxy;
     //TODO add string to optionset logic
-
+    //TODO add map multiple and use executemultiplelogic
+    //TODO use key struct instead of string
     public ChoiceFieldTypeMethods(SdkProxy sdkProxy)
     {
         _sdkProxy = sdkProxy;
@@ -188,25 +190,55 @@ public sealed class ChoiceFieldTypeMethods
     }
 }
 
-public sealed class FileFieldTypeMethods
+public sealed class FileOrImageFieldTypeMethods
 {
+    private const int _bytesInMegabyte = 1_048_576;
+    private const int _maxBlockSizeInBytes = _maxBlockSizeInMegabytes * _bytesInMegabyte;
+    private const int _maxBlockSizeInMegabytes = 4;
+    private readonly ExecuteMultipleLogic _executeMultipleLogic;
     private readonly SdkProxy _sdkProxy;
 
-    public FileFieldTypeMethods(SdkProxy sdkProxy)
+    public FileOrImageFieldTypeMethods(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic)
     {
         _sdkProxy = sdkProxy;
+        _executeMultipleLogic = executeMultipleLogic;
     }
 
-    public async Task<FileData> ReceiveFieldContent(Guid recordId, string tableName, string fieldName)
+    public async Task<bool> Delete(EntityReference recordId, string fieldName)
     {
-        Guard.Against.NullOrEmpty(tableName);
-        Guard.Against.Default(recordId);
-        return await ReceiveFieldContent(new EntityReference(tableName, recordId), fieldName);
+        Guard.Against.Null(recordId);
+        Guard.Against.NullOrEmpty(fieldName);
+        Entity fileFieldData = await _sdkProxy.RetrieveAsync(recordId.LogicalName, recordId.Id, new ColumnSet(fieldName));
+        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
+        {
+            return false;
+        }
+        await Delete(fileId);
+        return true;
     }
 
-    //TODO add read function for files bigger than 2gb
+    public async Task Delete(Guid fileId)
+    {
+        Guard.Against.Default(fileId);
+        DeleteFileRequest deleteFileRequest = new()
+        {
+            FileId = fileId
+        };
+        _ = await _sdkProxy.ExecuteAsync<DeleteFileResponse>(deleteFileRequest);
+    }
 
-    public async Task<FileData> ReceiveFieldContent(EntityReference recordId, string fieldName)
+    public async Task<FileData> Receive(Guid recordId, string tableName, string fieldName)
+    {
+        Guard
+            .Against
+            .NullOrEmpty(tableName);
+        Guard
+            .Against
+            .Default(recordId);
+        return await Receive(new EntityReference(tableName, recordId), fieldName);
+    }
+
+    public async Task<FileData> Receive(EntityReference recordId, string fieldName)
     {
         Guard.Against.NullOrEmpty(fieldName);
         Guard.Against.Null(recordId);
@@ -217,36 +249,36 @@ public sealed class FileFieldTypeMethods
         };
 
         InitializeFileBlocksDownloadResponse fileBlockResponse = await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
-        if (fileBlockResponse.FileSizeInBytes > int.MaxValue)
-        {
-            throw new InvalidProgramException($"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Consider using version of this method with callback.");
-        }
+
+        Guard
+            .Against
+            .Negative(fileBlockResponse.FileSizeInBytes);
+        Guard
+            .Against
+            .OutOfRange(fileBlockResponse.FileSizeInBytes, nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes), 0, int.MaxValue, $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB.");
 
         int sizeOfFileToDownload = Convert.ToInt32(fileBlockResponse.FileSizeInBytes);
 
         using MemoryStream fileContentStream = new(sizeOfFileToDownload);
 
-        DownloadBlockRequest downloadBlockRequest = new()
+        ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        while (sizeOfFileToDownload > 0)
         {
-            FileContinuationToken = fileBlockResponse.FileContinuationToken
-        };
-
-        DownloadBlockResponse downloadBlockResponse = await _sdkProxy.ExecuteAsync<DownloadBlockResponse>(downloadBlockRequest);
-
-        await fileContentStream.WriteAsync(downloadBlockResponse.Data);
-
-        long downloadedBytes = downloadBlockResponse.Data.LongLength;
-        while (downloadedBytes < fileBlockResponse.FileSizeInBytes)
-        {
-            DownloadBlockRequest downloadBlockRequestNext = new()
+            int currentChunkSize = sizeOfFileToDownload < _maxBlockSizeInBytes ? sizeOfFileToDownload : _maxBlockSizeInBytes;
+            sizeOfFileToDownload -= currentChunkSize;
+            DownloadBlockRequest downloadBlockRequest = new()
             {
                 FileContinuationToken = fileBlockResponse.FileContinuationToken,
-                Offset = downloadedBytes
+                Offset = sizeOfFileToDownload,
+                BlockLength = currentChunkSize
             };
+            requestBuilder.AddRequest(downloadBlockRequest);
+        }
 
-            DownloadBlockResponse downloadBlockResponseNext = await _sdkProxy.ExecuteAsync<DownloadBlockResponse>(downloadBlockRequestNext);
+        Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
+        foreach (DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results.OrderBy(p => p.RequestIndex).Cast<DownloadBlockResponse>())
+        {
             await fileContentStream.WriteAsync(downloadBlockResponse.Data);
-            downloadedBytes += downloadBlockResponseNext.Data.LongLength;
         }
 
         return new FileData
@@ -257,11 +289,80 @@ public sealed class FileFieldTypeMethods
         };
     }
 
+    public async Task<UploadFileFieldResult> Upload(string fileName, EntityReference recordId, string fieldName, byte[] data)
+    {
+        return await Upload(fileName, recordId, fieldName, new MemoryStream(data));
+    }
+
+    public async Task<UploadFileFieldResult> Upload(string fileName, EntityReference recordId, string fieldName, Stream dataStream)
+    {
+        InitializeFileBlocksUploadRequest fileBlocksRequest = new()
+        {
+            FileName = fileName,
+            Target = recordId,
+            FileAttributeName = fieldName,
+        };
+        InitializeFileBlocksUploadResponse fileBlockResponse =
+            await _sdkProxy.ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
+
+        ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        BinaryReader dataBinaryReader = new(dataStream);
+        while (true)
+        {
+            byte[] chunkData = dataBinaryReader.ReadBytes(_maxBlockSizeInBytes);
+            if (chunkData == null || chunkData.Length == 0)
+            {
+                break;
+            }
+            string randomBase64 = GetRandomBase64FromRandomGuid();
+            UploadBlockRequest uploadBlockRequest = new()
+            {
+                BlockData = chunkData,
+                FileContinuationToken = fileBlockResponse.FileContinuationToken,
+                BlockId = randomBase64
+            };
+            requestBuilder.AddRequest(uploadBlockRequest);
+        }
+        await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
+
+        CommitFileBlocksUploadRequest commitFileBlocksUploadRequest = new()
+        {
+            FileContinuationToken = fileBlockResponse.FileContinuationToken,
+            FileName = fileName,
+            MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
+            BlockList = requestBuilder.RequestWithResults.Requests.Cast<UploadBlockRequest>().Select(p => p.BlockId).ToArray()
+        };
+        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse =
+            await _sdkProxy.ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
+        return new UploadFileFieldResult
+        {
+            SavedBytes = commitFileBlocksUploadResponse.FileSizeInBytes,
+            FileId = commitFileBlocksUploadResponse.FileId
+        };
+    }
+
+    private string GetRandomBase64FromRandomGuid()
+    {
+        Guid genGuid = Guid.NewGuid();
+        Span<byte> guidBytes = stackalloc byte[16];
+        if (!genGuid.TryWriteBytes(guidBytes))
+        {
+            throw new InvalidPluginExecutionException("Failed to generate random base64 from random GUID.");
+        }
+        return Convert.ToBase64String(guidBytes);
+    }
+
     public sealed class FileData
     {
         public byte[] Data { get; set; }
         public string Name { get; set; }
         public long Size { get; set; }
+    }
+
+    public sealed class UploadFileFieldResult
+    {
+        public Guid FileId { get; set; }
+        public long SavedBytes { get; set; }
     }
 }
 
