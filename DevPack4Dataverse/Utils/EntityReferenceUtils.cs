@@ -18,15 +18,14 @@ using Ardalis.GuardClauses;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
-namespace DevPack4Dataverse.Utils
-{
-    internal static class EntityReferenceUtils
-    {
-        public static EntityReference CreateEntityReference(Guid recordId, string logicalName, ILogger logger)
-        {
-            using EntryExitLogger logGuard = new(logger);
+namespace DevPack4Dataverse.Utils;
 
-            return new EntityReference(Guard.Against.NullOrEmpty(logicalName), Guard.Against.Default(recordId));
-        }
+internal static class EntityReferenceUtils
+{
+    public static EntityReference CreateEntityReference(Guid recordId, string logicalName, ILogger logger)
+    {
+        using EntryExitLogger logGuard = new(logger);
+
+        return new EntityReference(Guard.Against.NullOrEmpty(logicalName), Guard.Against.Default(recordId));
     }
 }
