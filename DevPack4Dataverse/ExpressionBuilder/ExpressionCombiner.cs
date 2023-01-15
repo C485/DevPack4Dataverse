@@ -22,8 +22,11 @@ namespace DevPack4Dataverse.ExpressionBuilder;
 
 internal static class ExpressionCombiner
 {
-    public static Expression<Func<T, bool>> And<T>(this Expression<Func<T, bool>> mainExpression,
-        Expression<Func<T, bool>> expressionToAdd, ILogger logger)
+    public static Expression<Func<T, bool>> And<T>(
+        this Expression<Func<T, bool>> mainExpression,
+        Expression<Func<T, bool>> expressionToAdd,
+        ILogger logger
+    )
     {
         using EntryExitLogger logGuard = new(logger);
         ParameterExpression parameter = Expression.Parameter(typeof(T));
@@ -34,7 +37,10 @@ internal static class ExpressionCombiner
         ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
         Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
 
-        return Expression.Lambda<Func<T, bool>>(Expression.AndAlso(visitedMainExpression, visitedExpressionToAdd), parameter);
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.AndAlso(visitedMainExpression, visitedExpressionToAdd),
+            parameter
+        );
     }
 
     public static Expression<Func<T, bool>> Empty<T>(ILogger logger)
@@ -43,8 +49,11 @@ internal static class ExpressionCombiner
         return _ => false;
     }
 
-    public static Expression<Func<T, bool>> Or<T>(this Expression<Func<T, bool>> mainExpression,
-        Expression<Func<T, bool>> expressionToAdd, ILogger logger)
+    public static Expression<Func<T, bool>> Or<T>(
+        this Expression<Func<T, bool>> mainExpression,
+        Expression<Func<T, bool>> expressionToAdd,
+        ILogger logger
+    )
     {
         using EntryExitLogger logGuard = new(logger);
 
@@ -56,11 +65,13 @@ internal static class ExpressionCombiner
         ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
         Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
 
-        return Expression.Lambda<Func<T, bool>>(Expression.OrElse(visitedMainExpression, visitedExpressionToAdd), parameter);
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.OrElse(visitedMainExpression, visitedExpressionToAdd),
+            parameter
+        );
     }
 
-    private sealed class ReplaceExpressionVisitor
-        : ExpressionVisitor
+    private sealed class ReplaceExpressionVisitor : ExpressionVisitor
     {
         private readonly ILogger _logger;
         private readonly Expression _newValue;

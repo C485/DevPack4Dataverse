@@ -27,24 +27,29 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
     private readonly Guid? oldCallerId;
     private bool _disposedValue;
 
-    public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, Guid? callerId = null, Guid? aadCallerId = null)
+    public ReplaceAndRestoreCallerId(
+        ServiceClient serviceClient,
+        ILogger logger,
+        Guid? callerId = null,
+        Guid? aadCallerId = null
+    )
     {
         using EntryExitLogger logGuard = new(logger);
-        ServiceClient = Guard
-            .Against
-            .Null(serviceClient);
+        ServiceClient = Guard.Against.Null(serviceClient);
         oldCallerId = serviceClient.CallerId;
         oldAADCallerId = serviceClient.CallerAADObjectId;
         serviceClient.CallerId = callerId ?? Guid.Empty;
         serviceClient.CallerAADObjectId = aadCallerId;
     }
 
-    public ReplaceAndRestoreCallerId(ServiceClient serviceClient, ILogger logger, RequestImpersonateSettings requestSettings = null)
+    public ReplaceAndRestoreCallerId(
+        ServiceClient serviceClient,
+        ILogger logger,
+        RequestImpersonateSettings requestSettings = null
+    )
     {
         using EntryExitLogger logGuard = new(logger);
-        ServiceClient = Guard
-            .Against
-            .Null(serviceClient);
+        ServiceClient = Guard.Against.Null(serviceClient);
         oldCallerId = serviceClient.CallerId;
         oldAADCallerId = serviceClient.CallerAADObjectId;
         serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
@@ -53,18 +58,18 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
 
     ~ReplaceAndRestoreCallerId()
     {
-        Dispose(false);
+        InnerDispose();
     }
 
     private ServiceClient ServiceClient { get; set; }
 
     public void Dispose()
     {
-        Dispose(true);
+        InnerDispose();
         GC.SuppressFinalize(this);
     }
 
-    private void Dispose(bool disposing)
+    private void InnerDispose()
     {
         if (_disposedValue)
         {

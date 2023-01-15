@@ -32,28 +32,26 @@ public class ClientSecretConnectionCreator : IConnectionCreator
     private bool _isCreated;
     private bool _isError;
 
-    public ClientSecretConnectionCreator(string crmUrl, string appId, SecureString secret, int maximumConcurrentlyUsage = 1)
+    public ClientSecretConnectionCreator(
+        string crmUrl,
+        string appId,
+        SecureString secret,
+        int maximumConcurrentlyUsage = 1
+    )
     {
-        _crmUrl = Guard
-           .Against
-           .InvalidInput(crmUrl,
-                nameof(crmUrl),
-                p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
-                $"{nameof(crmUrl)} - is null or not valid URL.");
+        _crmUrl = Guard.Against.InvalidInput(
+            crmUrl,
+            nameof(crmUrl),
+            p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
+            $"{nameof(crmUrl)} - is null or not valid URL."
+        );
 
-        _appId = Guard
-           .Against
-           .NullOrEmpty(appId);
+        _appId = Guard.Against.NullOrEmpty(appId);
 
-        _secret = Guard
-           .Against
-           .NullOrInvalidInput(secret, nameof(secret), p => p.Length > 0);
+        _secret = Guard.Against.NullOrInvalidInput(secret, nameof(secret), p => p.Length > 0);
 
-        _secret
-           .MakeReadOnly();
-        _maximumConcurrentlyUsage = Guard
-            .Against
-            .NegativeOrZero(maximumConcurrentlyUsage);
+        _secret.MakeReadOnly();
+        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
     public bool IsCreated => _isCreated;
@@ -63,24 +61,18 @@ public class ClientSecretConnectionCreator : IConnectionCreator
     public IConnection Create(ILogger logger)
     {
         using EntryExitLogger logGuard = new(logger);
-        Guard
-            .Against
-            .Null(logger);
+        Guard.Against.Null(logger);
 
         try
         {
-            ServiceClient crmServiceClient = new(new Uri(_crmUrl),
-                _appId,
-                _secret,
-                true,
-                logger);
+            ServiceClient crmServiceClient = new(new Uri(_crmUrl), _appId, _secret, true, logger);
 
-            Guard
-               .Against
-               .NullOrInvalidInput(crmServiceClient,
-                    nameof(crmServiceClient),
-                    p => p.IsReady,
-                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}");
+            Guard.Against.NullOrInvalidInput(
+                crmServiceClient,
+                nameof(crmServiceClient),
+                p => p.IsReady,
+                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}"
+            );
             Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
 
             bool isConnectionValid = connection.Test();

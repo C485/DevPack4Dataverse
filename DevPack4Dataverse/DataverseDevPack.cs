@@ -25,22 +25,18 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
-using System.Collections.Concurrent;
 
 namespace DevPack4Dataverse;
 
 public sealed class ChoiceFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
-    private readonly ConcurrentDictionary<string, OptionMetadataCollection> _cachedMetadata; //TODO use cache
     private readonly SdkProxy _sdkProxy;
-    //TODO add string to optionset logic
+
     //TODO add map multiple and use executemultiplelogic
-    //TODO use key struct instead of string
     public ChoiceFieldTypeMethods(SdkProxy sdkProxy)
     {
-        _sdkProxy = sdkProxy;
-        _cachedMetadata = new ConcurrentDictionary<string, OptionMetadataCollection>();
+        _sdkProxy = Guard.Against.Null(sdkProxy);
     }
 
     /// <summary>
@@ -53,40 +49,47 @@ public sealed class ChoiceFieldTypeMethods
     /// <exception cref="KeyNotFoundException"></exception>
     public static string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
     {
-        Guard
-            .Against
-            .Null(sourceRecord);
-        Guard
-            .Against
-            .NullOrEmpty(fieldName);
+        Guard.Against.Null(sourceRecord);
+        Guard.Against.NullOrEmpty(fieldName);
         if (sourceRecord.FormattedValues.Contains(fieldName))
         {
             return sourceRecord.FormattedValues[fieldName];
         }
-        throw new KeyNotFoundException($"Formated value for field[{fieldName}] was not found, check image/query settings.");
+        throw new KeyNotFoundException(
+            $"Formated value for field[{fieldName}] was not found, check image/query settings."
+        );
     }
 
-    public async Task<string> MapOptionSetToString(string tableName, string fieldName, OptionSetValue valueToMap, int languageCode = NoLanguageFilter)
+    public async Task<string> MapOptionSetToString(
+        string tableName,
+        string fieldName,
+        OptionSetValue valueToMap,
+        int languageCode = NoLanguageFilter
+    )
     {
-        Guard
-            .Against
-            .Null(valueToMap);
+        Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(tableName, fieldName, valueToMap.Value, languageCode);
     }
 
-    public async Task<string> MapOptionSetToString(string tableName, string fieldName, bool valueToMap, int languageCode = NoLanguageFilter)
+    public async Task<string> MapOptionSetToString(
+        string tableName,
+        string fieldName,
+        bool valueToMap,
+        int languageCode = NoLanguageFilter
+    )
     {
-        Guard
-            .Against
-            .Null(valueToMap);
+        Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(tableName, fieldName, Convert.ToInt32(valueToMap), languageCode);
     }
 
-    public async Task<string> MapOptionSetToString<T>(string tableName, string fieldName, T valueToMap, int languageCode = NoLanguageFilter) where T : struct, Enum
+    public async Task<string> MapOptionSetToString<T>(
+        string tableName,
+        string fieldName,
+        T valueToMap,
+        int languageCode = NoLanguageFilter
+    ) where T : struct, Enum
     {
-        Guard
-            .Against
-            .Null(valueToMap);
+        Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(tableName, fieldName, Convert.ToInt32(valueToMap), languageCode);
     }
 
@@ -101,92 +104,157 @@ public sealed class ChoiceFieldTypeMethods
     /// <exception cref="KeyNotFoundException"></exception>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="ArgumentNullException"></exception>
-    public async Task<string> MapOptionSetToString(string tableName, string fieldName, int valueToMap, int languageCode = NoLanguageFilter)
+    public async Task<string> MapOptionSetToString(
+        string tableName,
+        string fieldName,
+        int valueToMap,
+        int languageCode = NoLanguageFilter
+    )
     {
-        Guard
-            .Against
-            .NullOrEmpty(tableName);
-        Guard
-            .Against
-            .NullOrEmpty(fieldName);
-        string key = $"{tableName.ToLower()}_{fieldName.ToLower()}";
+        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(tableName, fieldName);
 
-        await DownloadMetadataForField(tableName, fieldName, key);
-        if (!_cachedMetadata.ContainsKey(key))
-        {
-            throw new KeyNotFoundException($"Key[{key}] was not found in dataverse metadata.");
-        }
-        OptionMetadataCollection metadataResponse = _cachedMetadata[key];
         OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
-        Guard
-            .Against
-            .Null(mappedFieldValueMetadata, message: $"Metadata for field was valid but optionset value of {valueToMap} was not found.");
+        Guard.Against.Null(
+            mappedFieldValueMetadata,
+            message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
+        );
         if (languageCode == NoLanguageFilter)
         {
             return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
         }
-        LocalizedLabel languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(p => p.LanguageCode == languageCode);
-        return Guard
-            .Against
+        LocalizedLabel languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(
+            p => p.LanguageCode == languageCode
+        );
+        return Guard.Against
             .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
             .Label;
     }
 
-    private async Task DownloadMetadataForField(string tableName, string fieldName, string key)
+    public async Task<T> MapStringToEnum<T>(
+        string tableName,
+        string fieldName,
+        string valueToMap,
+        int languageCode = NoLanguageFilter,
+        bool compareIgnoreCase = true
+    ) where T : struct, Enum
     {
-        if (_cachedMetadata.ContainsKey(key))
+        OptionSetValue mapped = await MapStringToOptionSet(
+            tableName,
+            fieldName,
+            valueToMap,
+            languageCode,
+            compareIgnoreCase
+        );
+        Guard.Against.Null(mapped);
+        return (T)(object)Guard.Against.EnumOutOfRange<T>(mapped.Value);
+    }
+
+    public async Task<OptionSetValue> MapStringToOptionSet(
+        string tableName,
+        string fieldName,
+        string valueToMap,
+        int languageCode = NoLanguageFilter,
+        bool compareIgnoreCase = true
+    )
+    {
+        Guard.Against.NullOrEmpty(valueToMap);
+
+        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(tableName, fieldName);
+
+        if (languageCode == NoLanguageFilter)
         {
-            return;
+            OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(
+                p =>
+                    string.Equals(
+                        valueToMap,
+                        p.Label.UserLocalizedLabel.Label,
+                        compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+                    )
+            );
+            Guard.Against.Null(
+                mappedFieldValueMetadata,
+                message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
+            );
+            Guard.Against.Null(
+                mappedFieldValueMetadata.Value,
+                message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
+            );
+            return new OptionSetValue(mappedFieldValueMetadata.Value.Value);
         }
-        RetrieveAttributeResponse metadataInfo = await _sdkProxy
-            .ExecuteAsync<RetrieveAttributeResponse>(new RetrieveAttributeRequest
+
+        foreach (OptionMetadata optionMetadata in metadataResponse)
+        {
+            foreach (LocalizedLabel label in optionMetadata.Label.LocalizedLabels)
+            {
+                if (
+                    label.LanguageCode == languageCode
+                    && string.Equals(
+                        valueToMap,
+                        label.Label,
+                        compareIgnoreCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    Guard.Against.Null(
+                        optionMetadata.Value,
+                        message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
+                    );
+                    return new OptionSetValue(optionMetadata.Value.Value);
+                }
+            }
+        }
+
+        throw new KeyNotFoundException(
+            $"Metadata for field was valid but optionset value of {valueToMap} was not found."
+        );
+    }
+
+    private async Task<OptionMetadataCollection> DownloadMetadataForField(string tableName, string fieldName)
+    {
+        RetrieveAttributeResponse metadataInfo = await _sdkProxy.ExecuteAsync<RetrieveAttributeResponse>(
+            new RetrieveAttributeRequest
             {
                 EntityLogicalName = tableName,
                 LogicalName = fieldName,
                 RetrieveAsIfPublished = true
-            });
+            }
+        );
         if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
         {
-            return;
+            return new OptionMetadataCollection();
         }
         Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
-        Guard.Against.AgainstExpression((attributeType) =>
+        Guard.Against.AgainstExpression(
+            (attributeType) =>
+            {
+                return attributeType
+                    is AttributeTypeCode.State
+                        or AttributeTypeCode.Status
+                        or AttributeTypeCode.Picklist
+                        or AttributeTypeCode.Boolean;
+            },
+            metadataInfo.AttributeMetadata.AttributeType.Value,
+            $"Field[{fieldName}] in table {tableName} is not a valid optionset or state/status field."
+        );
+        return metadataInfo.AttributeMetadata switch
         {
-            return attributeType is AttributeTypeCode.State or AttributeTypeCode.Status
-            or AttributeTypeCode.Picklist or AttributeTypeCode.Boolean;
-        }, metadataInfo.AttributeMetadata.AttributeType.Value, $"Field[{fieldName}] in table {tableName} is not a valid optionset or state/status field.");
-        switch (metadataInfo.AttributeMetadata)
-        {
-            case StatusAttributeMetadata statusAttributeMetadata:
-                _cachedMetadata.TryAdd(key, statusAttributeMetadata.OptionSet.Options);
-                break;
-
-            case StateAttributeMetadata stateAttributeMetadata:
-                _cachedMetadata.TryAdd(key, stateAttributeMetadata.OptionSet.Options);
-
-                break;
-
-            case PicklistAttributeMetadata picklistAttributeMetadata:
-                _cachedMetadata.TryAdd(key, picklistAttributeMetadata.OptionSet.Options);
-
-                break;
-
-            case BooleanAttributeMetadata booleanAttributeMetadata:
-                _cachedMetadata.TryAdd(key, new OptionMetadataCollection(new OptionMetadata[]{
-                    booleanAttributeMetadata.OptionSet.TrueOption,
-                    booleanAttributeMetadata.OptionSet.FalseOption
-                }));
-
-                break;
-
-            case EnumAttributeMetadata enumAttributeMetadata:
-                _cachedMetadata.TryAdd(key, enumAttributeMetadata.OptionSet.Options);
-
-                break;
-
-            default:
-                throw new InvalidCastException($"Field[{fieldName}] in table {tableName} is not a valid option set, enum, boolean or state/status field.");
-        }
+            StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,
+            StateAttributeMetadata stateAttributeMetadata => stateAttributeMetadata.OptionSet.Options,
+            PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
+            BooleanAttributeMetadata booleanAttributeMetadata
+                => new OptionMetadataCollection(
+                    new OptionMetadata[]
+                    {
+                        booleanAttributeMetadata.OptionSet.TrueOption,
+                        booleanAttributeMetadata.OptionSet.FalseOption
+                    }
+                ),
+            EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
+            _
+                => throw new InvalidCastException(
+                    $"Field[{fieldName}] in table {tableName} is not a valid option set, enum, boolean or state/status field."
+                ),
+        };
     }
 }
 
@@ -208,7 +276,11 @@ public sealed class FileOrImageFieldTypeMethods
     {
         Guard.Against.Null(recordId);
         Guard.Against.NullOrEmpty(fieldName);
-        Entity fileFieldData = await _sdkProxy.RetrieveAsync(recordId.LogicalName, recordId.Id, new ColumnSet(fieldName));
+        Entity fileFieldData = await _sdkProxy.RetrieveAsync(
+            recordId.LogicalName,
+            recordId.Id,
+            new ColumnSet(fieldName)
+        );
         if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
         {
             return false;
@@ -220,21 +292,14 @@ public sealed class FileOrImageFieldTypeMethods
     public async Task Delete(Guid fileId)
     {
         Guard.Against.Default(fileId);
-        DeleteFileRequest deleteFileRequest = new()
-        {
-            FileId = fileId
-        };
+        DeleteFileRequest deleteFileRequest = new() { FileId = fileId };
         _ = await _sdkProxy.ExecuteAsync<DeleteFileResponse>(deleteFileRequest);
     }
 
     public async Task<FileData> Receive(Guid recordId, string tableName, string fieldName)
     {
-        Guard
-            .Against
-            .NullOrEmpty(tableName);
-        Guard
-            .Against
-            .Default(recordId);
+        Guard.Against.NullOrEmpty(tableName);
+        Guard.Against.Default(recordId);
         return await Receive(new EntityReference(tableName, recordId), fieldName);
     }
 
@@ -242,20 +307,20 @@ public sealed class FileOrImageFieldTypeMethods
     {
         Guard.Against.NullOrEmpty(fieldName);
         Guard.Against.Null(recordId);
-        InitializeFileBlocksDownloadRequest fileBlocksRequest = new()
-        {
-            Target = recordId,
-            FileAttributeName = fieldName
-        };
+        InitializeFileBlocksDownloadRequest fileBlocksRequest =
+            new() { Target = recordId, FileAttributeName = fieldName };
 
-        InitializeFileBlocksDownloadResponse fileBlockResponse = await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
+        InitializeFileBlocksDownloadResponse fileBlockResponse =
+            await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
 
-        Guard
-            .Against
-            .Negative(fileBlockResponse.FileSizeInBytes);
-        Guard
-            .Against
-            .OutOfRange(fileBlockResponse.FileSizeInBytes, nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes), 0, int.MaxValue, $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB.");
+        Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
+        Guard.Against.OutOfRange(
+            fileBlockResponse.FileSizeInBytes,
+            nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes),
+            0,
+            int.MaxValue,
+            $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB."
+        );
 
         int sizeOfFileToDownload = Convert.ToInt32(fileBlockResponse.FileSizeInBytes);
 
@@ -264,19 +329,28 @@ public sealed class FileOrImageFieldTypeMethods
         ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
         while (sizeOfFileToDownload > 0)
         {
-            int currentChunkSize = sizeOfFileToDownload < _maxBlockSizeInBytes ? sizeOfFileToDownload : _maxBlockSizeInBytes;
+            int currentChunkSize =
+                sizeOfFileToDownload < _maxBlockSizeInBytes ? sizeOfFileToDownload : _maxBlockSizeInBytes;
             sizeOfFileToDownload -= currentChunkSize;
-            DownloadBlockRequest downloadBlockRequest = new()
-            {
-                FileContinuationToken = fileBlockResponse.FileContinuationToken,
-                Offset = sizeOfFileToDownload,
-                BlockLength = currentChunkSize
-            };
+            DownloadBlockRequest downloadBlockRequest =
+                new()
+                {
+                    FileContinuationToken = fileBlockResponse.FileContinuationToken,
+                    Offset = sizeOfFileToDownload,
+                    BlockLength = currentChunkSize
+                };
             requestBuilder.AddRequest(downloadBlockRequest);
         }
 
-        Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
-        foreach (DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results.OrderBy(p => p.RequestIndex).Cast<DownloadBlockResponse>())
+        Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(
+            requestBuilder,
+            new Models.ExecuteMultipleRequestSimpleSettings()
+        );
+        foreach (
+            DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results
+                .OrderBy(p => p.RequestIndex)
+                .Cast<DownloadBlockResponse>()
+        )
         {
             await fileContentStream.WriteAsync(downloadBlockResponse.Data);
         }
@@ -289,19 +363,30 @@ public sealed class FileOrImageFieldTypeMethods
         };
     }
 
-    public async Task<UploadFileFieldResult> Upload(string fileName, EntityReference recordId, string fieldName, byte[] data)
+    public async Task<UploadFileFieldResult> Upload(
+        string fileName,
+        EntityReference recordId,
+        string fieldName,
+        byte[] data
+    )
     {
         return await Upload(fileName, recordId, fieldName, new MemoryStream(data));
     }
 
-    public async Task<UploadFileFieldResult> Upload(string fileName, EntityReference recordId, string fieldName, Stream dataStream)
+    public async Task<UploadFileFieldResult> Upload(
+        string fileName,
+        EntityReference recordId,
+        string fieldName,
+        Stream dataStream
+    )
     {
-        InitializeFileBlocksUploadRequest fileBlocksRequest = new()
-        {
-            FileName = fileName,
-            Target = recordId,
-            FileAttributeName = fieldName,
-        };
+        InitializeFileBlocksUploadRequest fileBlocksRequest =
+            new()
+            {
+                FileName = fileName,
+                Target = recordId,
+                FileAttributeName = fieldName,
+            };
         InitializeFileBlocksUploadResponse fileBlockResponse =
             await _sdkProxy.ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
 
@@ -315,23 +400,28 @@ public sealed class FileOrImageFieldTypeMethods
                 break;
             }
             string randomBase64 = GetRandomBase64FromRandomGuid();
-            UploadBlockRequest uploadBlockRequest = new()
-            {
-                BlockData = chunkData,
-                FileContinuationToken = fileBlockResponse.FileContinuationToken,
-                BlockId = randomBase64
-            };
+            UploadBlockRequest uploadBlockRequest =
+                new()
+                {
+                    BlockData = chunkData,
+                    FileContinuationToken = fileBlockResponse.FileContinuationToken,
+                    BlockId = randomBase64
+                };
             requestBuilder.AddRequest(uploadBlockRequest);
         }
         await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
 
-        CommitFileBlocksUploadRequest commitFileBlocksUploadRequest = new()
-        {
-            FileContinuationToken = fileBlockResponse.FileContinuationToken,
-            FileName = fileName,
-            MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
-            BlockList = requestBuilder.RequestWithResults.Requests.Cast<UploadBlockRequest>().Select(p => p.BlockId).ToArray()
-        };
+        CommitFileBlocksUploadRequest commitFileBlocksUploadRequest =
+            new()
+            {
+                FileContinuationToken = fileBlockResponse.FileContinuationToken,
+                FileName = fileName,
+                MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
+                BlockList = requestBuilder.RequestWithResults.Requests
+                    .Cast<UploadBlockRequest>()
+                    .Select(p => p.BlockId)
+                    .ToArray()
+            };
         CommitFileBlocksUploadResponse commitFileBlocksUploadResponse =
             await _sdkProxy.ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
         return new UploadFileFieldResult
@@ -373,7 +463,11 @@ public sealed class DataverseDevPack
     public readonly SdkProxy SdkProxy;
     private readonly ILogger _logger;
 
-    public DataverseDevPack(ILogger logger, bool applyConnectionOptimalization = true, params IConnectionCreator[] connectionCreators)
+    public DataverseDevPack(
+        ILogger logger,
+        bool applyConnectionOptimalization = true,
+        params IConnectionCreator[] connectionCreators
+    )
     {
         using EntryExitLogger logGuard = new(logger);
         SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
@@ -382,5 +476,6 @@ public sealed class DataverseDevPack
         _logger = logger;
     }
 
-    public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() => LinqExpressionBuilder.Create<T>(_logger);
+    public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() =>
+        LinqExpressionBuilder.Create<T>(_logger);
 }

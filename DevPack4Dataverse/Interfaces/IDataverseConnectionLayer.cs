@@ -38,11 +38,18 @@ public interface IDataverseConnectionLayer
 
     T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
 
-    ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
+    ExecuteMultipleResponse Execute(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings requestSettings = null
+    );
 
-    Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null);
+    Task<ExecuteMultipleResponse> ExecuteAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings requestSettings = null
+    );
 
-    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
+    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+        where T : OrganizationResponse;
 
     Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
 

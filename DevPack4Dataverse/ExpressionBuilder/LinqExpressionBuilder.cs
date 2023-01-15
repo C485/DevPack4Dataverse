@@ -57,12 +57,12 @@ public static class LinqExpressionBuilder
         public void AddAnd(Expression<Func<U, bool>> expressionToAdd)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard
-                .Against
-                .Null(expressionToAdd);
-            Guard
-                .Against
-                .AgainstExpression(p => p + 1 <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+            Guard.Against.Null(expressionToAdd);
+            Guard.Against.AgainstExpression(
+                p => p + 1 <= _maximumExpressions,
+                _expressionsAdded,
+                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+            );
             _expression = _expression.And(expressionToAdd, _logger);
             _expressionsAdded++;
         }
@@ -70,15 +70,13 @@ public static class LinqExpressionBuilder
         public void AddAnd(ILinqExpressionBuilder<U> expressionToAdd)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard
-                .Against
-                .Null(expressionToAdd);
-            Guard
-                .Against
-                .Zero(expressionToAdd.ExpressionsAdded);
-            Guard
-                .Against
-                .AgainstExpression(p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+            Guard.Against.Null(expressionToAdd);
+            Guard.Against.Zero(expressionToAdd.ExpressionsAdded);
+            Guard.Against.AgainstExpression(
+                p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+                _expressionsAdded,
+                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+            );
             _expression = _expression.And(expressionToAdd.Result, _logger);
             _expressionsAdded += expressionToAdd.ExpressionsAdded;
         }
@@ -86,12 +84,12 @@ public static class LinqExpressionBuilder
         public void AddOr(Expression<Func<U, bool>> expressionToAdd)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard
-                .Against
-                .Null(expressionToAdd);
-            Guard
-                .Against
-                .AgainstExpression(p => p + 1 <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+            Guard.Against.Null(expressionToAdd);
+            Guard.Against.AgainstExpression(
+                p => p + 1 <= _maximumExpressions,
+                _expressionsAdded,
+                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+            );
             _expression = _expression.Or(expressionToAdd, _logger);
             _expressionsAdded++;
         }
@@ -99,15 +97,13 @@ public static class LinqExpressionBuilder
         public void AddOr(ILinqExpressionBuilder<U> expressionToAdd)
         {
             using EntryExitLogger logGuard = new(_logger);
-            Guard
-                .Against
-                .Null(expressionToAdd);
-            Guard
-                .Against
-                .Zero(expressionToAdd.ExpressionsAdded);
-            Guard
-                .Against
-                .AgainstExpression(p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions, _expressionsAdded, $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+            Guard.Against.Null(expressionToAdd);
+            Guard.Against.Zero(expressionToAdd.ExpressionsAdded);
+            Guard.Against.AgainstExpression(
+                p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+                _expressionsAdded,
+                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+            );
             _expression = _expression.Or(expressionToAdd.Result, _logger);
             _expressionsAdded += expressionToAdd.ExpressionsAdded;
         }

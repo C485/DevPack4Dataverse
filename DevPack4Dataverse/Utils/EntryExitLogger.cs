@@ -30,7 +30,11 @@ public sealed class EntryExitLogger : IDisposable
     private readonly ILogger _logger;
     private readonly Stopwatch _stopwatch;
 
-    public EntryExitLogger(ILogger logger = null, [CallerFilePath] string callerFilePath = null, [CallerMemberName] string caller = null)
+    public EntryExitLogger(
+        ILogger logger = null,
+        [CallerFilePath] string callerFilePath = null,
+        [CallerMemberName] string caller = null
+    )
     {
         _logger = Guard.Against.Null(logger);
         _entrenceThreadId = Environment.CurrentManagedThreadId;
@@ -45,11 +49,34 @@ public sealed class EntryExitLogger : IDisposable
         bool exceptionOccurred = Marshal.GetExceptionPointers() != IntPtr.Zero;
         if (exceptionOccurred)
         {
-            _logger.LogError("{LibName}: Method {MethodName} in object {ObjectName} exited with exception. Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _entrenceThreadId, Environment.CurrentManagedThreadId);
-            _logger.LogDebug("{LibName}: Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
+            _logger.LogError(
+                "{LibName}: Method {MethodName} in object {ObjectName} exited with exception. Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.",
+                nameof(DevPack4Dataverse),
+                _callerMethod,
+                _callerObjectName,
+                _entrenceThreadId,
+                Environment.CurrentManagedThreadId
+            );
+            _logger.LogDebug(
+                "{LibName}: Method {MethodName} in object {ObjectName} exited with exception, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.",
+                nameof(DevPack4Dataverse),
+                _callerMethod,
+                _callerObjectName,
+                _stopwatch.Elapsed,
+                _entrenceThreadId,
+                Environment.CurrentManagedThreadId
+            );
 
             return;
         }
-        _logger.LogDebug("{LibName}: Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.", nameof(DevPack4Dataverse), _callerMethod, _callerObjectName, _stopwatch.Elapsed, _entrenceThreadId, Environment.CurrentManagedThreadId);
+        _logger.LogDebug(
+            "{LibName}: Method {MethodName} in object {ObjectName} exited successfully, execution time was {TimeElapsed}.  Entered with thread {StartThreadId}, exited with thread {ExitThreadId}.",
+            nameof(DevPack4Dataverse),
+            _callerMethod,
+            _callerObjectName,
+            _stopwatch.Elapsed,
+            _entrenceThreadId,
+            Environment.CurrentManagedThreadId
+        );
     }
 }

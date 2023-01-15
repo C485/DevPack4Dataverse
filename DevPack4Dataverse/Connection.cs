@@ -38,28 +38,19 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(logger);
 
-        Guard
-            .Against
-            .NegativeOrZero(maximumConcurrentlyUsage);
+        Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
 
-        _logger = Guard
-            .Against
-            .Null(logger);
+        _logger = Guard.Against.Null(logger);
 
         _semaphoreSlim = new SemaphoreSlim(maximumConcurrentlyUsage, maximumConcurrentlyUsage);
 
-        PureServiceClient = Guard
-           .Against
-           .Null(connection);
+        PureServiceClient = Guard.Against.Null(connection);
 
-        PureServiceClient
-           .DisableCrossThreadSafeties = true;
+        PureServiceClient.DisableCrossThreadSafeties = true;
 
-        PureServiceClient
-           .MaxRetryCount = 10;
+        PureServiceClient.MaxRetryCount = 10;
 
-        PureServiceClient
-           .RetryPauseTime = TimeSpan.FromSeconds(2);
+        PureServiceClient.RetryPauseTime = TimeSpan.FromSeconds(2);
     }
 
     public ServiceClient PureServiceClient { get; }
@@ -67,22 +58,20 @@ public sealed class Connection : IConnection
 
     public void ApplyConnectionOptimalization()
     {
-        PureServiceClient
-            .EnableAffinityCookie = false;
+        PureServiceClient.EnableAffinityCookie = false;
     }
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        CreateRequest createRequest = new()
-        {
-            Target = record
-        };
+        CreateRequest createRequest = new() { Target = record };
 
         return Execute<CreateResponse>(createRequest, requestSettings).id;
     }
@@ -102,42 +91,29 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        Guard
-           .Against
-           .Null(requestSettings);
+        Guard.Against.Null(requestSettings);
 
-        CreateRequest createRequest = new()
-        {
-            Target = record
-        };
+        CreateRequest createRequest = new() { Target = record };
 
         CreateResponse createResponse = await ExecuteAsync<CreateResponse>(createRequest, requestSettings);
-        return Guard
-            .Against
-            .Null(createResponse)
-            .id;
+        return Guard.Against.Null(createResponse).id;
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrEmpty(logicalName);
+        Guard.Against.NullOrEmpty(logicalName);
 
-        Guard
-           .Against
-           .Default(id);
+        Guard.Against.Default(id);
 
-        DeleteRequest deleteRequest = new()
-        {
-            Target = new EntityReference(logicalName, id)
-        };
+        DeleteRequest deleteRequest = new() { Target = new EntityReference(logicalName, id) };
 
         _ = Execute<DeleteResponse>(deleteRequest, requestSettings);
     }
@@ -146,9 +122,7 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(entityReference);
+        Guard.Against.Null(entityReference);
 
         DeleteRecord(entityReference.LogicalName, entityReference.Id, requestSettings);
     }
@@ -157,18 +131,11 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrEmpty(logicalName);
+        Guard.Against.NullOrEmpty(logicalName);
 
-        Guard
-           .Against
-           .Default(id);
+        Guard.Against.Default(id);
 
-        DeleteRequest deleteRequest = new()
-        {
-            Target = new EntityReference(logicalName, id)
-        };
+        DeleteRequest deleteRequest = new() { Target = new EntityReference(logicalName, id) };
 
         _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings);
     }
@@ -180,13 +147,12 @@ public sealed class Connection : IConnection
         await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings);
     }
 
-    public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
+    public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+        where T : OrganizationResponse
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(request);
+        Guard.Against.Null(request);
 
         using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
@@ -195,8 +161,7 @@ public sealed class Connection : IConnection
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
         {
-            return PureServiceClient
-               .Execute(request) as T;
+            return PureServiceClient.Execute(request) as T;
         }
         finally
         {
@@ -204,13 +169,14 @@ public sealed class Connection : IConnection
         }
     }
 
-    public ExecuteMultipleResponse Execute(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
+    public ExecuteMultipleResponse Execute(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings requestSettings = null
+    )
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(executeMultipleRequestBuilder);
+        Guard.Against.Null(executeMultipleRequestBuilder);
 
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
@@ -223,13 +189,12 @@ public sealed class Connection : IConnection
         }
     }
 
-    public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse
+    public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+        where T : OrganizationResponse
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(request);
+        Guard.Against.Null(request);
 
         using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
 
@@ -237,9 +202,7 @@ public sealed class Connection : IConnection
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
         {
-            return await PureServiceClient
-               .ExecuteAsync(request)
-                as T;
+            return await PureServiceClient.ExecuteAsync(request) as T;
         }
         finally
         {
@@ -247,15 +210,19 @@ public sealed class Connection : IConnection
         }
     }
 
-    public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequestBuilder executeMultipleRequestBuilder, RequestSettings requestSettings = null)
+    public async Task<ExecuteMultipleResponse> ExecuteAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings requestSettings = null
+    )
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(executeMultipleRequestBuilder);
+        Guard.Against.Null(executeMultipleRequestBuilder);
 
-        return await ExecuteAsync<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        return await ExecuteAsync<ExecuteMultipleResponse>(
+            executeMultipleRequestBuilder.RequestWithResults,
+            requestSettings
+        );
     }
 
     public ulong GetConnectionWeight() => _usageStatistics.UsageWeightFromLastMinutes(2);
@@ -264,9 +231,11 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
@@ -277,9 +246,11 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
@@ -289,74 +260,55 @@ public sealed class Connection : IConnection
     public void ReleaseLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-        _semaphoreSlim
-            .Release();
+        _semaphoreSlim.Release();
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrEmpty(entityName);
+        Guard.Against.NullOrEmpty(entityName);
 
-        Guard
-           .Against
-           .Default(id);
+        Guard.Against.Default(id);
 
-        Guard
-           .Against
-           .Null(columnSet);
+        Guard.Against.Null(columnSet);
 
-        RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(new RetrieveRequest
-        {
-            ColumnSet = columnSet,
-            Target = new EntityReference(entityName, id)
-        }, requestSettings);
-        return Guard
-            .Against
-            .Null(retrieveResponse)
-            .Entity;
+        RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(
+            new RetrieveRequest { ColumnSet = columnSet, Target = new EntityReference(entityName, id) },
+            requestSettings
+        );
+        return Guard.Against.Null(retrieveResponse).Entity;
     }
 
-    public async Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    public async Task<Entity> RetrieveAsync(
+        string entityName,
+        Guid id,
+        ColumnSet columnSet,
+        RequestSettings requestSettings = null
+    )
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrEmpty(entityName);
+        Guard.Against.NullOrEmpty(entityName);
 
-        Guard
-           .Against
-           .Default(id);
+        Guard.Against.Default(id);
 
-        Guard
-           .Against
-           .Null(columnSet);
+        Guard.Against.Null(columnSet);
 
-        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(new RetrieveRequest
-        {
-            ColumnSet = columnSet,
-            Target = new EntityReference(entityName, id)
-        }, requestSettings);
-        return Guard
-            .Against
-            .Null(retrieveResponse)
-            .Entity;
+        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(
+            new RetrieveRequest { ColumnSet = columnSet, Target = new EntityReference(entityName, id) },
+            requestSettings
+        );
+        return Guard.Against.Null(retrieveResponse).Entity;
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(queryExpression);
+        Guard.Against.Null(queryExpression);
 
-        return InnerRetrieveMultiple()
-           .ToArray();
+        return InnerRetrieveMultiple().ToArray();
 
         IEnumerable<Entity> InnerRetrieveMultiple()
         {
@@ -369,14 +321,11 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(new RetrieveMultipleRequest
-                {
-                    Query = queryExpression
-                }, requestSettings);
-                EntityCollection retrieveMultipleResult = Guard
-                    .Against
-                    .Null(retrieveMultipleResponse)
-                    .EntityCollection;
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = queryExpression },
+                    requestSettings
+                );
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -394,16 +343,16 @@ public sealed class Connection : IConnection
         }
     }
 
-    public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    public async Task<Entity[]> RetrieveMultipleAsync(
+        QueryExpression queryExpression,
+        RequestSettings requestSettings = null
+    )
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(queryExpression);
+        Guard.Against.Null(queryExpression);
 
-        return await InnerRetrieveMultiple()
-           .ToArrayAsync();
+        return await InnerRetrieveMultiple().ToArrayAsync();
 
         async IAsyncEnumerable<Entity> InnerRetrieveMultiple()
         {
@@ -416,14 +365,11 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(new RetrieveMultipleRequest
-                {
-                    Query = queryExpression
-                }, requestSettings);
-                EntityCollection retrieveMultipleResult = Guard
-                    .Against
-                    .Null(retrieveMultipleResponse)
-                    .EntityCollection;
+                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = queryExpression },
+                    requestSettings
+                );
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
                 {
@@ -448,11 +394,9 @@ public sealed class Connection : IConnection
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
         {
-            WhoAmIResponse response = (WhoAmIResponse)PureServiceClient
-               .Execute(new WhoAmIRequest());
+            WhoAmIResponse response = (WhoAmIResponse)PureServiceClient.Execute(new WhoAmIRequest());
 
-            return response != null
-                && response.UserId != Guid.Empty;
+            return response != null && response.UserId != Guid.Empty;
         }
         finally
         {
@@ -469,8 +413,7 @@ public sealed class Connection : IConnection
         {
             WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
 
-            return response != null
-                && response.UserId != Guid.Empty;
+            return response != null && response.UserId != Guid.Empty;
         }
         finally
         {
@@ -481,29 +424,26 @@ public sealed class Connection : IConnection
     public bool TryLock()
     {
         using EntryExitLogger logGuard = new(_logger);
-        return _semaphoreSlim
-            .Wait(0);
+        return _semaphoreSlim.Wait(0);
     }
 
     public async Task<bool> TryLockAsync()
     {
         using EntryExitLogger logGuard = new(_logger);
-        return await _semaphoreSlim
-            .WaitAsync(0);
+        return await _semaphoreSlim.WaitAsync(0);
     }
 
     public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        UpdateRequest request = new()
-        {
-            Target = record
-        };
+        UpdateRequest request = new() { Target = record };
 
         _ = Execute<UpdateResponse>(request, requestSettings);
     }
@@ -512,14 +452,13 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-            .Against
-            .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        UpdateRequest request = new()
-        {
-            Target = record
-        };
+        UpdateRequest request = new() { Target = record };
 
         _ = await ExecuteAsync<UpdateResponse>(request, requestSettings);
     }
@@ -528,41 +467,25 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
 
-        UpsertRequest request = new()
-        {
-            Target = record
-        };
+        UpsertRequest request = new() { Target = record };
 
         UpsertResponse executeResponse = Execute<UpsertResponse>(request, requestSettings);
 
-        return Guard
-           .Against
-           .Null(executeResponse)
-           .Target;
+        return Guard.Against.Null(executeResponse).Target;
     }
 
     public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
 
-        UpsertRequest request = new()
-        {
-            Target = record
-        };
+        UpsertRequest request = new() { Target = record };
 
         UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings);
 
-        return Guard
-           .Against
-           .Null(executeResponse)
-           .Target;
+        return Guard.Against.Null(executeResponse).Target;
     }
 }

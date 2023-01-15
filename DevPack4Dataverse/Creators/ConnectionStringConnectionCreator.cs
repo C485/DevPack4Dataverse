@@ -34,9 +34,7 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
 
     public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
     {
-        _connectionString = Guard
-           .Against
-           .NullOrEmpty(connectionString);
+        _connectionString = Guard.Against.NullOrEmpty(connectionString);
 
         if (_connectionString.Contains("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase))
         {
@@ -58,9 +56,7 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
 
         _connectionString += ";RequireNewInstance=True";
-        _maximumConcurrentlyUsage = Guard
-            .Against
-            .NegativeOrZero(maximumConcurrentlyUsage);
+        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
     public bool IsCreated => _isCreated;
@@ -71,19 +67,17 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
     {
         using EntryExitLogger logGuard = new(logger);
 
-        Guard
-            .Against
-            .Null(logger);
+        Guard.Against.Null(logger);
 
         try
         {
             ServiceClient crmServiceClient = new(_connectionString, logger);
-            Guard
-               .Against
-               .NullOrInvalidInput(crmServiceClient,
-                    nameof(crmServiceClient),
-                    p => p.IsReady,
-                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}");
+            Guard.Against.NullOrInvalidInput(
+                crmServiceClient,
+                nameof(crmServiceClient),
+                p => p.IsReady,
+                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
+            );
 
             Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
             bool isConnectionValid = connection.Test();

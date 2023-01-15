@@ -26,7 +26,8 @@ public class ExecuteMultipleLogicResult
 
     public int RecordsRequested { get; set; }
 
-    public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } = Array.Empty<ExecuteMultipleResponseItem>();
+    public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } =
+        Array.Empty<ExecuteMultipleResponseItem>();
     public Stopwatch Stopwatch { get; set; }
 
     public int ThreadsUsed { get; set; }

@@ -23,10 +23,7 @@ public class Statistic
     private readonly TimeSpan _start;
     private TimeSpan? _end;
 
-    public Statistic(TimeSpan startTimeSpan)
-    {
-        _start = Guard.Against.Zero(startTimeSpan);
-    }
+    public Statistic(TimeSpan startTimeSpan) => _start = Guard.Against.Zero(startTimeSpan);
 
     public ulong ElapsedMilliseconds => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMilliseconds) : 0;
     public ulong ElapsedMinutes => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMinutes) : 0;
@@ -34,7 +31,7 @@ public class Statistic
 
     public bool IsFromLastNMinutes(TimeSpan currentTimeSpan, uint minutes)
     {
-        if(ElapsedMilliseconds == 0)
+        if (ElapsedMilliseconds == 0)
         {
             return false;
         }
