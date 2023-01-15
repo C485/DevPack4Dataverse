@@ -109,11 +109,8 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrEmpty(logicalName);
-
-        Guard.Against.Default(id);
-
-        DeleteRequest deleteRequest = new() { Target = new EntityReference(logicalName, id) };
+        DeleteRequest deleteRequest =
+            new() { Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger) };
 
         _ = Execute<DeleteResponse>(deleteRequest, requestSettings);
     }
@@ -131,11 +128,8 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrEmpty(logicalName);
-
-        Guard.Against.Default(id);
-
-        DeleteRequest deleteRequest = new() { Target = new EntityReference(logicalName, id) };
+        DeleteRequest deleteRequest =
+            new() { Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger) };
 
         _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings);
     }
@@ -267,14 +261,14 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrEmpty(entityName);
-
-        Guard.Against.Default(id);
-
         Guard.Against.Null(columnSet);
 
         RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(
-            new RetrieveRequest { ColumnSet = columnSet, Target = new EntityReference(entityName, id) },
+            new RetrieveRequest
+            {
+                ColumnSet = columnSet,
+                Target = EntityReferenceUtils.CreateEntityReference(id, entityName, _logger)
+            },
             requestSettings
         );
         return Guard.Against.Null(retrieveResponse).Entity;
@@ -289,14 +283,14 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrEmpty(entityName);
-
-        Guard.Against.Default(id);
-
         Guard.Against.Null(columnSet);
 
         RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(
-            new RetrieveRequest { ColumnSet = columnSet, Target = new EntityReference(entityName, id) },
+            new RetrieveRequest
+            {
+                ColumnSet = columnSet,
+                Target = EntityReferenceUtils.CreateEntityReference(id, entityName, _logger)
+            },
             requestSettings
         );
         return Guard.Against.Null(retrieveResponse).Entity;

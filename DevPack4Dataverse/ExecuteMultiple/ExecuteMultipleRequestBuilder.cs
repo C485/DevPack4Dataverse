@@ -77,11 +77,7 @@ public sealed class ExecuteMultipleRequestBuilder
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrEmpty(logicalName);
-
-        Guard.Against.Default(id);
-
-        AddDelete(new EntityReference(logicalName, id), requestSettings);
+        AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
     }
 
     public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
