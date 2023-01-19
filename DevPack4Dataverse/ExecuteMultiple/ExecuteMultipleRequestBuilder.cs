@@ -27,20 +27,14 @@ public sealed class ExecuteMultipleRequestBuilder
 {
     private readonly ILogger _logger;
 
-    public ExecuteMultipleRequestBuilder(
-        ILogger logger,
-        bool continueOnError = true)
+    public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
     {
         using EntryExitLogger logGuard = new(logger);
         _logger = Guard.Against.Null(logger);
 
         RequestWithResults = new ExecuteMultipleRequest
         {
-            Settings = new ExecuteMultipleSettings
-            {
-                ContinueOnError = continueOnError,
-                ReturnResponses = true
-            },
+            Settings = new ExecuteMultipleSettings { ContinueOnError = continueOnError, ReturnResponses = true },
             Requests = new OrganizationRequestCollection()
         };
     }
@@ -53,14 +47,13 @@ public sealed class ExecuteMultipleRequestBuilder
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        CreateRequest request = new()
-        {
-            Target = record
-        };
+        CreateRequest request = new() { Target = record };
 
         AddRequest(request, requestSettings);
     }
@@ -69,16 +62,13 @@ public sealed class ExecuteMultipleRequestBuilder
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(entityReference,
-                nameof(entityReference),
-                p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            entityReference,
+            nameof(entityReference),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        DeleteRequest request = new()
-        {
-            Target = entityReference
-        };
+        DeleteRequest request = new() { Target = entityReference };
 
         AddRequest(request, requestSettings);
     }
@@ -87,44 +77,31 @@ public sealed class ExecuteMultipleRequestBuilder
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrEmpty(logicalName);
-
-        Guard
-           .Against
-           .Default(id);
-
-        AddDelete(new EntityReference(logicalName, id), requestSettings);
+        AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
     }
 
     public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .Null(request);
+        Guard.Against.Null(request);
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        RequestWithResults
-           .Requests
-           .Add(request);
+        RequestWithResults.Requests.Add(request);
     }
 
     public void AddUpdate(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-           .Against
-           .NullOrInvalidInput(record, nameof(record), p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
 
-        UpdateRequest request = new()
-        {
-            Target = record
-        };
+        UpdateRequest request = new() { Target = record };
 
         AddRequest(request, requestSettings);
     }
@@ -133,14 +110,9 @@ public sealed class ExecuteMultipleRequestBuilder
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard
-            .Against
-            .NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
-        UpsertRequest request = new()
-        {
-            Target = record
-        };
+        UpsertRequest request = new() { Target = record };
 
         AddRequest(request, requestSettings);
     }

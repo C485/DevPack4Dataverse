@@ -14,18 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using System.Diagnostics;
+using Ardalis.GuardClauses;
+using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk;
 
-namespace DevPack4Dataverse.Models;
+namespace DevPack4Dataverse.Utils;
 
-public class AdvancedExecuteMultipleRequestsStatistics
+internal static class EntityReferenceUtils
 {
-    public bool Cancelled { get; set; }
-    public int RecordsProcessed { get; set; }
+    public static EntityReference CreateEntityReference(Guid recordId, string logicalName, ILogger logger)
+    {
+        using EntryExitLogger logGuard = new(logger);
 
-    public int RecordsRequested { get; set; }
-
-    public Stopwatch Stopwatch { get; set; }
-
-    public int ThreadsUsed { get; set; }
+        return new EntityReference(Guard.Against.NullOrEmpty(logicalName), Guard.Against.Default(recordId));
+    }
 }

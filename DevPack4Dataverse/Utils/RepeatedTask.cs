@@ -76,8 +76,6 @@ public sealed class RepeatedTask
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-        }
+        catch (OperationCanceledException) { }
     }
 }

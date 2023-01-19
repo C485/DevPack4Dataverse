@@ -55,7 +55,7 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// !The user sending the requests must have the prvBypassCustomPlugins privilege. By default, only users with the system administrator security role have this privilege.!
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/bypass-custom-business-logic.md
     /// </summary>
-	public bool SkipPluginExecution { private get; set; }
+    public bool SkipPluginExecution { private get; set; }
 
     /// <summary>
     /// A Boolean used to disable duplicate detection on a create or update operation.

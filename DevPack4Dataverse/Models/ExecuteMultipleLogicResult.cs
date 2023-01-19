@@ -14,13 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using Microsoft.Xrm.Sdk;
+using System.Diagnostics;
+
 namespace DevPack4Dataverse.Models;
 
-public class OrganizationServiceContextSettings
+public class ExecuteMultipleLogicResult
 {
-    public static readonly OrganizationServiceContextSettings Default = new();
+    public bool Cancelled { get; set; }
+    public int RecordsProcessed { get; set; }
 
-    public bool ClearChangesEveryTime { get; set; } = true;
+    public int RecordsRequested { get; set; }
 
-    public bool DetachRetrievedRecords { get; set; } = true;
+    public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } =
+        Array.Empty<ExecuteMultipleResponseItem>();
+    public Stopwatch Stopwatch { get; set; }
+
+    public int ThreadsUsed { get; set; }
 }

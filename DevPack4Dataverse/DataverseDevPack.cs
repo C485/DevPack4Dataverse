@@ -16,6 +16,7 @@ limitations under the License.
 
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExpressionBuilder;
+using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
@@ -27,17 +28,24 @@ public sealed class DataverseDevPack
 {
     public readonly ExecuteMultipleLogic ExecuteMultiple;
     public readonly FieldDrill FieldDrill;
+    public readonly FieldMethodsPack FieldMethods;
     public readonly SdkProxy SdkProxy;
     private readonly ILogger _logger;
 
-    public DataverseDevPack(ILogger logger, bool applyConnectionOptimalization = true, params IConnectionCreator[] connectionCreators)
+    public DataverseDevPack(
+        ILogger logger,
+        bool applyConnectionOptimalization = true,
+        params IConnectionCreator[] connectionCreators
+    )
     {
         using EntryExitLogger logGuard = new(logger);
         SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
         FieldDrill = new FieldDrill(SdkProxy, logger);
+        FieldMethods = new FieldMethodsPack(SdkProxy, ExecuteMultiple, logger);
         _logger = logger;
     }
 
-    public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() => LinqExpressionBuilder.Create<T>(_logger);
+    public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() =>
+        LinqExpressionBuilder.Create<T>(_logger);
 }

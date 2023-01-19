@@ -46,7 +46,7 @@ internal class Statistics : IStatistics
         lock (_lock)
         {
             ulong totalSeconds = 0;
-            foreach (var item in _statistics)
+            foreach (Statistic item in _statistics)
             {
                 totalSeconds += item.ElapsedSeconds;
             }
