@@ -16,6 +16,7 @@ limitations under the License.
 
 using Microsoft.Xrm.Sdk;
 using System.Diagnostics;
+using System.Text;
 
 namespace DevPack4Dataverse.Models;
 
@@ -31,4 +32,34 @@ public class ExecuteMultipleLogicResult
     public Stopwatch Stopwatch { get; set; }
 
     public int ThreadsUsed { get; set; }
+
+    public override string ToString()
+    {
+        StringBuilder sb = new();
+        sb.AppendLine("Statistics:");
+        sb.Append(nameof(Cancelled));
+        sb.Append(": ");
+        sb.Append(Cancelled);
+        sb.AppendLine();
+        sb.Append(nameof(RecordsProcessed));
+        sb.Append(": ");
+        sb.Append(RecordsProcessed);
+        sb.AppendLine();
+        sb.Append(nameof(RecordsRequested));
+        sb.Append(": ");
+        sb.Append(RecordsRequested);
+        sb.AppendLine();
+        sb.Append(nameof(Stopwatch));
+        sb.Append(": ");
+        sb.Append(Stopwatch.Elapsed);
+        sb.AppendLine();
+        sb.Append(nameof(ThreadsUsed));
+        sb.Append(": ");
+        sb.Append(ThreadsUsed);
+        sb.AppendLine();
+        sb.Append("Results count: ");
+        sb.Append(Results.Count);
+        sb.AppendLine();
+        return sb.ToString();
+    }
 }
