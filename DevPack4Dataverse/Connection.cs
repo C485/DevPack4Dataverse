@@ -236,6 +236,36 @@ public sealed class Connection : IConnection
         return Retrieve(record.LogicalName, record.Id, columns, requestSettings);
     }
 
+    public T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
+
+        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+
+        return Retrieve<T>(record.LogicalName, record.Id, columns, requestSettings);
+    }
+
+    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+        );
+
+        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+
+        return await RetrieveAsync<T>(record.LogicalName, record.Id, columns, requestSettings);
+    }
+
     public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -274,6 +304,14 @@ public sealed class Connection : IConnection
         return Guard.Against.Null(retrieveResponse).Entity;
     }
 
+    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+        where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        return Retrieve(entityName, id, columnSet, requestSettings)?.ToEntity<T>();
+    }
+
     public async Task<Entity> RetrieveAsync(
         string entityName,
         Guid id,
@@ -294,6 +332,19 @@ public sealed class Connection : IConnection
             requestSettings
         );
         return Guard.Against.Null(retrieveResponse).Entity;
+    }
+
+    public async Task<T> RetrieveAsync<T>(
+        string entityName,
+        Guid id,
+        ColumnSet columnSet,
+        RequestSettings requestSettings = null
+    ) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        return await RetrieveAsync(entityName, id, columnSet, requestSettings)
+            .ContinueWith(p => p.Result?.ToEntity<T>());
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
@@ -322,6 +373,48 @@ public sealed class Connection : IConnection
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
+                {
+                    yield return record;
+                }
+
+                if (!retrieveMultipleResult.MoreRecords)
+                {
+                    break;
+                }
+
+                queryExpression.PageInfo.PageNumber++;
+                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
+            }
+        }
+    }
+
+    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+        where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.Null(queryExpression);
+
+        return InnerRetrieveMultiple().ToArray();
+
+        IEnumerable<T> InnerRetrieveMultiple()
+        {
+            queryExpression.PageInfo = new PagingInfo
+            {
+                Count = 5000,
+                PageNumber = 1,
+                PagingCookie = null
+            };
+
+            while (true)
+            {
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = queryExpression },
+                    requestSettings
+                );
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (T record in retrieveMultipleResult.Entities.Select(p => p.ToEntity<T>()))
                 {
                     yield return record;
                 }
@@ -366,6 +459,50 @@ public sealed class Connection : IConnection
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
+                {
+                    yield return record;
+                }
+
+                if (!retrieveMultipleResult.MoreRecords)
+                {
+                    break;
+                }
+
+                queryExpression.PageInfo.PageNumber++;
+                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
+            }
+        }
+    }
+
+    public async Task<T[]> RetrieveMultipleAsync<T>(
+        QueryExpression queryExpression,
+        RequestSettings requestSettings = null
+    ) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.Null(queryExpression);
+
+        return await InnerRetrieveMultiple().ToArrayAsync();
+
+        async IAsyncEnumerable<T> InnerRetrieveMultiple()
+        {
+            queryExpression.PageInfo = new PagingInfo
+            {
+                Count = 5000,
+                PageNumber = 1,
+                PagingCookie = null
+            };
+
+            while (true)
+            {
+                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = queryExpression },
+                    requestSettings
+                );
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (T record in retrieveMultipleResult.Entities.Select(p => p.ToEntity<T>()))
                 {
                     yield return record;
                 }

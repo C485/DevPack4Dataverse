@@ -53,15 +53,30 @@ public interface IDataverseConnectionLayer
 
     Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
 
+    T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity;
+
     Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null);
+
+    Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity;
 
     Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
 
+    T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+        where T : Entity;
+
     Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
+
+    Task<T> RetrieveAsync<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+        where T : Entity;
 
     Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null);
 
+    T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null) where T : Entity;
+
     Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null);
+
+    Task<T[]> RetrieveMultipleAsync<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+        where T : Entity;
 
     void UpdateRecord(Entity record, RequestSettings requestSettings = null);
 
