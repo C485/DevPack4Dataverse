@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Security;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
@@ -23,10 +27,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Net;
-using System.Security;
 
 namespace DevPack4Dataverse;
 
@@ -274,7 +274,23 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return connectionLease.Connection.RefreshRecord(record, requestSettings);
     }
 
+    public T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.RefreshRecord(record, requestSettings);
+    }
+
     public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = await GetConnectionAsync();
+
+        return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings);
+    }
+
+    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = await GetConnectionAsync();
@@ -290,6 +306,15 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return connectionLease.Connection.Retrieve(entityName, id, columnSet, requestSettings);
     }
 
+    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+        where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.Retrieve<T>(entityName, id, columnSet, requestSettings);
+    }
+
     public async Task<Entity> RetrieveAsync(
         string entityName,
         Guid id,
@@ -303,12 +328,34 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return await connectionLease.Connection.RetrieveAsync(entityName, id, columnSet, requestSettings);
     }
 
+    public async Task<T> RetrieveAsync<T>(
+        string entityName,
+        Guid id,
+        ColumnSet columnSet,
+        RequestSettings requestSettings = null
+    ) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = await GetConnectionAsync();
+
+        return await connectionLease.Connection.RetrieveAsync<T>(entityName, id, columnSet, requestSettings);
+    }
+
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.RetrieveMultiple(queryExpression, requestSettings);
+    }
+
+    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+        where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.RetrieveMultiple<T>(queryExpression, requestSettings);
     }
 
     public async Task<Entity[]> RetrieveMultipleAsync(
@@ -320,6 +367,17 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         using ConnectionLease connectionLease = await GetConnectionAsync();
 
         return await connectionLease.Connection.RetrieveMultipleAsync(queryExpression, requestSettings);
+    }
+
+    public async Task<T[]> RetrieveMultipleAsync<T>(
+        QueryExpression queryExpression,
+        RequestSettings requestSettings = null
+    ) where T : Entity
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        using ConnectionLease connectionLease = await GetConnectionAsync();
+
+        return await connectionLease.Connection.RetrieveMultipleAsync<T>(queryExpression, requestSettings);
     }
 
     public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
