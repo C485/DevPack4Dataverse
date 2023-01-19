@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
@@ -25,23 +26,26 @@ namespace DevPack4Dataverse.ExecuteMultiple;
 
 public sealed class ExecuteMultipleRequestBuilder
 {
+    private readonly bool _continueOnError;
     private readonly ILogger _logger;
+    private readonly ConcurrentBag<OrganizationRequest> _requests;
 
     public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
     {
         using EntryExitLogger logGuard = new(logger);
+        _requests = new();
         _logger = Guard.Against.Null(logger);
-
-        RequestWithResults = new ExecuteMultipleRequest
-        {
-            Settings = new ExecuteMultipleSettings { ContinueOnError = continueOnError, ReturnResponses = true },
-            Requests = new OrganizationRequestCollection()
-        };
+        _continueOnError = continueOnError;
     }
 
-    public int Count => RequestWithResults.Requests.Count;
+    public int Count => _requests.Count;
 
-    public ExecuteMultipleRequest RequestWithResults { get; }
+    public ExecuteMultipleRequest RequestWithResults =>
+        new()
+        {
+            Settings = new ExecuteMultipleSettings { ContinueOnError = _continueOnError, ReturnResponses = true },
+            Requests = GetOrganizationRequests()
+        };
 
     public void AddCreate(Entity record, RequestSettings requestSettings = null)
     {
@@ -88,7 +92,7 @@ public sealed class ExecuteMultipleRequestBuilder
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        RequestWithResults.Requests.Add(request);
+        _requests.Add(request);
     }
 
     public void AddUpdate(Entity record, RequestSettings requestSettings = null)
@@ -115,5 +119,14 @@ public sealed class ExecuteMultipleRequestBuilder
         UpsertRequest request = new() { Target = record };
 
         AddRequest(request, requestSettings);
+    }
+
+    private OrganizationRequestCollection GetOrganizationRequests()
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        OrganizationRequestCollection organizationRequestCollection = new();
+        organizationRequestCollection.AddRange(_requests);
+        return organizationRequestCollection;
     }
 }
