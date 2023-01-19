@@ -38,29 +38,6 @@ public sealed class OptionSetFieldTypeMethods
         _sdkProxy = Guard.Against.Null(sdkProxy);
     }
 
-    /// <summary>
-    /// Utilizes SDK functionality called FormattedValues that contains label for optionset in users language. <para />
-    /// Type of field is not checked, cache is not used.
-    /// </summary>
-    /// <param name="sourceRecord">Required.</param>
-    /// <param name="fieldName">Required.</param>
-    /// <returns>Label for field.</returns>
-    /// <exception cref="KeyNotFoundException"></exception>
-    public string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
-    {
-        using EntryExitLogger logGuard = new(_logger);
-
-        Guard.Against.Null(sourceRecord);
-        Guard.Against.NullOrEmpty(fieldName);
-        if (sourceRecord.FormattedValues.Contains(fieldName))
-        {
-            return sourceRecord.FormattedValues[fieldName];
-        }
-        throw new KeyNotFoundException(
-            $"Formated value for field[{fieldName}] was not found, check image/query settings."
-        );
-    }
-
     public async Task<string> MapOptionSetToString(
         string logicalName,
         string fieldName,
@@ -137,6 +114,29 @@ public sealed class OptionSetFieldTypeMethods
         return Guard.Against
             .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
             .Label;
+    }
+
+    /// <summary>
+    /// Utilizes SDK functionality called FormattedValues that contains label for optionset in users language. <para />
+    /// Type of field is not checked, cache is not used.
+    /// </summary>
+    /// <param name="sourceRecord">Required.</param>
+    /// <param name="fieldName">Required.</param>
+    /// <returns>Label for field.</returns>
+    /// <exception cref="KeyNotFoundException"></exception>
+    public string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
+    {
+        using EntryExitLogger logGuard = new(_logger);
+
+        Guard.Against.Null(sourceRecord);
+        Guard.Against.NullOrEmpty(fieldName);
+        if (sourceRecord.FormattedValues.Contains(fieldName))
+        {
+            return sourceRecord.FormattedValues[fieldName];
+        }
+        throw new KeyNotFoundException(
+            $"Formated value for field[{fieldName}] was not found, check image/query settings."
+        );
     }
 
     public async Task<T> MapStringToEnum<T>(

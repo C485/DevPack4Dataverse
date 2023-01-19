@@ -30,8 +30,8 @@ public sealed class FileOrImageFieldTypeMethods
     private const int MaxBlockSizeInBytes = MaxBlockSizeInMegabytes * BytesInMegabyte;
     private const int MaxBlockSizeInMegabytes = 4;
     private readonly ExecuteMultipleLogic _executeMultipleLogic;
-    private readonly SdkProxy _sdkProxy;
     private readonly ILogger _logger;
+    private readonly SdkProxy _sdkProxy;
 
     public FileOrImageFieldTypeMethods(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
     {
