@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.New.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 

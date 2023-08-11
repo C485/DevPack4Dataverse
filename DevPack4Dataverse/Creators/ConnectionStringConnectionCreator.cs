@@ -79,15 +79,15 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
                 $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
             );
 
-            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
-            bool isConnectionValid = connection.Test();
+            ConnectionOld connectionOld = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
+            bool isConnectionValid = connectionOld.Test();
             if (!isConnectionValid)
             {
                 throw new InvalidProgramException("Test on connection failed.");
             }
 
             _isCreated = true;
-            return connection;
+            return connectionOld;
         }
         catch (Exception e)
         {

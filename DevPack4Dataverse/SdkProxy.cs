@@ -19,9 +19,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security;
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.New.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -226,7 +226,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 {
                     if (_applyConnectionOptimalization)
                     {
-                        connection.ApplyConnectionOptimalization();
+                        connection.ApplyConnectionOptimization();
                     }
                     return new ConnectionLease(connection);
                 }
@@ -255,7 +255,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 {
                     if (_applyConnectionOptimalization)
                     {
-                        connection.ApplyConnectionOptimalization();
+                        connection.ApplyConnectionOptimization();
                     }
 
                     return new ConnectionLease(connection);

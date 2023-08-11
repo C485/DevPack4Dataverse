@@ -73,16 +73,16 @@ public class ClientSecretConnectionCreator : IConnectionCreator
                 p => p.IsReady,
                 $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}"
             );
-            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
+            ConnectionOld connectionOld = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
 
-            bool isConnectionValid = connection.Test();
+            bool isConnectionValid = connectionOld.Test();
             if (!isConnectionValid)
             {
                 throw new InvalidProgramException("Test on connection failed.");
             }
 
             _isCreated = true;
-            return connection;
+            return connectionOld;
         }
         catch (Exception e)
         {

@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.New.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;

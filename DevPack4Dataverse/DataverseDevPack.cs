@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using DevPack4Dataverse.ExecuteMultiple;
-using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.New;
+using DevPack4Dataverse.New.Base;
+using DevPack4Dataverse.New.ExecuteMultiple;
+using DevPack4Dataverse.New.ExpressionBuilder;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -34,12 +36,12 @@ public sealed class DataverseDevPack
 
     public DataverseDevPack(
         ILogger logger,
-        bool applyConnectionOptimalization = true,
+        bool applyConnectionOptimization = true,
         params IConnectionCreator[] connectionCreators
     )
     {
         using EntryExitLogger logGuard = new(logger);
-        SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
+        SdkProxy = new SdkProxy(logger, applyConnectionOptimization, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
         FieldDrill = new FieldDrill(SdkProxy, logger);
         FieldMethods = new FieldMethodsPack(SdkProxy, ExecuteMultiple, logger);

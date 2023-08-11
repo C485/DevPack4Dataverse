@@ -15,9 +15,9 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.New.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
@@ -28,13 +28,13 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
-public sealed class Connection : IConnection
+public sealed class ConnectionOld : IConnection
 {
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly Statistics _usageStatistics = new();
 
-    public Connection(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
+    public ConnectionOld(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
     {
         using EntryExitLogger logGuard = new(logger);
 
@@ -56,7 +56,7 @@ public sealed class Connection : IConnection
     public ServiceClient PureServiceClient { get; }
     public IStatistics Statistics => _usageStatistics;
 
-    public void ApplyConnectionOptimalization()
+    public void ApplyConnectionOptimization()
     {
         PureServiceClient.EnableAffinityCookie = false;
     }

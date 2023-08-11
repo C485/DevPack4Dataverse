@@ -14,71 +14,71 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.New.ExecuteMultiple;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse.Interfaces;
-
-public interface IDataverseConnectionLayer
-{
-    Guid CreateRecord(Entity record, RequestSettings requestSettings = null);
-
-    Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null);
-
-    void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null);
-
-    void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null);
-
-    Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null);
-
-    Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null);
-
-    T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
-
-    ExecuteMultipleResponse Execute(
-        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
-    );
-
-    Task<ExecuteMultipleResponse> ExecuteAsync(
-        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
-    );
-
-    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse;
-
-    Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
-
-    T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity;
-
-    Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null);
-
-    Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity;
-
-    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
-
-    T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
-        where T : Entity;
-
-    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
-
-    Task<T> RetrieveAsync<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
-        where T : Entity;
-
-    Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null);
-
-    T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null) where T : Entity;
-
-    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null);
-
-    Task<T[]> RetrieveMultipleAsync<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
-        where T : Entity;
-
-    void UpdateRecord(Entity record, RequestSettings requestSettings = null);
+//
+//public interface IDataverseConnectionLayer
+//{
+//    Guid CreateRecord(Entity record, RequestSettings requestSettings = null);
+//
+//    Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null);
+//
+//    void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null);
+//
+//    void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null);
+//
+//    Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null);
+//
+//    Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null);
+//
+//    T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
+//
+//    ExecuteMultipleResponse Execute(
+//        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+//        RequestSettings requestSettings = null
+//    );
+//
+//    Task<ExecuteMultipleResponse> ExecuteAsync(
+//        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+//        RequestSettings requestSettings = null
+//    );
+//
+//    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+//        where T : OrganizationResponse;
+//
+//    Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
+//
+//    T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity;
+//
+//    Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null);
+//
+//    Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity;
+//
+//    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
+//
+//    T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+//        where T : Entity;
+//
+//    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
+//
+//    Task<T> RetrieveAsync<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+//        where T : Entity;
+//
+//    Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null);
+//
+//    T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null) where T : Entity;
+//
+//    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null);
+//
+//    Task<T[]> RetrieveMultipleAsync<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+//        where T : Entity;
+//
+//    void UpdateRecord(Entity record, RequestSettings requestSettings = null);
 
     Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null);
 

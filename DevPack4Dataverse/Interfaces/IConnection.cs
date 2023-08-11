@@ -18,23 +18,23 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Interfaces;
 
-public interface IConnection : IDataverseConnectionLayer
-{
-    ServiceClient PureServiceClient { get; }
-
-    IStatistics Statistics { get; }
-
-    void ApplyConnectionOptimalization();
-
-    ulong GetConnectionWeight();
-
-    void ReleaseLock();
-
-    bool Test();
-
-    Task<bool> TestAsync();
-
-    bool TryLock();
-
-    Task<bool> TryLockAsync();
-}
+//public interface IConnection : IDataverseConnectionLayer
+//{
+//    ServiceClient PureServiceClient { get; }
+//
+//    IStatistics Statistics { get; }
+//
+//    void ApplyConnectionOptimization();
+//
+//    ulong GetConnectionWeight();
+//
+//    void ReleaseLock();
+//
+//    bool Test();
+//
+//    Task<bool> TestAsync();
+//
+//    bool TryLock();
+//
+//    Task<bool> TryLockAsync();
+//}
