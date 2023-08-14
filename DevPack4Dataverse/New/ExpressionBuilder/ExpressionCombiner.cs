@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 using System.Linq.Expressions;
-using Microsoft.Extensions.Logging;
+using CommunityToolkit.Diagnostics;
 
 namespace DevPack4Dataverse.New.ExpressionBuilder;
 
@@ -23,38 +23,42 @@ internal static class ExpressionCombiner
 {
     public static Expression<Func<T, bool>> And<T>(
         this Expression<Func<T, bool>> mainExpression,
-        Expression<Func<T, bool>> expressionToAdd,
-        ILogger logger)
+        Expression<Func<T, bool>> expressionToAdd)
     {
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
-        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter, logger);
+        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter);
         Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
 
-        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
+        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter);
         Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
+
+        Guard.IsNotNull(visitedMainExpression);
+        Guard.IsNotNull(visitedExpressionToAdd);
 
         return Expression.Lambda<Func<T, bool>>(Expression.AndAlso(visitedMainExpression, visitedExpressionToAdd),
             parameter);
     }
 
-    public static Expression<Func<T, bool>> Empty<T>(ILogger logger)
+    public static Expression<Func<T, bool>> Empty<T>()
     {
         return _ => false;
     }
 
     public static Expression<Func<T, bool>> Or<T>(
         this Expression<Func<T, bool>> mainExpression,
-        Expression<Func<T, bool>> expressionToAdd,
-        ILogger logger)
+        Expression<Func<T, bool>> expressionToAdd)
     {
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
-        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter, logger);
+        ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter);
         Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
 
-        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
+        ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter);
         Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
+
+        Guard.IsNotNull(visitedMainExpression);
+        Guard.IsNotNull(visitedExpressionToAdd);
 
         return Expression.Lambda<Func<T, bool>>(Expression.OrElse(visitedMainExpression, visitedExpressionToAdd),
             parameter);
@@ -62,15 +66,13 @@ internal static class ExpressionCombiner
 
     private sealed class ReplaceExpressionVisitor : ExpressionVisitor
     {
-        private readonly ILogger _logger;
         private readonly Expression _newValue;
         private readonly Expression _oldValue;
 
-        public ReplaceExpressionVisitor(Expression oldValue, Expression newValue, ILogger logger)
+        public ReplaceExpressionVisitor(Expression oldValue, Expression newValue)
         {
             _oldValue = oldValue;
             _newValue = newValue;
-            _logger = logger;
         }
 
         public override Expression Visit(Expression node)

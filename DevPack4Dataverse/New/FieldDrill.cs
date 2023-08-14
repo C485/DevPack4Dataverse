@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 using CommunityToolkit.Diagnostics;
-using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
@@ -23,25 +23,26 @@ namespace DevPack4Dataverse.New;
 
 public class FieldDrill
 {
-    private readonly Connection _connection;
-    private readonly ILogger<FieldDrill> _logger;
+    private readonly ServiceClient _connection;
 
-    public FieldDrill(Connection connection, ILogger<FieldDrill> logger)
+    public FieldDrill(ServiceClient connection)
     {
         Guard.IsNotNull(connection);
-        Guard.IsNotNull(logger);
         _connection = connection;
-        _logger = logger;
     }
 
-    public T Retrieve<T>(EntityReference obj, string path, string delimiter = ".")
+    public T Retrieve<T>(
+        EntityReference obj,
+        string path,
+        bool noThrowWhenNull = false,
+        string delimiter = ".")
     {
         string[] pathParts = path.Split(delimiter);
 
-        return Retrieve<T>(obj, pathParts);
+        return Retrieve<T>(obj, noThrowWhenNull, pathParts);
     }
 
-    public T Retrieve<T>(EntityReference drillReference, params string[] pathParts)
+    public T Retrieve<T>(EntityReference drillReference, bool noThrowWhenNull = false, params string[] pathParts)
     {
         if (Array.Exists(pathParts, string.IsNullOrEmpty))
         {
@@ -67,13 +68,18 @@ public class FieldDrill
 
             if (isLast)
             {
-                if (retrievedField is T or null)
+                return retrievedField switch
                 {
-                    return (T)retrievedField;
-                }
+                    null => default,
+                    T finalValue => finalValue,
+                    _ => throw new InvalidProgramException(
+                        $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}")
+                };
+            }
 
-                throw new InvalidProgramException(
-                    $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}");
+            if (noThrowWhenNull && retrievedField is null)
+            {
+                return default;
             }
 
             drillReference = retrievedField switch
@@ -89,14 +95,21 @@ public class FieldDrill
         throw new InvalidProgramException("Unexpected state, probably a bug.");
     }
 
-    public async Task<T> RetrieveAsync<T>(EntityReference obj, string path, string delimiter = ".")
+    public async Task<T> RetrieveAsync<T>(
+        EntityReference obj,
+        string path,
+        bool noThrowWhenNull = false,
+        string delimiter = ".")
     {
         string[] pathParts = path.Split(delimiter);
 
-        return await RetrieveAsync<T>(obj, pathParts);
+        return await RetrieveAsync<T>(obj, noThrowWhenNull, pathParts);
     }
 
-    public async Task<T> RetrieveAsync<T>(EntityReference drillReference, params string[] pathParts)
+    public async Task<T> RetrieveAsync<T>(
+        EntityReference drillReference,
+        bool noThrowWhenNull = false,
+        params string[] pathParts)
     {
         if (Array.Exists(pathParts, string.IsNullOrEmpty))
         {
@@ -122,13 +135,18 @@ public class FieldDrill
 
             if (isLast)
             {
-                if (retrievedField is T or null)
+                return retrievedField switch
                 {
-                    return (T)retrievedField;
-                }
+                    null => default,
+                    T finalValue => finalValue,
+                    _ => throw new InvalidProgramException(
+                        $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}")
+                };
+            }
 
-                throw new InvalidProgramException(
-                    $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}");
+            if (noThrowWhenNull && retrievedField is null)
+            {
+                return default;
             }
 
             drillReference = retrievedField switch

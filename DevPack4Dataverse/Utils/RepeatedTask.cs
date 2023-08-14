@@ -14,66 +14,49 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
-using Microsoft.Extensions.Logging;
+using CommunityToolkit.Diagnostics;
 
 namespace DevPack4Dataverse.Utils;
 
 public sealed class RepeatedTask
 {
     private readonly Action _action;
-    private readonly ILogger _logger;
+    private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly PeriodicTimer _periodicTimer;
-    private readonly CancellationTokenSource cancellationTokenSource;
     private Task _task;
 
-    public RepeatedTask(TimeSpan timeSpan, Action action, ILogger logger)
+    public RepeatedTask(TimeSpan timeSpan, Action action)
     {
-        using EntryExitLogger logGuard = new(logger);
-        _logger = Guard.Against.Null(logger);
-        _action = Guard.Against.Null(action);
-        cancellationTokenSource = new CancellationTokenSource();
+        Guard.IsNotNull(action);
+        _action = action;
+        _cancellationTokenSource = new CancellationTokenSource();
         _periodicTimer = new PeriodicTimer(timeSpan);
     }
 
     public void Start()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         _task = TickAsync();
     }
 
     public async Task StopAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         if (_task == null)
         {
             return;
         }
 
-        cancellationTokenSource.Cancel();
+        _cancellationTokenSource.Cancel();
         await _task;
-        cancellationTokenSource.Dispose();
+        _cancellationTokenSource.Dispose();
     }
 
     private async Task TickAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         try
         {
-            while (await _periodicTimer.WaitForNextTickAsync(cancellationTokenSource.Token))
+            while (await _periodicTimer.WaitForNextTickAsync(_cancellationTokenSource.Token))
             {
-                try
-                {
-                    using EntryExitLogger logGuardInner = new(_logger, caller: $"{nameof(TickAsync)}-InnerFunction");
-                    _action();
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "Action execution failed in {ClassName}", nameof(RepeatedTask));
-                }
+                _action();
             }
         }
         catch (OperationCanceledException) { }

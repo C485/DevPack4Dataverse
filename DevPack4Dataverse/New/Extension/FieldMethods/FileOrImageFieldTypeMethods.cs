@@ -14,15 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
+using CommunityToolkit.Diagnostics;
+using DevPack4Dataverse.Models;
 using DevPack4Dataverse.New.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
-using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
+using MimeMapping;
 
-namespace DevPack4Dataverse.FieldMethods;
+namespace DevPack4Dataverse.New.Extension.FieldMethods;
 
 public sealed class FileOrImageFieldTypeMethods
 {
@@ -30,80 +32,93 @@ public sealed class FileOrImageFieldTypeMethods
     private const int MaxBlockSizeInBytes = MaxBlockSizeInMegabytes * BytesInMegabyte;
     private const int MaxBlockSizeInMegabytes = 4;
     private readonly ExecuteMultipleLogic _executeMultipleLogic;
-    private readonly ILogger _logger;
-    private readonly SdkProxy _sdkProxy;
+    private readonly ServiceClient _serviceClient;
 
-    public FileOrImageFieldTypeMethods(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
+    public FileOrImageFieldTypeMethods(ServiceClient serviceClient, ExecuteMultipleLogic executeMultipleLogic)
     {
-        using EntryExitLogger logGuard = new(logger);
-
-        _logger = Guard.Against.Null(logger);
-        _sdkProxy = Guard.Against.Null(sdkProxy);
-        _executeMultipleLogic = Guard.Against.Null(executeMultipleLogic);
+        Guard.IsNotNull(serviceClient);
+        Guard.IsNotNull(executeMultipleLogic);
+        _serviceClient = serviceClient;
+        _executeMultipleLogic = executeMultipleLogic;
     }
 
     public async Task<bool> Delete(EntityReference recordId, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
-
-        Guard.Against.Null(recordId);
-        Guard.Against.NullOrEmpty(fieldName);
-        Entity fileFieldData = await _sdkProxy.RetrieveAsync(
-            recordId.LogicalName,
+        Guard.IsNotNull(recordId);
+        Guard.IsNotDefault(recordId.Id);
+        Guard.IsNotNullOrEmpty(recordId.LogicalName);
+        Guard.IsNotNullOrEmpty(fieldName);
+        Entity fileFieldData = await _serviceClient.RetrieveAsync(recordId.LogicalName,
             recordId.Id,
-            new ColumnSet(fieldName)
-        );
+            new ColumnSet(fieldName));
+
         if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
         {
             return false;
         }
+
         await Delete(fileId);
+
         return true;
     }
 
     public async Task Delete(Guid fileId)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotDefault(fileId);
 
-        DeleteFileRequest deleteFileRequest = new() { FileId = Guard.Against.Default(fileId) };
-        _ = await _sdkProxy.ExecuteAsync<DeleteFileResponse>(deleteFileRequest);
+        DeleteFileRequest deleteFileRequest = new()
+        {
+            FileId = fileId
+        };
+
+        _ = await _serviceClient.Extension().ExecuteAsync<DeleteFileResponse>(deleteFileRequest);
     }
 
     public async Task<FileData> Receive(Guid recordId, string logicalName, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotDefault(recordId);
+        Guard.IsNotNullOrEmpty(logicalName);
+        Guard.IsNotNullOrEmpty(fieldName);
 
-        return await Receive(EntityReferenceUtils.CreateEntityReference(recordId, logicalName, _logger), fieldName);
+        return await Receive(EntityReferenceUtils.CreateEntityReference(recordId, logicalName), fieldName);
     }
 
     public async Task<FileData> Receive(EntityReference recordId, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotNull(recordId);
+        Guard.IsNotDefault(recordId.Id);
+        Guard.IsNotNullOrEmpty(recordId.LogicalName);
+        Guard.IsNotNullOrEmpty(fieldName);
 
         InitializeFileBlocksDownloadRequest fileBlocksRequest =
-            new() { Target = Guard.Against.Null(recordId), FileAttributeName = Guard.Against.NullOrEmpty(fieldName) };
+            new()
+            {
+                Target = recordId,
+                FileAttributeName = fieldName
+            };
 
         InitializeFileBlocksDownloadResponse fileBlockResponse =
-            await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
+            await _serviceClient.Extension().ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
 
-        Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
-        Guard.Against.OutOfRange(
-            fileBlockResponse.FileSizeInBytes,
-            nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes),
-            0,
-            int.MaxValue,
-            $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB."
-        );
+        if (fileBlockResponse.FileSizeInBytes > int.MaxValue)
+        {
+            throw new InvalidProgramException(
+                $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB.");
+        }
+
+        Guard.IsLessThan(fileBlockResponse.FileSizeInBytes, 0);
 
         int sizeOfFileToDownload = Convert.ToInt32(fileBlockResponse.FileSizeInBytes);
 
         using MemoryStream fileContentStream = new(sizeOfFileToDownload);
 
         ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+
         while (sizeOfFileToDownload > 0)
         {
             int currentChunkSize =
                 sizeOfFileToDownload < MaxBlockSizeInBytes ? sizeOfFileToDownload : MaxBlockSizeInBytes;
+
             sizeOfFileToDownload -= currentChunkSize;
             DownloadBlockRequest downloadBlockRequest =
                 new()
@@ -112,17 +127,18 @@ public sealed class FileOrImageFieldTypeMethods
                     Offset = sizeOfFileToDownload,
                     BlockLength = currentChunkSize
                 };
+
             requestBuilder.AddRequest(downloadBlockRequest);
         }
 
-        Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(
-            requestBuilder,
-            new Models.ExecuteMultipleRequestSimpleSettings()
-        );
+        ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(requestBuilder,
+            new ExecuteMultipleRequestSimpleSettings());
+
         foreach (
             DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results
-                .OrderBy(p => p.RequestIndex)
-                .Cast<DownloadBlockResponse>()
+               .OrderBy(p => p.RequestIndex)
+               .Select(p => p.Response)
+               .Cast<DownloadBlockResponse>()
         )
         {
             await fileContentStream.WriteAsync(downloadBlockResponse.Data);
@@ -140,41 +156,55 @@ public sealed class FileOrImageFieldTypeMethods
         string fileName,
         EntityReference recordId,
         string fieldName,
-        byte[] data
-    )
+        byte[] data)
     {
-        using EntryExitLogger logGuard = new(_logger);
-        return await Upload(fileName, recordId, fieldName, new MemoryStream(Guard.Against.Null(data)));
+        Guard.IsNotNull(data);
+        Guard.IsNotNullOrEmpty(fieldName);
+        Guard.IsNotNullOrEmpty(fileName);
+        Guard.IsNotNull(recordId);
+        Guard.IsNotDefault(recordId.Id);
+        Guard.IsNotNullOrEmpty(recordId.LogicalName);
+        using MemoryStream memoryStream = new(data);
+
+        return await Upload(fileName, recordId, fieldName, memoryStream);
     }
 
     public async Task<UploadFileFieldResult> Upload(
         string fileName,
         EntityReference recordId,
         string fieldName,
-        Stream dataStream
-    )
+        Stream dataStream)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotNull(dataStream);
+        Guard.IsNotNullOrEmpty(fieldName);
+        Guard.IsNotNullOrEmpty(fileName);
+        Guard.IsNotNull(recordId);
+        Guard.IsNotDefault(recordId.Id);
+        Guard.IsNotNullOrEmpty(recordId.LogicalName);
 
         InitializeFileBlocksUploadRequest fileBlocksRequest =
             new()
             {
-                FileName = Guard.Against.NullOrEmpty(fileName),
-                Target = Guard.Against.Null(recordId),
-                FileAttributeName = Guard.Against.NullOrEmpty(fieldName),
+                FileName = fileName,
+                Target = recordId,
+                FileAttributeName = fieldName
             };
+
         InitializeFileBlocksUploadResponse fileBlockResponse =
-            await _sdkProxy.ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
+            await _serviceClient.Extension().ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
 
         ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
-        BinaryReader dataBinaryReader = new(Guard.Against.Null(dataStream));
+        BinaryReader dataBinaryReader = new(dataStream);
+
         while (true)
         {
             byte[] chunkData = dataBinaryReader.ReadBytes(MaxBlockSizeInBytes);
-            if (chunkData == null || chunkData.Length == 0)
+
+            if (chunkData.Length == 0)
             {
                 break;
             }
+
             string randomBase64 = GetRandomBase64FromRandomGuid();
             UploadBlockRequest uploadBlockRequest =
                 new()
@@ -183,23 +213,30 @@ public sealed class FileOrImageFieldTypeMethods
                     FileContinuationToken = fileBlockResponse.FileContinuationToken,
                     BlockId = randomBase64
                 };
+
             requestBuilder.AddRequest(uploadBlockRequest);
         }
-        await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
+
+        await _executeMultipleLogic.ExecuteAsync(requestBuilder, new ExecuteMultipleRequestSimpleSettings());
 
         CommitFileBlocksUploadRequest commitFileBlocksUploadRequest =
             new()
             {
                 FileContinuationToken = fileBlockResponse.FileContinuationToken,
                 FileName = fileName,
-                MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
-                BlockList = requestBuilder.RequestWithResults.Requests
-                    .Cast<UploadBlockRequest>()
-                    .Select(p => p.BlockId)
-                    .ToArray()
+                MimeType = MimeUtility.GetMimeMapping(fileName),
+                BlockList = requestBuilder
+                   .Build()
+                   .Requests
+                   .Cast<UploadBlockRequest>()
+                   .Select(p => p.BlockId)
+                   .ToArray()
             };
+
         CommitFileBlocksUploadResponse commitFileBlocksUploadResponse =
-            await _sdkProxy.ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
+            await _serviceClient.Extension()
+               .ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
+
         return new UploadFileFieldResult
         {
             SavedBytes = commitFileBlocksUploadResponse.FileSizeInBytes,
@@ -207,29 +244,32 @@ public sealed class FileOrImageFieldTypeMethods
         };
     }
 
-    private string GetRandomBase64FromRandomGuid()
+    private static string GetRandomBase64FromRandomGuid()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         Guid genGuid = Guid.NewGuid();
         Span<byte> guidBytes = stackalloc byte[16];
+
         if (!genGuid.TryWriteBytes(guidBytes))
         {
             throw new InvalidPluginExecutionException("Failed to generate random base64 from random GUID.");
         }
+
         return Convert.ToBase64String(guidBytes);
     }
 
     public sealed class FileData
     {
         public byte[] Data { get; set; }
+
         public string Name { get; set; }
+
         public long Size { get; set; }
     }
 
     public sealed class UploadFileFieldResult
     {
         public Guid FileId { get; set; }
+
         public long SavedBytes { get; set; }
     }
 }

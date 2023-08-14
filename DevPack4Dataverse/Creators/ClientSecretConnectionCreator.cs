@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
-using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Utils;
+using System.Security;
+using CommunityToolkit.Diagnostics;
+using DevPack4Dataverse.New;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
-using System.Security;
 
 namespace DevPack4Dataverse.Creators;
 
@@ -29,22 +28,17 @@ public class ClientSecretConnectionCreator : IConnectionCreator
     private readonly string _crmUrl;
     private readonly int _maximumConcurrentlyUsage;
     private readonly SecureString _secret;
-    private bool _isCreated;
-    private bool _isError;
 
     public ClientSecretConnectionCreator(
         string crmUrl,
         string appId,
         SecureString secret,
-        int maximumConcurrentlyUsage = 1
-    )
+        int maximumConcurrentlyUsage = 1)
     {
-        _crmUrl = Guard.Against.InvalidInput(
-            crmUrl,
+        _crmUrl = Guard.Against.InvalidInput(crmUrl,
             nameof(crmUrl),
             p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
-            $"{nameof(crmUrl)} - is null or not valid URL."
-        );
+            $"{nameof(crmUrl)} - is null or not valid URL.");
 
         _appId = Guard.Against.NullOrEmpty(appId);
 
@@ -54,40 +48,47 @@ public class ClientSecretConnectionCreator : IConnectionCreator
         _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
-    public bool IsCreated => _isCreated;
-    public bool IsError => _isError;
-    public bool IsValid => _isCreated && !_isError;
+    public bool IsCreated { get; private set; }
+
+    public bool IsError { get; private set; }
+
+    public bool IsValid => IsCreated && !IsError;
 
     public IConnection Create(ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         Guard.Against.Null(logger);
 
         try
         {
-            ServiceClient crmServiceClient = new(new Uri(_crmUrl), _appId, _secret, true, logger);
+            ServiceClient crmServiceClient = new(new Uri(_crmUrl),
+                _appId,
+                _secret,
+                true,
+                logger);
 
-            Guard.Against.NullOrInvalidInput(
-                crmServiceClient,
+            Guard.Against.NullOrInvalidInput(crmServiceClient,
                 nameof(crmServiceClient),
                 p => p.IsReady,
-                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}"
-            );
+                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}");
+
             ConnectionOld connectionOld = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
 
             bool isConnectionValid = connectionOld.Test();
+
             if (!isConnectionValid)
             {
                 throw new InvalidProgramException("Test on connection failed.");
             }
 
-            _isCreated = true;
+            IsCreated = true;
+
             return connectionOld;
         }
         catch (Exception e)
         {
             logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
-            _isError = true;
+            IsError = true;
+
             throw;
         }
     }

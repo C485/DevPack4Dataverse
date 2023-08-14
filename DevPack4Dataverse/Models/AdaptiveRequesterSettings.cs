@@ -14,51 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
+using CommunityToolkit.Diagnostics;
+using DevPack4Dataverse.New;
 
 namespace DevPack4Dataverse.Models;
 
 /// <summary>
-/// Represents settings for the <see cref="AdaptiveRequester"/> class.
+///     Represents settings for the <see cref="AdaptiveRequester" /> class.
 /// </summary>
 public class AdaptiveRequesterSettings
 {
     /// <summary>
-    /// Gets or sets the minimum number of requests allowed.
-    /// </summary>
-    public int MinRequests { get; set; }
-
-    /// <summary>
-    /// Gets or sets the maximum number of requests allowed.
-    /// </summary>
-    public int MaxRequests { get; set; }
-
-    /// <summary>
-    /// Gets or sets the target response time for requests.
-    /// </summary>
-    public TimeSpan TargetResponseTime { get; set; }
-
-    /// <summary>
-    /// Gets or sets the initial number of requests per second.
-    /// </summary>
-    public int InitialRequestsPerSecond { get; set; }
-
-    /// <summary>
-    /// Gets or sets the buffer size used to store count and response time of previous requests.
-    /// </summary>
-    public int BufferSize { get; set; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AdaptiveRequesterSettings"/> class with default values.
+    ///     Initializes a new instance of the <see cref="AdaptiveRequesterSettings" /> class with default values.
     /// </summary>
     /// <remarks>
-    /// Default values:
-    /// <see cref="MinRequests"/> = 1
-    /// <see cref="MaxRequests"/> = 300
-    /// <see cref="TargetResponseTime"/> = 3 seconds
-    /// <see cref="InitialRequestsPerSecond"/> = 5
-    /// <see cref="BufferSize"/> = 100
+    ///     Default values:
+    ///     <see cref="MinRequests" /> = 1
+    ///     <see cref="MaxRequests" /> = 300
+    ///     <see cref="TargetResponseTime" /> = 3 seconds
+    ///     <see cref="InitialRequestsPerSecond" /> = 5
+    ///     <see cref="BufferSize" /> = 100
     /// </remarks>
     public AdaptiveRequesterSettings()
     {
@@ -70,20 +45,46 @@ public class AdaptiveRequesterSettings
     }
 
     /// <summary>
-    /// Validates the <see cref="AdaptiveRequesterSettings"/> and returns the instance if valid.
+    ///     Gets or sets the minimum number of requests allowed.
     /// </summary>
-    /// <returns>The validated instance of <see cref="AdaptiveRequesterSettings"/>.</returns>
+    public int MinRequests { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the maximum number of requests allowed.
+    /// </summary>
+    public int MaxRequests { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the target response time for requests.
+    /// </summary>
+    public TimeSpan TargetResponseTime { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the initial number of requests per second.
+    /// </summary>
+    public int InitialRequestsPerSecond { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the buffer size used to store count and response time of previous requests.
+    /// </summary>
+    public int BufferSize { get; set; }
+
+    /// <summary>
+    ///     Validates the <see cref="AdaptiveRequesterSettings" /> and returns the instance if valid.
+    /// </summary>
+    /// <returns>The validated instance of <see cref="AdaptiveRequesterSettings" />.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when any of the property values are out of the allowed range.</exception>
     public AdaptiveRequesterSettings Validate()
     {
-        Guard.Against.NegativeOrZero(MinRequests);
-        Guard.Against.OutOfRange(MaxRequests, nameof(MaxRequests), MinRequests, 500);
-        Guard.Against.NegativeOrZero(TargetResponseTime);
+        Guard.IsGreaterThan(MinRequests, 0);
+        Guard.IsInRange(MaxRequests, MinRequests, 500);
+        Guard.IsGreaterThan(TargetResponseTime, TimeSpan.Zero);
+
         TimeSpan maxResponseTime = TimeSpan.FromMinutes(5);
-        Guard.Against.OutOfRange(TargetResponseTime, nameof(TargetResponseTime), TimeSpan.Zero, maxResponseTime);
-        Guard.Against.NegativeOrZero(InitialRequestsPerSecond);
-        Guard.Against.OutOfRange(InitialRequestsPerSecond, nameof(InitialRequestsPerSecond), MinRequests, MaxRequests);
-        Guard.Against.NegativeOrZero(BufferSize);
+        Guard.IsInRange(TargetResponseTime, TimeSpan.Zero, maxResponseTime);
+        Guard.IsGreaterThan(InitialRequestsPerSecond, 0);
+        Guard.IsGreaterThan(BufferSize, 0);
+        Guard.IsInRange(InitialRequestsPerSecond, MinRequests, MaxRequests);
         return this;
     }
 }

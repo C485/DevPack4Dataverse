@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Diagnostics;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
-using System.Diagnostics;
 
 namespace DevPack4Dataverse;
 
@@ -25,6 +25,14 @@ internal class Statistics : IStatistics
     private readonly object _lock = new();
     private readonly List<Statistic> _statistics = new();
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+
+    public ulong TotalUsageInSeconds()
+    {
+        lock (_lock)
+        {
+            return _statistics.Aggregate<Statistic, ulong>(0, (current, item) => current + item.ElapsedSeconds);
+        }
+    }
 
     public void Finish(Statistic statistic)
     {
@@ -37,20 +45,8 @@ internal class Statistics : IStatistics
         {
             Statistic statsEntry = new(_stopwatch.Elapsed);
             _statistics.Add(statsEntry);
-            return statsEntry;
-        }
-    }
 
-    public ulong TotalUsageInSeconds()
-    {
-        lock (_lock)
-        {
-            ulong totalSeconds = 0;
-            foreach (Statistic item in _statistics)
-            {
-                totalSeconds += item.ElapsedSeconds;
-            }
-            return totalSeconds;
+            return statsEntry;
         }
     }
 
@@ -62,8 +58,10 @@ internal class Statistics : IStatistics
             {
                 return 0;
             }
+
             ulong totalSeconds = 0;
             uint skippedStatistics = 0;
+
             for (int i = _statistics.Count - 1; i >= 0; i--)
             {
                 if (skippedStatistics >= 100)
@@ -72,13 +70,17 @@ internal class Statistics : IStatistics
                 }
 
                 Statistic statistic = _statistics[i];
+
                 if (!statistic.IsFromLastNMinutes(_stopwatch.Elapsed, minutes))
                 {
                     skippedStatistics++;
+
                     continue;
                 }
-                totalSeconds += (statistic.ElapsedMilliseconds / 10ul);
+
+                totalSeconds += statistic.ElapsedMilliseconds / 10ul;
             }
+
             return totalSeconds;
         }
     }

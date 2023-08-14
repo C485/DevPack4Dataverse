@@ -16,7 +16,6 @@ limitations under the License.
 
 using System.Collections.Concurrent;
 using CommunityToolkit.Diagnostics;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
@@ -25,13 +24,10 @@ namespace DevPack4Dataverse.New.ExecuteMultiple;
 public sealed class ExecuteMultipleRequestBuilder
 {
     private readonly bool _continueOnError;
-    private readonly ILogger _logger;
     private readonly ConcurrentBag<OrganizationRequest> _requests;
 
-    public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
+    public ExecuteMultipleRequestBuilder(bool continueOnError = true)
     {
-        Guard.IsNotNull(logger);
-        _logger = logger;
         _requests = new ConcurrentBag<OrganizationRequest>();
         _continueOnError = continueOnError;
     }

@@ -1,29 +1,20 @@
 ﻿using CommunityToolkit.Diagnostics;
 using DevPack4Dataverse.Utils;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
 namespace DevPack4Dataverse.New;
 
-public class RequestBuilderFactory
+public static class RequestBuilderFactory
 {
-    private readonly ILogger _logger;
-
-    public RequestBuilderFactory(ILogger logger)
-    {
-        Guard.IsNotNull(logger);
-        _logger = logger;
-    }
-
-    public RequestBuilder<T> Create<T>(Func<T> creator) where T : OrganizationRequest
+    public static RequestBuilder<T> Create<T>(Func<T> creator) where T : OrganizationRequest
     {
         Guard.IsNotNull(creator);
 
         return new RequestBuilder<T>(creator());
     }
 
-    public RequestBuilder<UpdateRequest> CreateUpdateRequest(Entity record)
+    public static RequestBuilder<UpdateRequest> CreateUpdateRequest(Entity record)
     {
         Guard.IsNotNull(record);
         Guard.IsNotNullOrEmpty(record.LogicalName);
@@ -37,7 +28,7 @@ public class RequestBuilderFactory
         return new RequestBuilder<UpdateRequest>(updateRequest);
     }
 
-    public RequestBuilder<UpsertRequest> CreateUpsertRequest(Entity record)
+    public static RequestBuilder<UpsertRequest> CreateUpsertRequest(Entity record)
     {
         Guard.IsNotNull(record);
         Guard.IsNotNullOrEmpty(record.LogicalName);
@@ -50,7 +41,7 @@ public class RequestBuilderFactory
         return new RequestBuilder<UpsertRequest>(upsertRequest);
     }
 
-    public RequestBuilder<CreateMultipleRequest> CreateCreateMultipleRequest(IList<Entity> records)
+    public static RequestBuilder<CreateMultipleRequest> CreateCreateMultipleRequest(IList<Entity> records)
     {
         Guard.IsNotNull(records);
         Guard.IsLessThan(records.Count, 1);
@@ -63,7 +54,7 @@ public class RequestBuilderFactory
         return new RequestBuilder<CreateMultipleRequest>(upsertRequest);
     }
 
-    public RequestBuilder<UpdateMultipleRequest> CreateUpdateMultipleRequest(IList<Entity> records)
+    public static RequestBuilder<UpdateMultipleRequest> CreateUpdateMultipleRequest(IList<Entity> records)
     {
         Guard.IsNotNull(records);
         Guard.IsLessThan(records.Count, 1);
@@ -76,7 +67,7 @@ public class RequestBuilderFactory
         return new RequestBuilder<UpdateMultipleRequest>(upsertRequest);
     }
 
-    public RequestBuilder<CreateRequest> CreateCreateRequest(Entity record)
+    public static RequestBuilder<CreateRequest> CreateCreateRequest(Entity record)
     {
         Guard.IsNotNull(record);
         Guard.IsNotNullOrEmpty(record.LogicalName);
@@ -90,7 +81,7 @@ public class RequestBuilderFactory
         return new RequestBuilder<CreateRequest>(upsertRequest);
     }
 
-    public RequestBuilder<DeleteRequest> CreateDeleteRequest(Entity record)
+    public static RequestBuilder<DeleteRequest> CreateDeleteRequest(Entity record)
     {
         Guard.IsNotNull(record);
         Guard.IsNotNullOrEmpty(record.LogicalName);
@@ -99,15 +90,15 @@ public class RequestBuilderFactory
         return CreateDeleteRequest(record.ToEntityReference());
     }
 
-    public RequestBuilder<DeleteRequest> CreateDeleteRequest(string logicalName, Guid id)
+    public static RequestBuilder<DeleteRequest> CreateDeleteRequest(string logicalName, Guid id)
     {
         Guard.IsNotNullOrEmpty(logicalName);
         Guard.IsNotDefault(id);
 
-        return CreateDeleteRequest(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger));
+        return CreateDeleteRequest(EntityReferenceUtils.CreateEntityReference(id, logicalName));
     }
 
-    public RequestBuilder<DeleteRequest> CreateDeleteRequest(EntityReference entityReference)
+    public static RequestBuilder<DeleteRequest> CreateDeleteRequest(EntityReference entityReference)
     {
         Guard.IsNotNull(entityReference);
         Guard.IsNotNullOrEmpty(entityReference.LogicalName);

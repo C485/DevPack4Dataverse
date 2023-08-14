@@ -19,7 +19,6 @@ using System.Diagnostics;
 using CommunityToolkit.Diagnostics;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 
@@ -27,19 +26,17 @@ namespace DevPack4Dataverse.New.ExecuteMultiple;
 
 public sealed class ExecuteMultipleLogic
 {
-    private readonly ILogger _logger;
-    private readonly SdkProxy _sdkProxy;
+    private readonly ConnectionsBag _connectionsBag;
 
-    public ExecuteMultipleLogic(SdkProxy sdkProxy, ILogger logger)
+    public ExecuteMultipleLogic(ConnectionsBag connectionsBag)
     {
-        Guard.IsNotNull(logger);
-        _sdkProxy = Guard.Against.Null(sdkProxy);
-        _logger = logger
+        Guard.IsNotNull(connectionsBag);
+        _connectionsBag = connectionsBag;
     }
 
     public ExecuteMultipleRequestBuilder CreateRequestBuilder(bool continueOnError = true)
     {
-        return new ExecuteMultipleRequestBuilder(_logger, continueOnError);
+        return new ExecuteMultipleRequestBuilder(continueOnError);
     }
 
     public async Task<ExecuteMultipleLogicResult> ExecuteAsync(
@@ -47,11 +44,9 @@ public sealed class ExecuteMultipleLogic
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotNull(executeMultipleRequestSettings);
 
-        Guard.Against.Null(executeMultipleRequestSettings);
-
-        Guard.Against.Null(executeMultipleRequestBuilder);
+        Guard.IsNotNull(executeMultipleRequestBuilder);
 
         if (executeMultipleRequestBuilder.Count == 0)
         {
@@ -65,7 +60,7 @@ public sealed class ExecuteMultipleLogic
 
         int threadsCount =
             executeMultipleRequestSettings.MaxDegreeOfParallelism <= 0
-                ? _sdkProxy.ConnectionCount
+                ? _connectionsBag.Count
                 : executeMultipleRequestSettings.MaxDegreeOfParallelism;
 
         ExecuteMultipleLogicResult logicResult = new()
@@ -82,8 +77,7 @@ public sealed class ExecuteMultipleLogic
                 {
                     executeMultipleRequestSettings.ReportProgress(Thread.VolatileRead(ref progress),
                         executeMultipleRequestBuilder.Count);
-                },
-                _logger);
+                });
 
         repeatedTask.Start();
 
@@ -118,7 +112,7 @@ public sealed class ExecuteMultipleLogic
                         requestWithResults.Requests.AddRange(packOfRequests);
 
                         ExecuteMultipleResponse responseWithResults =
-                            await _sdkProxy.ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
+                            await _connectionsBag.ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
 
                         foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                         {
@@ -151,7 +145,7 @@ public sealed class ExecuteMultipleLogic
         }
 
         logicResult.Stopwatch.Stop();
-        logicResult.RecordsRequested = executeMultipleRequestBuilder.RequestWithResults.Requests.Count;
+        logicResult.RecordsRequested = executeMultipleRequestBuilder.Build().Requests.Count;
         logicResult.RecordsProcessed = progress;
         logicResult.Results = responsesList;
         logicResult.Cancelled = cancellationToken.IsCancellationRequested;
@@ -165,11 +159,9 @@ public sealed class ExecuteMultipleLogic
         ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        Guard.IsNotNull(executeMultipleRequestSettings);
 
-        Guard.Against.Null(executeMultipleRequestSettings);
-
-        Guard.Against.Null(executeMultipleRequestBuilder);
+        Guard.IsNotNull(executeMultipleRequestBuilder);
 
         if (executeMultipleRequestBuilder.Count == 0)
         {
@@ -183,7 +175,7 @@ public sealed class ExecuteMultipleLogic
 
         int threadsCount =
             executeMultipleRequestSettings.MaxDegreeOfParallelism <= 0
-                ? _sdkProxy.ConnectionCount
+                ? _connectionsBag.Count
                 : executeMultipleRequestSettings.MaxDegreeOfParallelism;
 
         ExecuteMultipleLogicResult logicResult = new()
@@ -221,7 +213,7 @@ public sealed class ExecuteMultipleLogic
                 requestWithResults.Requests.AddRange(packOfRequests);
 
                 ExecuteMultipleResponse responseWithResults =
-                    await _sdkProxy.ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
+                    await _connectionsBag.ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
 
                 foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                 {
@@ -240,7 +232,7 @@ public sealed class ExecuteMultipleLogic
             });
 
         logicResult.Stopwatch.Stop();
-        logicResult.RecordsRequested = executeMultipleRequestBuilder.RequestWithResults.Requests.Count;
+        logicResult.RecordsRequested = executeMultipleRequestBuilder.Build().Requests.Count;
         logicResult.RecordsProcessed = progress;
         logicResult.Results = responsesList;
         logicResult.Cancelled = cancellationToken.IsCancellationRequested;
@@ -252,9 +244,9 @@ public sealed class ExecuteMultipleLogic
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings)
     {
-        using EntryExitLogger logGuard = new(_logger);
-
-        return executeMultipleRequestBuilder.RequestWithResults.Requests
+        return executeMultipleRequestBuilder
+           .Build()
+           .Requests
            .Select((s, i) => new
             {
                 Value = s,

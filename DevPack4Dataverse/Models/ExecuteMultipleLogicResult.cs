@@ -14,21 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Microsoft.Xrm.Sdk;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
 
 public class ExecuteMultipleLogicResult
 {
     public bool Cancelled { get; set; }
+
     public int RecordsProcessed { get; set; }
 
     public int RecordsRequested { get; set; }
 
     public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } =
         Array.Empty<ExecuteMultipleResponseItem>();
+
     public Stopwatch Stopwatch { get; set; }
 
     public int ThreadsUsed { get; set; }
@@ -60,6 +62,7 @@ public class ExecuteMultipleLogicResult
         sb.Append("Results count: ");
         sb.Append(Results.Count);
         sb.AppendLine();
+
         return sb.ToString();
     }
 }

@@ -21,27 +21,27 @@ namespace DevPack4Dataverse.Models;
 public class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpleSettings
 {
     /// <summary>
-    ///  <para>Optional.</para>
-    ///  <para>Callback used for reporting error.</para>
-    ///  <para>
-    ///   Called each time when error occurs, please have in mind that thread may vary between errors.
-    ///  </para>
+    ///     <para>Optional.</para>
+    ///     <para>Callback used for reporting error.</para>
+    ///     <para>
+    ///         Called each time when error occurs, please have in mind that thread may vary between errors.
+    ///     </para>
     /// </summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };
 
     /// <summary>
-    ///  <para>Optional.</para>
-    ///  <para>Callback used for reporting progress.</para>
-    ///  <para>It's executed every <see cref="ReportProgressInterval" /> from separate thread.</para>
-    ///  <para>Any access to objects from other threads needs to be atomic/locked.</para>
+    ///     <para>Optional.</para>
+    ///     <para>Callback used for reporting progress.</para>
+    ///     <para>It's executed every <see cref="ReportProgressInterval" /> from separate thread.</para>
+    ///     <para>Any access to objects from other threads needs to be atomic/locked.</para>
     /// </summary>
     public Action<int, int> ReportProgress { get; set; } = (_, _) => { };
 
     /// <summary>
-    ///  <para>Optional.</para>
-    ///  <para>Sets sleep interval for thread that is used for reporting progress.</para>
-    ///  <para>Defaults to 1 second.</para>
-    ///  <para>See <see cref="ReportProgress" /> callback.</para>
+    ///     <para>Optional.</para>
+    ///     <para>Sets sleep interval for thread that is used for reporting progress.</para>
+    ///     <para>Defaults to 1 second.</para>
+    ///     <para>See <see cref="ReportProgress" /> callback.</para>
     /// </summary>
     public TimeSpan ReportProgressInterval { get; set; } = TimeSpan.FromSeconds(1);
 }

@@ -18,7 +18,6 @@ using System.Collections;
 using System.Linq.Expressions;
 using CommunityToolkit.Diagnostics;
 using DevPack4Dataverse.New.Base;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.New.ExpressionBuilder;
@@ -32,34 +31,27 @@ public static class LinqExpressionBuilder
     /// </summary>
     /// <typeparam name="U">Can be <see cref="Entity" /> or any class that inherits from <see cref="Entity" />.</typeparam>
     /// <returns></returns>
-    public static ILinqExpressionBuilder<U> Create<U>(ILogger logger) where U : Entity, new()
+    public static ILinqExpressionBuilder<U> Create<U>() where U : Entity, new()
     {
-        return new LinqExpressionBuilderInner<U>(logger);
+        return new LinqExpressionBuilderInner<U>();
     }
 
     private sealed class LinqExpressionBuilderInner<U> : ILinqExpressionBuilder<U> where U : Entity, new()
     {
-        private readonly ILogger _logger;
-        private readonly int _maximumExpressions = 500;
-
-        public LinqExpressionBuilderInner(ILogger logger)
-        {
-            Result = ExpressionCombiner.Empty<U>(logger);
-            _logger = logger;
-        }
+        private const int MaximumExpressions = 500;
 
         public uint ExpressionsAdded { get; private set; }
 
-        public Expression<Func<U, bool>> Result { get; private set; }
+        public Expression<Func<U, bool>> Result { get; private set; } = ExpressionCombiner.Empty<U>();
 
         public void AddAnd(Expression<Func<U, bool>> expressionToAdd)
         {
             Guard.IsNotNull(expressionToAdd);
-            Guard.IsTrue(ExpressionsAdded + 1 <= _maximumExpressions,
+            Guard.IsTrue(ExpressionsAdded + 1 <= MaximumExpressions,
                 "Expressions added",
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+                $"Maximum expressions limit exceeded, limit is {MaximumExpressions}");
 
-            Result = Result.And(expressionToAdd, _logger);
+            Result = Result.And(expressionToAdd);
             ExpressionsAdded++;
         }
 
@@ -67,22 +59,22 @@ public static class LinqExpressionBuilder
         {
             Guard.IsNotNull(expressionToAdd);
             Guard.IsNotDefault(expressionToAdd.ExpressionsAdded);
-            Guard.IsTrue(ExpressionsAdded + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+            Guard.IsTrue(ExpressionsAdded + expressionToAdd.ExpressionsAdded <= MaximumExpressions,
                 "Expressions added",
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+                $"Maximum expressions limit exceeded, limit is {MaximumExpressions}");
 
-            Result = Result.And(expressionToAdd.Result, _logger);
+            Result = Result.And(expressionToAdd.Result);
             ExpressionsAdded += expressionToAdd.ExpressionsAdded;
         }
 
         public void AddOr(Expression<Func<U, bool>> expressionToAdd)
         {
             Guard.IsNotNull(expressionToAdd);
-            Guard.IsTrue(ExpressionsAdded + 1 <= _maximumExpressions,
+            Guard.IsTrue(ExpressionsAdded + 1 <= MaximumExpressions,
                 "Expressions added",
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+                $"Maximum expressions limit exceeded, limit is {MaximumExpressions}");
 
-            Result = Result.Or(expressionToAdd, _logger);
+            Result = Result.Or(expressionToAdd);
             ExpressionsAdded++;
         }
 
@@ -90,11 +82,11 @@ public static class LinqExpressionBuilder
         {
             Guard.IsNotNull(expressionToAdd);
             Guard.IsNotDefault(expressionToAdd.ExpressionsAdded);
-            Guard.IsTrue(ExpressionsAdded + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+            Guard.IsTrue(ExpressionsAdded + expressionToAdd.ExpressionsAdded <= MaximumExpressions,
                 "Expressions added",
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}");
+                $"Maximum expressions limit exceeded, limit is {MaximumExpressions}");
 
-            Result = Result.Or(expressionToAdd.Result, _logger);
+            Result = Result.Or(expressionToAdd.Result);
             ExpressionsAdded += expressionToAdd.ExpressionsAdded;
         }
     }

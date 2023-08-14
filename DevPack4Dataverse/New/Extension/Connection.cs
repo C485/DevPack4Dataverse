@@ -1,36 +1,28 @@
 ﻿using CommunityToolkit.Diagnostics;
-using DevPack4Dataverse.New.Base;
 using DevPack4Dataverse.Utils;
-using Microsoft.Crm.Sdk.Messages;
-using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace DevPack4Dataverse.New;
+namespace DevPack4Dataverse.New.Extension;
 
-public class Connection : IConnection, IAsyncConnection
+public class ServiceClientExtensionsInner
 {
-    private readonly ILogger _logger;
+    private readonly ServiceClient _connection;
 
-    public Connection(ServiceClient connection, ILogger logger)
+    internal ServiceClientExtensionsInner(ServiceClient connection)
     {
         Guard.IsNotNull(connection);
-        Guard.IsNotNull(logger);
-        _logger = logger;
-        PureServiceClient = connection;
-        PureServiceClient.DisableCrossThreadSafeties = true;
+        _connection = connection;
     }
-
-    public ServiceClient PureServiceClient { get; }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request)
         where T : OrganizationResponse
     {
         Guard.IsNotNull(request);
 
-        return await PureServiceClient.ExecuteAsync(request) as T;
+        return await _connection.ExecuteAsync(request) as T;
     }
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(ExecuteMultipleRequest executeMultipleRequest)
@@ -49,7 +41,7 @@ public class Connection : IConnection, IAsyncConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return await RetrieveAsync<T>(record.LogicalName, record.Id, columns);
+        return (await _connection.RetrieveAsync(record.LogicalName, record.Id, columns)).ToEntity<T>();
     }
 
     public async Task<Entity> RefreshRecordAsync(Entity record)
@@ -60,36 +52,7 @@ public class Connection : IConnection, IAsyncConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return await RetrieveAsync(record.LogicalName, record.Id, columns);
-    }
-
-    public async Task<Entity> RetrieveAsync(
-        string logicalName,
-        Guid id,
-        ColumnSet columnSet)
-    {
-        Guard.IsNotNullOrEmpty(logicalName);
-        Guard.IsNotDefault(id);
-        Guard.IsNotNull(columnSet);
-
-        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(new RetrieveRequest
-        {
-            ColumnSet = columnSet,
-            Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger)
-        });
-
-        Guard.IsNotNull(retrieveResponse);
-
-        return retrieveResponse.Entity;
-    }
-
-    public async Task<T> RetrieveAsync<T>(
-        string logicalName,
-        Guid id,
-        ColumnSet columnSet) where T : Entity
-    {
-        return await RetrieveAsync(logicalName, id, columnSet)
-           .ContinueWith(p => p.Result?.ToEntity<T>());
+        return await _connection.RetrieveAsync(record.LogicalName, record.Id, columns);
     }
 
     public async Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression)
@@ -176,19 +139,12 @@ public class Connection : IConnection, IAsyncConnection
         }
     }
 
-    public async Task<bool> TestAsync()
-    {
-        WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest());
-
-        return response != null && response.UserId != Guid.Empty;
-    }
-
     public T Execute<T>(OrganizationRequest request)
         where T : OrganizationResponse
     {
         Guard.IsNotNull(request);
 
-        return PureServiceClient.Execute(request) as T;
+        return _connection.Execute(request) as T;
     }
 
     public ExecuteMultipleResponse Execute(ExecuteMultipleRequest executeMultipleRequest)
@@ -233,7 +189,7 @@ public class Connection : IConnection, IAsyncConnection
         RetrieveResponse retrieveResponse = Execute<RetrieveResponse>(new RetrieveRequest
         {
             ColumnSet = columnSet,
-            Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger)
+            Target = EntityReferenceUtils.CreateEntityReference(id, logicalName)
         });
 
         Guard.IsNotNull(retrieveResponse);
@@ -333,12 +289,5 @@ public class Connection : IConnection, IAsyncConnection
                 queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
-    }
-
-    public bool Test()
-    {
-        WhoAmIResponse response = (WhoAmIResponse)PureServiceClient.Execute(new WhoAmIRequest());
-
-        return response != null && response.UserId != Guid.Empty;
     }
 }

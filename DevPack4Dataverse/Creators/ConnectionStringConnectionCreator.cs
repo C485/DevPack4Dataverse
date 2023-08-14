@@ -14,9 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
-using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Utils;
+using CommunityToolkit.Diagnostics;
+using DevPack4Dataverse.New;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
@@ -29,12 +28,13 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
 
     private readonly string _connectionString;
     private readonly int _maximumConcurrentlyUsage;
-    private bool _isCreated;
-    private bool _isError;
 
     public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
     {
-        _connectionString = Guard.Against.NullOrEmpty(connectionString);
+        Guard.IsGreaterThan(maximumConcurrentlyUsage, 0);
+        _maximumConcurrentlyUsage = maximumConcurrentlyUsage;
+        Guard.IsNotNullOrEmpty(connectionString);
+        _connectionString = connectionString;
 
         if (_connectionString.Contains("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase))
         {
@@ -56,43 +56,43 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
 
         _connectionString += ";RequireNewInstance=True";
-        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
-    public bool IsCreated => _isCreated;
-    public bool IsError => _isError;
-    public bool IsValid => _isCreated && !_isError;
+    public bool IsCreated { get; private set; }
+
+    public bool IsError { get; private set; }
+
+    public bool IsValid => IsCreated && !IsError;
 
     public IConnection Create(ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
-
         Guard.Against.Null(logger);
 
         try
         {
             ServiceClient crmServiceClient = new(_connectionString, logger);
-            Guard.Against.NullOrInvalidInput(
-                crmServiceClient,
+            Guard.Against.NullOrInvalidInput(crmServiceClient,
                 nameof(crmServiceClient),
                 p => p.IsReady,
-                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
-            );
+                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}");
 
             ConnectionOld connectionOld = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
             bool isConnectionValid = connectionOld.Test();
+
             if (!isConnectionValid)
             {
                 throw new InvalidProgramException("Test on connection failed.");
             }
 
-            _isCreated = true;
+            IsCreated = true;
+
             return connectionOld;
         }
         catch (Exception e)
         {
             logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
-            _isError = true;
+            IsError = true;
+
             throw;
         }
     }

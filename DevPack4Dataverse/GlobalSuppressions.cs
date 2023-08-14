@@ -5,15 +5,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-[assembly: SuppressMessage(
-    "Major Code Smell",
+[assembly:SuppressMessage("Major Code Smell",
     "S4457:Parameter validation in \"async\"/\"await\" methods should be wrapped",
     Justification = "<Pending>",
-    Scope = "module"
-)]
-[assembly: SuppressMessage(
-    "Major Code Smell",
+    Scope = "module")]
+[assembly:SuppressMessage("Major Code Smell",
     "S108:Nested blocks of code should not be left empty",
     Justification = "<Pending>",
-    Scope = "module"
-)]
+    Scope = "module")]

@@ -4,30 +4,32 @@
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
-	 <LangVersion>latest</LangVersion>
-	 <Title>DevPack for Dataverse</Title>
-	 <Copyright>Kamil Skoracki/C485@GitHub</Copyright>
-	 <RepositoryUrl>https://github.com/C485/DevPack4Dataverse</RepositoryUrl>
-	 <RepositoryType>git</RepositoryType>
-	 <PackageProjectUrl>https://github.com/C485/DevPack4Dataverse</PackageProjectUrl>
-	 <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
-	 <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-	 <PackageReadmeFile>README.md</PackageReadmeFile>
-	 <PackageIcon>motivation.png</PackageIcon>
-	 <PackageTags>dataverse;power platform;crm;dynamics;powerplatform;devpack4dataverse</PackageTags>
-	 <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	 <Company>Kamil Skoracki/C485@GitHub</Company>
-	 <AssemblyVersion>0.0.0.3</AssemblyVersion>
-	 <FileVersion>0.0.0.3</FileVersion>
-	 <Version>0.0.0.3-beta</Version>
-	 <Authors>Kamil Skoracki/C485@GitHub</Authors>
-	 <Description>DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on top of the SDK for Dataverse. 
-Designed with the idea of optimizing and speeding up work with Dataverse SDK.</Description>
-	 <PackageReleaseNotes>Added statistics
-Added connection picking based on statistics
-Added async GetConnection
-Added maximum concurrently usage to connection (connection can be used more than once at the time)
-Random fixes and stability improvements</PackageReleaseNotes>
+    <LangVersion>latest</LangVersion>
+    <Title>DevPack for Dataverse</Title>
+    <Copyright>Kamil Skoracki/C485@GitHub</Copyright>
+    <RepositoryUrl>https://github.com/C485/DevPack4Dataverse</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/C485/DevPack4Dataverse</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>motivation.png</PackageIcon>
+    <PackageTags>dataverse;power platform;crm;dynamics;powerplatform;devpack4dataverse</PackageTags>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Company>Kamil Skoracki/C485@GitHub</Company>
+    <AssemblyVersion>0.0.0.3</AssemblyVersion>
+    <FileVersion>0.0.0.3</FileVersion>
+    <Version>0.0.0.3-beta</Version>
+    <Authors>Kamil Skoracki/C485@GitHub</Authors>
+    <Description>DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on top of the SDK for Dataverse.
+      Designed with the idea of optimizing and speeding up work with Dataverse SDK.
+    </Description>
+    <PackageReleaseNotes>Added statistics
+      Added connection picking based on statistics
+      Added async GetConnection
+      Added maximum concurrently usage to connection (connection can be used more than once at the time)
+      Random fixes and stability improvements
+    </PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -39,19 +41,19 @@ Random fixes and stability improvements</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Diagnostics" Version="8.2.1" />
-    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.1.12" />
-    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.1.12" />
-    <PackageReference Include="MimeMapping" Version="2.0.0" />
-    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+    <PackageReference Include="CommunityToolkit.Diagnostics" Version="8.2.1"/>
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.1.12"/>
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.1.12"/>
+    <PackageReference Include="MimeMapping" Version="2.0.0"/>
+    <PackageReference Include="System.Linq.Async" Version="6.0.1"/>
   </ItemGroup>
 
   <ItemGroup>
-    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig" />
+    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig"/>
   </ItemGroup>
 
   <ItemGroup>
-    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig" />
+    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -68,7 +70,6 @@ Random fixes and stability improvements</PackageReleaseNotes>
       <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
-
 
 
 </Project>
