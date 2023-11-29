@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
+using DevPack4Dataverse.Extension;
 using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
@@ -28,11 +28,10 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
 
     private readonly string _connectionString;
-    private readonly int _maximumConcurrentlyUsage;
     private bool _isCreated;
     private bool _isError;
 
-    public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
+    public ConnectionStringConnectionCreator(string connectionString)
     {
         _connectionString = Guard.Against.NullOrEmpty(connectionString);
 
@@ -56,19 +55,14 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
 
         _connectionString += ";RequireNewInstance=True";
-        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
     public bool IsCreated => _isCreated;
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
-    public IConnection Create(ILogger logger)
+    public ServiceClient Create(bool applyConnectionOptimization, ILogger? logger = null)
     {
-        using EntryExitLogger logGuard = new(logger);
-
-        Guard.Against.Null(logger);
-
         try
         {
             ServiceClient crmServiceClient = new(_connectionString, logger);
@@ -79,19 +73,18 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
                 $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
             );
 
-            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
-            bool isConnectionValid = connection.Test();
+            bool isConnectionValid = crmServiceClient.ExtTest();
             if (!isConnectionValid)
             {
                 throw new InvalidProgramException("Test on connection failed.");
             }
 
             _isCreated = true;
-            return connection;
+            return crmServiceClient;
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
+            logger?.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
             _isError = true;
             throw;
         }

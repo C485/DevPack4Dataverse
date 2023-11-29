@@ -19,36 +19,28 @@ using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace DevPack4Dataverse.FieldMethods;
+namespace DevPack4Dataverse.Extension;
 
-public sealed class FileOrImageFieldTypeMethods
+public static class FileOrImageFieldTypeMethods
 {
     private const int BytesInMegabyte = 1_048_576;
     private const int MaxBlockSizeInBytes = MaxBlockSizeInMegabytes * BytesInMegabyte;
     private const int MaxBlockSizeInMegabytes = 4;
-    private readonly ExecuteMultipleLogic _executeMultipleLogic;
-    private readonly ILogger _logger;
-    private readonly SdkProxy _sdkProxy;
 
-    public FileOrImageFieldTypeMethods(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
+    public static async Task<bool> ExtDeleteFile(
+        this IOrganizationServiceAsync organizationService,
+        EntityReference recordId,
+        string fieldName
+    )
     {
-        using EntryExitLogger logGuard = new(logger);
-
-        _logger = Guard.Against.Null(logger);
-        _sdkProxy = Guard.Against.Null(sdkProxy);
-        _executeMultipleLogic = Guard.Against.Null(executeMultipleLogic);
-    }
-
-    public async Task<bool> Delete(EntityReference recordId, string fieldName)
-    {
-        using EntryExitLogger logGuard = new(_logger);
-
         Guard.Against.Null(recordId);
         Guard.Against.NullOrEmpty(fieldName);
-        Entity fileFieldData = await _sdkProxy.RetrieveAsync(
+        Entity fileFieldData = await organizationService.RetrieveAsync(
             recordId.LogicalName,
             recordId.Id,
             new ColumnSet(fieldName)
@@ -57,35 +49,41 @@ public sealed class FileOrImageFieldTypeMethods
         {
             return false;
         }
-        await Delete(fileId);
+        await organizationService.ExtDeleteFile(fileId);
         return true;
     }
 
-    public async Task Delete(Guid fileId)
+    public static async Task ExtDeleteFile(this IOrganizationServiceAsync organizationService, Guid fileId)
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         DeleteFileRequest deleteFileRequest = new() { FileId = Guard.Against.Default(fileId) };
-        _ = await _sdkProxy.ExecuteAsync<DeleteFileResponse>(deleteFileRequest);
+        _ = await organizationService.ExtExecuteAsync<DeleteFileResponse>(deleteFileRequest);
     }
 
-    public async Task<FileData> Receive(Guid recordId, string logicalName, string fieldName)
+    public static async Task<FileData> ExtDownloadFile(
+        this IOrganizationServiceAsync organizationService,
+        Guid recordId,
+        string logicalName,
+        string fieldName
+    )
     {
-        using EntryExitLogger logGuard = new(_logger);
-
-        return await Receive(EntityReferenceUtils.CreateEntityReference(recordId, logicalName, _logger), fieldName);
+        return await organizationService.ExtDownloadFile(
+            EntityReferenceUtils.CreateEntityReference(recordId, logicalName),
+            fieldName
+        );
     }
 
-    public async Task<FileData> Receive(EntityReference recordId, string fieldName)
+    public static async Task<FileData> ExtDownloadFile(
+        this IOrganizationServiceAsync organizationService,
+        EntityReference recordId,
+        string fieldName
+    )
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         InitializeFileBlocksDownloadRequest fileBlocksRequest =
             new() { Target = Guard.Against.Null(recordId), FileAttributeName = Guard.Against.NullOrEmpty(fieldName) };
 
-        InitializeFileBlocksDownloadResponse fileBlockResponse =
-            await _sdkProxy.ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
-
+        InitializeFileBlocksDownloadResponse? fileBlockResponse =
+            await organizationService.ExtExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
+        Guard.Against.Null(fileBlockResponse);
         Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
         Guard.Against.OutOfRange(
             fileBlockResponse.FileSizeInBytes,
@@ -99,7 +97,7 @@ public sealed class FileOrImageFieldTypeMethods
 
         using MemoryStream fileContentStream = new(sizeOfFileToDownload);
 
-        ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        ExecuteMultipleRequestBuilder requestBuilder = ExecuteMultipleRequestBuilder.Create();
         while (sizeOfFileToDownload > 0)
         {
             int currentChunkSize =
@@ -115,13 +113,11 @@ public sealed class FileOrImageFieldTypeMethods
             requestBuilder.AddRequest(downloadBlockRequest);
         }
 
-        Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic.ExecuteAsync(
-            requestBuilder,
-            new Models.ExecuteMultipleRequestSimpleSettings()
-        );
+        ExecuteMultipleResponse? executeMultipleLogicResult = await organizationService.ExtExecuteAsync(requestBuilder);
         foreach (
-            DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results
-                .OrderBy(p => p.RequestIndex)
+            DownloadBlockResponse downloadBlockResponse in Guard.Against
+                .Null(executeMultipleLogicResult)
+                .Results.Select(p => p.Value)
                 .Cast<DownloadBlockResponse>()
         )
         {
@@ -136,26 +132,30 @@ public sealed class FileOrImageFieldTypeMethods
         };
     }
 
-    public async Task<UploadFileFieldResult> Upload(
+    public static async Task<UploadFileFieldResult> ExtUploadFile(
+        this IOrganizationServiceAsync organizationService,
         string fileName,
         EntityReference recordId,
         string fieldName,
         byte[] data
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
-        return await Upload(fileName, recordId, fieldName, new MemoryStream(Guard.Against.Null(data)));
+        return await organizationService.ExtUploadFile(
+            fileName,
+            recordId,
+            fieldName,
+            new MemoryStream(Guard.Against.Null(data))
+        );
     }
 
-    public async Task<UploadFileFieldResult> Upload(
+    public static async Task<UploadFileFieldResult> ExtUploadFile(
+        this IOrganizationServiceAsync organizationService,
         string fileName,
         EntityReference recordId,
         string fieldName,
         Stream dataStream
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         InitializeFileBlocksUploadRequest fileBlocksRequest =
             new()
             {
@@ -163,10 +163,10 @@ public sealed class FileOrImageFieldTypeMethods
                 Target = Guard.Against.Null(recordId),
                 FileAttributeName = Guard.Against.NullOrEmpty(fieldName),
             };
-        InitializeFileBlocksUploadResponse fileBlockResponse =
-            await _sdkProxy.ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
+        InitializeFileBlocksUploadResponse? fileBlockResponse =
+            await organizationService.ExtExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest);
 
-        ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        ExecuteMultipleRequestBuilder requestBuilder = ExecuteMultipleRequestBuilder.Create();
         BinaryReader dataBinaryReader = new(Guard.Against.Null(dataStream));
         while (true)
         {
@@ -185,7 +185,7 @@ public sealed class FileOrImageFieldTypeMethods
                 };
             requestBuilder.AddRequest(uploadBlockRequest);
         }
-        await _executeMultipleLogic.ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings());
+        await organizationService.ExtExecuteAsync(requestBuilder);
 
         CommitFileBlocksUploadRequest commitFileBlocksUploadRequest =
             new()
@@ -198,19 +198,17 @@ public sealed class FileOrImageFieldTypeMethods
                     .Select(p => p.BlockId)
                     .ToArray()
             };
-        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse =
-            await _sdkProxy.ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
+        CommitFileBlocksUploadResponse? commitFileBlocksUploadResponse =
+            await organizationService.ExtExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);
         return new UploadFileFieldResult
         {
-            SavedBytes = commitFileBlocksUploadResponse.FileSizeInBytes,
+            SavedBytes = Guard.Against.Null(commitFileBlocksUploadResponse).FileSizeInBytes,
             FileId = commitFileBlocksUploadResponse.FileId
         };
     }
 
-    private string GetRandomBase64FromRandomGuid()
+    private static string GetRandomBase64FromRandomGuid()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         Guid genGuid = Guid.NewGuid();
         Span<byte> guidBytes = stackalloc byte[16];
         if (!genGuid.TryWriteBytes(guidBytes))

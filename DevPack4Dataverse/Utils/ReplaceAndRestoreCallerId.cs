@@ -16,8 +16,8 @@ limitations under the License.
 
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Utils;
 
@@ -28,32 +28,35 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
     private bool _disposedValue;
 
     public ReplaceAndRestoreCallerId(
-        ServiceClient serviceClient,
-        ILogger logger,
+        IOrganizationService organizationService,
         Guid? callerId = null,
         Guid? aadCallerId = null
     )
     {
-        using EntryExitLogger logGuard = new(logger);
-        ServiceClient = Guard.Against.Null(serviceClient);
-        oldCallerId = serviceClient.CallerId;
-        oldAADCallerId = serviceClient.CallerAADObjectId;
-        serviceClient.CallerId = callerId ?? Guid.Empty;
-        serviceClient.CallerAADObjectId = aadCallerId;
+        ServiceClient? serviceClientInstance = organizationService as ServiceClient;
+        ServiceClient = Guard.Against.Null(
+            serviceClientInstance,
+            message: $"Only {nameof(ServiceClient)} instance is supported."
+        );
+        oldCallerId = ServiceClient.CallerId;
+        oldAADCallerId = ServiceClient.CallerAADObjectId;
+        ServiceClient.CallerId = callerId ?? Guid.Empty;
+        ServiceClient.CallerAADObjectId = aadCallerId;
     }
 
     public ReplaceAndRestoreCallerId(
-        ServiceClient serviceClient,
-        ILogger logger,
-        RequestImpersonateSettings requestSettings = null
+        IOrganizationService organizationService,
+        RequestImpersonateSettings? requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(logger);
-        ServiceClient = Guard.Against.Null(serviceClient);
-        oldCallerId = serviceClient.CallerId;
-        oldAADCallerId = serviceClient.CallerAADObjectId;
-        serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
-        serviceClient.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
+        ServiceClient? serviceClientInstance = organizationService as ServiceClient;
+        ServiceClient = new WeakReference<ServiceClient>(
+            Guard.Against.Null(serviceClientInstance, message: $"Only {nameof(ServiceClient)} instance is supported.")
+        );
+        oldCallerId = serviceClientInstance.CallerId;
+        oldAADCallerId = serviceClientInstance.CallerAADObjectId;
+        serviceClientInstance.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
+        serviceClientInstance.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
     }
 
     ~ReplaceAndRestoreCallerId()
@@ -61,7 +64,7 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         InnerDispose();
     }
 
-    private ServiceClient ServiceClient { get; set; }
+    private WeakReference<ServiceClient> ServiceClient { get; set; }
 
     public void Dispose()
     {

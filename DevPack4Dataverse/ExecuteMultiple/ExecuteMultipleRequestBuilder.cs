@@ -27,16 +27,15 @@ namespace DevPack4Dataverse.ExecuteMultiple;
 public sealed class ExecuteMultipleRequestBuilder
 {
     private readonly bool _continueOnError;
-    private readonly ILogger _logger;
     private readonly ConcurrentBag<OrganizationRequest> _requests;
 
-    public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
+    public ExecuteMultipleRequestBuilder( bool continueOnError = true)
     {
-        using EntryExitLogger logGuard = new(logger);
-        _requests = new();
-        _logger = Guard.Against.Null(logger);
+        _requests = [];
         _continueOnError = continueOnError;
     }
+
+    public static ExecuteMultipleRequestBuilder Create(bool continueOnError = true) => new( continueOnError );
 
     public int Count => _requests.Count;
 
@@ -47,9 +46,9 @@ public sealed class ExecuteMultipleRequestBuilder
             Requests = GetOrganizationRequests()
         };
 
-    public void AddCreate(Entity record, RequestSettings requestSettings = null)
+    public void AddCreate(Entity record, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -62,9 +61,9 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void AddDelete(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.NullOrInvalidInput(
             entityReference,
@@ -77,27 +76,27 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void AddDelete(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
-        AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
+        AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName), requestSettings);
     }
 
-    public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
+    public void AddRequest(OrganizationRequest request, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.Null(request);
 
-        requestSettings?.AddToOrganizationRequest(request, _logger);
+        requestSettings?.AddToOrganizationRequest(request);
 
         _requests.Add(request);
     }
 
-    public void AddUpdate(Entity record, RequestSettings requestSettings = null)
+    public void AddUpdate(Entity record, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -110,10 +109,8 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddUpsert(Entity record, RequestSettings requestSettings = null)
+    public void AddUpsert(Entity record, RequestSettings? requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
         UpsertRequest request = new() { Target = record };
@@ -123,10 +120,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     private OrganizationRequestCollection GetOrganizationRequests()
     {
-        using EntryExitLogger logGuard = new(_logger);
-
-        OrganizationRequestCollection organizationRequestCollection = new();
-        organizationRequestCollection.AddRange(_requests);
-        return organizationRequestCollection;
+        return [.. _requests];
     }
 }

@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <Nullable>enable</Nullable>
 	 <LangVersion>latest</LangVersion>
 	 <Title>DevPack for Dataverse</Title>
 	 <Copyright>Kamil Skoracki/C485@GitHub</Copyright>
@@ -39,10 +39,10 @@ Random fixes and stability improvements</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Ardalis.GuardClauses" Version="4.0.1" />
-    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.0.26" />
-    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.0.26" />
-    <PackageReference Include="MimeMapping" Version="1.0.1.50" />
+    <PackageReference Include="Ardalis.GuardClauses" Version="4.2.0" />
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.1.16" />
+    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.1.16" />
+    <PackageReference Include="MimeMapping" Version="2.0.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
 
@@ -67,6 +67,10 @@ Random fixes and stability improvements</PackageReleaseNotes>
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="FieldMethods\" />
   </ItemGroup>
 
 </Project>

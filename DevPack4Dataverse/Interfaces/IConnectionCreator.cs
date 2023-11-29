@@ -16,6 +16,7 @@ limitations under the License.
 
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Interfaces;
 
@@ -51,5 +52,5 @@ public interface IConnectionCreator
     ///  </para>
     /// </summary>
     /// <returns><see cref="IConnection" /> as instance of <see cref="Connection" /></returns>
-    IConnection Create(ILogger logger);
+    ServiceClient Create(bool applyConnectionOptimization, ILogger? logger = null);
 }

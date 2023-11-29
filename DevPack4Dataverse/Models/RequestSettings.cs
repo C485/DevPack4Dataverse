@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using DevPack4Dataverse.Utils;
-using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
@@ -63,9 +61,8 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// </summary>
     public bool SuppressDuplicateDetection { private get; set; }
 
-    public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
+    public void AddToOrganizationRequest(OrganizationRequest organizationRequest)
     {
-        using EntryExitLogger logGuard = new(logger);
         if (!string.IsNullOrEmpty(SharedVariable))
         {
             organizationRequest[RequestHeaders.TagName] = SharedVariable;
@@ -76,7 +73,7 @@ public sealed class RequestSettings : RequestImpersonateSettings
         }
         if (SuppressDuplicateDetection)
         {
-            organizationRequest[RequestHeaders.SuppressDuplicateDetectioname] = true;
+            organizationRequest[RequestHeaders.SuppressDuplicateDetectionName] = true;
         }
         if (SkipPluginExecution)
         {
@@ -112,7 +109,7 @@ public sealed class RequestSettings : RequestImpersonateSettings
         /// used to apply duplicate detection behavior to a given request.
         /// See: https://docs.microsoft.com/powerapps/developer/common-data-service/org-service/use-messages#passing-optional-parameters-with-a-request
         /// </summary>
-        public const string SuppressDuplicateDetectioname = "SuppressDuplicateDetection";
+        public const string SuppressDuplicateDetectionName = "SuppressDuplicateDetection";
 
         /// <summary>
         /// used to pass data though Dataverse to a plug-in or downstream system on a request.

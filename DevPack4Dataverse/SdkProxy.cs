@@ -35,7 +35,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     private readonly bool _applyConnectionOptimalization;
     private readonly RepeatedTask _connectionCreator;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
-    private readonly ConcurrentBag<IConnection> _connections = new();
+    private readonly ConcurrentBag<IConnection> _connections = [];
     private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);

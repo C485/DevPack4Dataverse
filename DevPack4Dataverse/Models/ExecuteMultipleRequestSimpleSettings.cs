@@ -14,15 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Microsoft.Xrm.Sdk.Messages;
-
 namespace DevPack4Dataverse.Models;
 
 public class ExecuteMultipleRequestSimpleSettings
 {
     /// <summary>
     ///  <para>Optional.</para>
-    ///  <para>Represents a number of record packs which size is defined by <see cref="RequestSize" />.</para>
+    ///  <para>Represents a number of record packs which size is defined by <see cref="AdaptiveRequesterSettings" />.</para>
     ///  <para>This number should be equal or less to amount of connections in <see cref="DataverseDevPack" />.</para>
     ///  <para>By default it's set to automatic, will always try to use all connections.</para>
     ///  <para>When, concurrent settings for connection are ignored in automatic mode - for example</para>
@@ -31,12 +29,7 @@ public class ExecuteMultipleRequestSimpleSettings
     public int MaxDegreeOfParallelism { get; set; } = -1;
 
     /// <summary>
-    ///  <para>Optional.</para>
-    ///  <para>
-    ///   Represents a number of records that will be send to Dataverse in one <see cref="ExecuteMultipleRequest" />
-    ///  </para>
-    ///  <para>By default this number is set to 6, which in benchmarks gave best performance.</para>
-    ///  <para>See more information at project site.</para>
+    /// Settings for adaptive algorithm. Response time is taken to the count so next requests will have
     /// </summary>
-    public int RequestSize { get; set; } = 6;
+    public AdaptiveRequesterSettings AdaptiveRequesterSettings { get; set; } = new();
 }

@@ -15,66 +15,56 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 
-namespace DevPack4Dataverse.FieldMethods;
+namespace DevPack4Dataverse.Extension;
 
-public sealed class OptionSetFieldTypeMethods
+public static class OptionSetFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
-    private readonly ILogger _logger;
-    private readonly SdkProxy _sdkProxy;
 
-    public OptionSetFieldTypeMethods(SdkProxy sdkProxy, ILogger logger)
-    {
-        using EntryExitLogger logGuard = new(logger);
-
-        _logger = Guard.Against.Null(logger);
-
-        _sdkProxy = Guard.Against.Null(sdkProxy);
-    }
-
-    public async Task<string> MapOptionSetToString(
+    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         OptionSetValue valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode);
+        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode);
     }
 
-    public async Task<string> MapOptionSetToString(
+    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         bool valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
     }
 
-    public async Task<string> MapOptionSetToString<T>(
+    public static async Task<string> ExtMapOptionSetToString<T>(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         T valueToMap,
         int languageCode = NoLanguageFilter
-    ) where T : struct, Enum
+    )
+        where T : struct, Enum
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
     }
 
     /// <summary>
@@ -88,18 +78,18 @@ public sealed class OptionSetFieldTypeMethods
     /// <exception cref="KeyNotFoundException"></exception>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="ArgumentNullException"></exception>
-    public async Task<string> MapOptionSetToString(
+    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         int valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
-        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(logicalName, fieldName);
 
-        OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
+        OptionMetadata? mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
         Guard.Against.Null(
             mappedFieldValueMetadata,
             message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
@@ -108,7 +98,7 @@ public sealed class OptionSetFieldTypeMethods
         {
             return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
         }
-        LocalizedLabel languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(
+        LocalizedLabel? languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(
             p => p.LanguageCode == languageCode
         );
         return Guard.Against
@@ -124,9 +114,9 @@ public sealed class OptionSetFieldTypeMethods
     /// <param name="fieldName">Required.</param>
     /// <returns>Label for field.</returns>
     /// <exception cref="KeyNotFoundException"></exception>
-    public string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
+    public static string ExtMapOptionSetToStringUsingFormatedValues(this IOrganizationServiceAsync organizationService, Entity sourceRecord, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.Null(sourceRecord);
         Guard.Against.NullOrEmpty(fieldName);
@@ -139,17 +129,18 @@ public sealed class OptionSetFieldTypeMethods
         );
     }
 
-    public async Task<T> MapStringToEnum<T>(
+    public static async Task<T> ExtMapStringToEnum<T>(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         string valueToMap,
         int languageCode = NoLanguageFilter,
         bool compareIgnoreCase = true
-    ) where T : struct, Enum
+    )
+        where T : struct, Enum
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
-        OptionSetValue mapped = await MapStringToOptionSet(
+        OptionSetValue mapped = await organizationService.ExtMapStringToOptionSet(
             logicalName,
             fieldName,
             valueToMap,
@@ -160,7 +151,7 @@ public sealed class OptionSetFieldTypeMethods
         return (T)(object)Guard.Against.EnumOutOfRange<T>(Guard.Against.Null(mapped).Value);
     }
 
-    public async Task<OptionSetValue> MapStringToOptionSet(
+    public static async Task<OptionSetValue> ExtMapStringToOptionSet(this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         string valueToMap,
@@ -168,15 +159,15 @@ public sealed class OptionSetFieldTypeMethods
         bool compareIgnoreCase = true
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
         Guard.Against.NullOrEmpty(valueToMap);
 
-        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(logicalName, fieldName);
 
         if (languageCode == NoLanguageFilter)
         {
-            OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(
+            OptionMetadata? mappedFieldValueMetadata = metadataResponse.FirstOrDefault(
                 p =>
                     string.Equals(
                         valueToMap,
@@ -222,11 +213,11 @@ public sealed class OptionSetFieldTypeMethods
         );
     }
 
-    private async Task<OptionMetadataCollection> DownloadMetadataForField(string logicalName, string fieldName)
+    internal static async Task<OptionMetadataCollection> ExtDownloadMetadataForField(this IOrganizationServiceAsync organizationService, string logicalName, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
+        
 
-        RetrieveAttributeResponse metadataInfo = await _sdkProxy.ExecuteAsync<RetrieveAttributeResponse>(
+        RetrieveAttributeResponse? metadataInfo = await organizationService.ExtExecuteAsync<RetrieveAttributeResponse>(
             new RetrieveAttributeRequest
             {
                 EntityLogicalName = logicalName,
@@ -236,7 +227,7 @@ public sealed class OptionSetFieldTypeMethods
         );
         if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
         {
-            return new OptionMetadataCollection();
+            return [];
         }
         Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
         Guard.Against.AgainstExpression(

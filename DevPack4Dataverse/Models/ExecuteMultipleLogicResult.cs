@@ -22,7 +22,7 @@ namespace DevPack4Dataverse.Models;
 
 public class ExecuteMultipleLogicResult
 {
-    public bool Cancelled { get; set; }
+    public bool Canceled { get; set; }
     public int RecordsProcessed { get; set; }
 
     public int RecordsRequested { get; set; }
@@ -37,9 +37,9 @@ public class ExecuteMultipleLogicResult
     {
         StringBuilder sb = new();
         sb.AppendLine("Statistics:");
-        sb.Append(nameof(Cancelled));
+        sb.Append(nameof(Canceled));
         sb.Append(": ");
-        sb.Append(Cancelled);
+        sb.Append(Canceled);
         sb.AppendLine();
         sb.Append(nameof(RecordsProcessed));
         sb.Append(": ");
