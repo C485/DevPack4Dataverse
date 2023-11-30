@@ -7,6 +7,8 @@ using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Messages;
+using System.Data.Common;
+using DevPack4Dataverse.New;
 
 namespace DevPack4Dataverse.Extension
 {
@@ -50,67 +52,73 @@ namespace DevPack4Dataverse.Extension
             _ = await Guard.Against.Null(organizationService).ExtExecuteAsync<DeleteResponse>(deleteRequest, requestSettings);
         }
 
-        public static async Task<T?> ExtDrillRetrieveAsync<T>(this IOrganizationServiceAsync organizationService, EntityReference obj, string path, string delimiter = ".")
+        public static async Task<T?> ExtDrillRetrieveAsync<T>(this IOrganizationServiceAsync organizationService, EntityReference obj, string path, bool noThrowWhenNull = false, string delimiter = ".")
         {
             string[] pathParts = path.Split(delimiter);
-            return await Guard.Against.Null(organizationService).ExtDrillRetrieveAsync<T>(obj, pathParts);
+            return await Guard.Against.Null(organizationService).ExtDrillRetrieveAsync<T>(obj,noThrowWhenNull, pathParts);
         }
 
-        public static async Task<T?> ExtDrillRetrieveAsync<T>(this IOrganizationServiceAsync organizationService, EntityReference obj, params string[] pathParts)
+        public static async Task<T?> ExtDrillRetrieveAsync<T>(this IOrganizationServiceAsync organizationService, EntityReference obj, bool noThrowWhenNull = false, params string[] pathParts)
         {
-            _ = Guard.Against.InvalidInput(
+            Guard.Against.InvalidInput(
                 pathParts,
                 nameof(pathParts),
-                p =>Array.TrueForAll(p,u => !string.IsNullOrEmpty(u)),
+                p => Array.TrueForAll(p, u => !string.IsNullOrEmpty(u)),
                 "One of path elements is null or empty."
             );
-            EntityReference drillReference = Guard.Against.Null(
+            EntityReference drillReference = Guard.Against.NullOrInvalidInput(
                 obj,
-                message: "Drilling object cannot start with reference that is null."
-            );
+                nameof(obj),
+                p => !string.IsNullOrEmpty(p.LogicalName) && p.Id != Guid.Empty,
+                message: "Drilling object cannot start with reference that is null or empty."
+            ); 
+
+
+            if (Array.Exists(pathParts, string.IsNullOrEmpty))
+            {
+                throw new InvalidProgramException("One of path elements is null or empty.");
+            }
             for (int i = 0; i < pathParts.Length; i++)
             {
                 bool isLast = i == pathParts.Length - 1;
                 string currentFieldName = pathParts[i];
-                Entity ret = await Guard.Against.Null(organizationService).RetrieveAsync(
-                    drillReference.LogicalName,
+                Entity ret = await organizationService.RetrieveAsync(drillReference.LogicalName,
                     drillReference.Id,
-                    new ColumnSet(currentFieldName)
-                );
-                Guard.Against.InvalidInput(
-                    ret,
-                    nameof(ret),
-                    p => p.Contains(currentFieldName),
-                    "Retrieved record doesn't contain field in attributes collection."
-                );
+                    new ColumnSet(currentFieldName));
+
+                if (!ret.Contains(currentFieldName))
+                {
+                    throw new InvalidProgramException("Retrieved record doesn't contain field in attributes collection.");
+                }
+
                 object retrievedField = ret[currentFieldName];
+
                 if (isLast)
                 {
-                    if (retrievedField is T || retrievedField is null)
+                    return retrievedField switch
                     {
-                        return (T?)retrievedField;
-                    }
-                    throw new InvalidProgramException(
-                        $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}"
-                    );
+                        null => default,
+                        T finalValue => finalValue,
+                        _ => throw new InvalidProgramException(
+                            $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}")
+                    };
                 }
-                if (retrievedField is EntityReference retivedFieldEntityReference)
+
+                if (noThrowWhenNull && retrievedField is null)
                 {
-                    drillReference = retivedFieldEntityReference;
+                    return default;
                 }
-                else if (retrievedField is null)
+
+                drillReference = retrievedField switch
                 {
-                    throw new InvalidProgramException(
-                        $"Retrieved field is null but it's not last element of path, current field name {currentFieldName}"
-                    );
-                }
-                else
-                {
-                    throw new InvalidProgramException(
-                        $"Retrieved field is not {nameof(EntityReference)}, current field name {currentFieldName}, type of retrieved field {retrievedField.GetType().Name}"
-                    );
-                }
+                    EntityReference retrievedFieldEntityReference => retrievedFieldEntityReference,
+                    null => throw new InvalidProgramException(
+                        $"Retrieved field is null but it's not last element of path, current field name {currentFieldName}"),
+                    _ => throw new InvalidProgramException(
+                        $"Retrieved field is not {nameof(EntityReference)}, current field name {currentFieldName}, type of retrieved field {retrievedField.GetType().Name}")
+                };
             }
+
             throw new InvalidProgramException("Unexpected state, probably a bug.");
         }
         public static async Task<T?> ExtExecuteAsync<T>(this IOrganizationServiceAsync organizationService, OrganizationRequest request, RequestSettings? requestSettings = null)
@@ -131,7 +139,16 @@ namespace DevPack4Dataverse.Extension
             requestSettings?.AddToOrganizationRequest(request);
             return await Guard.Against.Null(organizationService).ExecuteAsync(request) as T;
         }
+        public static async Task<Response?> ExtExecuteAsync<Request, Response>(
+    this IOrganizationServiceAsync organizationService,
+    RequestBuilder<Request> executeMultipleRequestBuilder,
+    RequestSettings? requestSettings = null
+) where Request : OrganizationRequest where Response : OrganizationResponse
+        {
+            Guard.Against.Null(executeMultipleRequestBuilder);
 
+            return await Guard.Against.Null(organizationService).ExtExecuteAsync<Response>(executeMultipleRequestBuilder.Build(), requestSettings);
+        }
         public static async Task<ExecuteMultipleResponse?> ExtExecuteAsync(this IOrganizationServiceAsync organizationService,
             ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
             RequestSettings? requestSettings = null
@@ -140,7 +157,7 @@ namespace DevPack4Dataverse.Extension
             Guard.Against.Null(executeMultipleRequestBuilder);
 
             return await Guard.Against.Null(organizationService).ExtExecuteAsync<ExecuteMultipleResponse>(
-                executeMultipleRequestBuilder.RequestWithResults,
+                executeMultipleRequestBuilder.Build(),
                 requestSettings
             );
         }

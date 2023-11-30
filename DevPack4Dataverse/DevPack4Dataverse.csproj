@@ -69,8 +69,4 @@ Random fixes and stability improvements</PackageReleaseNotes>
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="FieldMethods\" />
-  </ItemGroup>
-
 </Project>

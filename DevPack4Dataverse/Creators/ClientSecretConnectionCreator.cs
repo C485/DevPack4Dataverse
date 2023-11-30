@@ -51,11 +51,11 @@ public class ClientSecretConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
-    public ServiceClient Create(bool applyConnectionOptimization, ILogger? logger = null)
+    public ServiceClient Create(bool applyConnectionOptimization)
     {
         try
         {
-            ServiceClient crmServiceClient = new(new Uri(_crmUrl), _appId, _secret, true, logger);
+            ServiceClient crmServiceClient = new(new Uri(_crmUrl), _appId, _secret, true, GlobalLogger.Instance);
 
             Guard.Against.NullOrInvalidInput(
                 crmServiceClient,
@@ -71,11 +71,15 @@ public class ClientSecretConnectionCreator : IConnectionCreator
             }
 
             _isCreated = true;
-            return crmServiceClient;
+            return applyConnectionOptimization ? crmServiceClient.ApplyConnectionOptimization() : crmServiceClient;
         }
         catch (Exception e)
         {
-            logger?.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
+            GlobalLogger.Instance.LogError(
+                e,
+                "Unexpected error in {NameOfClass}",
+                nameof(ClientSecretConnectionCreator)
+            );
             _isError = true;
             throw;
         }

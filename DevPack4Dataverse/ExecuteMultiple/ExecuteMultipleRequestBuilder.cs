@@ -39,12 +39,21 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public int Count => _requests.Count;
 
-    public ExecuteMultipleRequest RequestWithResults =>
-        new()
+    public ExecuteMultipleRequest Build()
+    {
+        OrganizationRequestCollection organizationRequestCollection = new();
+        organizationRequestCollection.AddRange(_requests);
+
+        return new ExecuteMultipleRequest
         {
-            Settings = new ExecuteMultipleSettings { ContinueOnError = _continueOnError, ReturnResponses = true },
-            Requests = GetOrganizationRequests()
+            Settings = new ExecuteMultipleSettings
+            {
+                ContinueOnError = _continueOnError,
+                ReturnResponses = true
+            },
+            Requests = organizationRequestCollection
         };
+    }
 
     public void AddCreate(Entity record, RequestSettings? requestSettings = null)
     {
@@ -107,7 +116,7 @@ public sealed class ExecuteMultipleRequestBuilder
         UpdateRequest request = new() { Target = record };
 
         AddRequest(request, requestSettings);
-    }
+    } 
 
     public void AddUpsert(Entity record, RequestSettings? requestSettings = null)
     {

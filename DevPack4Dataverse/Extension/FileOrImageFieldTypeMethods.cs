@@ -193,10 +193,7 @@ public static class FileOrImageFieldTypeMethods
                 FileContinuationToken = fileBlockResponse.FileContinuationToken,
                 FileName = fileName,
                 MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
-                BlockList = requestBuilder.RequestWithResults.Requests
-                    .Cast<UploadBlockRequest>()
-                    .Select(p => p.BlockId)
-                    .ToArray()
+                BlockList = requestBuilder.Build().Requests.Cast<UploadBlockRequest>().Select(p => p.BlockId).ToArray()
             };
         CommitFileBlocksUploadResponse? commitFileBlocksUploadResponse =
             await organizationService.ExtExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest);

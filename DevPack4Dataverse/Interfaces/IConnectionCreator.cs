@@ -52,5 +52,5 @@ public interface IConnectionCreator
     ///  </para>
     /// </summary>
     /// <returns><see cref="IConnection" /> as instance of <see cref="Connection" /></returns>
-    ServiceClient Create(bool applyConnectionOptimization, ILogger? logger = null);
+    ServiceClient Create(bool applyConnectionOptimization);
 }

@@ -61,11 +61,11 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
 
-    public ServiceClient Create(bool applyConnectionOptimization, ILogger? logger = null)
+    public ServiceClient Create(bool applyConnectionOptimization)
     {
         try
         {
-            ServiceClient crmServiceClient = new(_connectionString, logger);
+            ServiceClient crmServiceClient = new(_connectionString, GlobalLogger.Instance);
             Guard.Against.NullOrInvalidInput(
                 crmServiceClient,
                 nameof(crmServiceClient),
@@ -80,11 +80,15 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
             }
 
             _isCreated = true;
-            return crmServiceClient;
+            return applyConnectionOptimization ? crmServiceClient.ApplyConnectionOptimization() : crmServiceClient;
         }
         catch (Exception e)
         {
-            logger?.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
+            GlobalLogger.Instance.LogError(
+                e,
+                "Unexpected error in {NameOfClass}",
+                nameof(ConnectionStringConnectionCreator)
+            );
             _isError = true;
             throw;
         }
