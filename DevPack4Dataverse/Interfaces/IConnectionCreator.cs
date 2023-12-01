@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Microsoft.Crm.Sdk.Messages;
-using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Interfaces;

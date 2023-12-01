@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using Microsoft.Extensions.Logging;
 
 namespace DevPack4Dataverse.Utils;
 

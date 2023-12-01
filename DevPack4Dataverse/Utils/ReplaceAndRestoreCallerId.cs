@@ -23,40 +23,38 @@ namespace DevPack4Dataverse.Utils;
 
 internal sealed class ReplaceAndRestoreCallerId : IDisposable
 {
-    private readonly Guid? oldAADCallerId;
-    private readonly Guid? oldCallerId;
+    private readonly Guid? _guidToRestore;
+    private readonly ReplaceAndRestoreCallerIdType _type;
     private bool _disposedValue;
 
     public ReplaceAndRestoreCallerId(
         IOrganizationService organizationService,
-        Guid? callerId = null,
-        Guid? aadCallerId = null
+        RequestImpersonateSettings requestImpersonateSettings
     )
     {
-        ServiceClient? serviceClientInstance = organizationService as ServiceClient;
-        ServiceClient = Guard.Against.Null(
-            serviceClientInstance,
-            message: $"Only {nameof(ServiceClient)} instance is supported."
-        );
-        oldCallerId = ServiceClient.CallerId;
-        oldAADCallerId = ServiceClient.CallerAADObjectId;
-        ServiceClient.CallerId = callerId ?? Guid.Empty;
-        ServiceClient.CallerAADObjectId = aadCallerId;
-    }
-
-    public ReplaceAndRestoreCallerId(
-        IOrganizationService organizationService,
-        RequestImpersonateSettings? requestSettings = null
-    )
-    {
+        _type = Guard.Against.Null(requestImpersonateSettings).ImpersonateType;
         ServiceClient? serviceClientInstance = organizationService as ServiceClient;
         ServiceClient = new WeakReference<ServiceClient>(
             Guard.Against.Null(serviceClientInstance, message: $"Only {nameof(ServiceClient)} instance is supported.")
         );
-        oldCallerId = serviceClientInstance.CallerId;
-        oldAADCallerId = serviceClientInstance.CallerAADObjectId;
-        serviceClientInstance.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
-        serviceClientInstance.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
+
+        switch (requestImpersonateSettings.ImpersonateType)
+        {
+            case ReplaceAndRestoreCallerIdType.CallerId:
+                _guidToRestore = serviceClientInstance.CallerId;
+                serviceClientInstance.CallerId = requestImpersonateSettings.ImpersonateId;
+
+                break;
+
+            case ReplaceAndRestoreCallerIdType.CallerAADObjectId:
+                _guidToRestore = serviceClientInstance.CallerAADObjectId;
+                serviceClientInstance.CallerAADObjectId = requestImpersonateSettings.ImpersonateId;
+
+                break;
+
+            default:
+                throw new InvalidProgramException($"{_type} is not supported");
+        }
     }
 
     ~ReplaceAndRestoreCallerId()
@@ -79,9 +77,25 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
             return;
         }
 
-        ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
-        ServiceClient.CallerAADObjectId = oldAADCallerId;
-        ServiceClient = null;
+        if (ServiceClient.TryGetTarget(out ServiceClient? serviceClient))
+        {
+            switch (_type)
+            {
+                case ReplaceAndRestoreCallerIdType.CallerId:
+                    serviceClient.CallerId = _guidToRestore ?? Guid.Empty;
+
+                    break;
+
+                case ReplaceAndRestoreCallerIdType.CallerAADObjectId:
+                    serviceClient.CallerAADObjectId = _guidToRestore;
+
+                    break;
+
+                default:
+                    throw new InvalidProgramException($"{_type} is not supported");
+            }
+        }
+
         _disposedValue = true;
     }
 }

@@ -61,7 +61,7 @@ public class AdaptiveRequester
     ///     a task with the actual number of completed requests.
     /// </param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task ExecuteAsync(Func<int, Task<int>> work)
+    public async Task<bool> ExecuteAsync(Func<int, Task<int>> work)
     {
         int requestCount;
 
@@ -78,7 +78,7 @@ public class AdaptiveRequester
 
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        int actualRequestCount = requestCount;
+        int actualRequestCount = 0;
 
         try
         {
@@ -103,6 +103,7 @@ public class AdaptiveRequester
                 _sharedStateLock.ExitWriteLock();
             }
         }
+        return actualRequestCount != 0;
     }
 
     /// <summary>

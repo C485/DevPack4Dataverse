@@ -1,11 +1,9 @@
-﻿using System.Data.Common;
-using System.Net;
+﻿using System.Net;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
-using DevPack4Dataverse.New;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
@@ -17,24 +15,27 @@ namespace DevPack4Dataverse.Extension
 {
     public static class IOrganizationServiceExtension
     {
-
-        public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>(this IOrganizationService _) where T : Entity, new() => LinqExpressionBuilder.Create<T>();
+        public static ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>(this IOrganizationService _)
+            where T : Entity, new() => LinqExpressionBuilder.Create<T>();
 
         public static Guid? ExtCreateRecord(
-                    this IOrganizationService organizationService,
+            this IOrganizationService organizationService,
             Entity record,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
-            Guard.Against.NullOrInvalidInput(
-                record,
-                nameof(record),
-                p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    record,
+                    nameof(record),
+                    p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+                );
 
             CreateRequest createRequest = new() { Target = record };
 
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtExecute<CreateResponse>(createRequest, requestSettings)
                 ?.id;
@@ -44,7 +45,7 @@ namespace DevPack4Dataverse.Extension
             this IOrganizationService organizationService,
             string logicalName,
             Guid id,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             DeleteRequest deleteRequest =
@@ -56,37 +57,53 @@ namespace DevPack4Dataverse.Extension
         public static void ExtDeleteRecord(
             this IOrganizationService organizationService,
             EntityReference entityReference,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             Guard.Against.Null(entityReference);
 
-            Guard.Against
+            Guard
+                .Against
                 .Null(organizationService)
                 .ExtDeleteRecord(entityReference.LogicalName, entityReference.Id, requestSettings);
         }
-        public static T? ExtDrillRetrieve<T>(this IOrganizationService organizationService, EntityReference obj, string path, bool noThrowWhenNull = false, string delimiter = ".")
+
+        public static T? ExtDrillRetrieve<T>(
+            this IOrganizationService organizationService,
+            EntityReference obj,
+            string path,
+            bool noThrowWhenNull = false,
+            string delimiter = "."
+        )
         {
             string[] pathParts = path.Split(delimiter);
             return organizationService.ExtDrillRetrieve<T>(obj, noThrowWhenNull, pathParts);
         }
 
-        public static T? ExtDrillRetrieve<T>(this IOrganizationService organizationService, EntityReference obj, bool noThrowWhenNull = false, params string[] pathParts)
+        public static T? ExtDrillRetrieve<T>(
+            this IOrganizationService organizationService,
+            EntityReference obj,
+            bool noThrowWhenNull = false,
+            params string[] pathParts
+        )
         {
-            Guard.Against.InvalidInput(
-                pathParts,
-                nameof(pathParts),
-                p => Array.TrueForAll(p, u => !string.IsNullOrEmpty(u)),
-                "One of path elements is null or empty."
-            );
-            EntityReference drillReference = Guard.Against.NullOrInvalidInput(
-                obj,
-                nameof(obj),
-                p => !string.IsNullOrEmpty(p.LogicalName) && p.Id != Guid.Empty,
-                message: "Drilling object cannot start with reference that is null or empty."
-            );
+            Guard
+                .Against
+                .InvalidInput(
+                    pathParts,
+                    nameof(pathParts),
+                    p => Array.TrueForAll(p, u => !string.IsNullOrEmpty(u)),
+                    "One of path elements is null or empty."
+                );
+            EntityReference drillReference = Guard
+                .Against
+                .NullOrInvalidInput(
+                    obj,
+                    nameof(obj),
+                    p => !string.IsNullOrEmpty(p.LogicalName) && p.Id != Guid.Empty,
+                    message: "Drilling object cannot start with reference that is null or empty."
+                );
 
-            
             if (Array.Exists(pathParts, string.IsNullOrEmpty))
             {
                 throw new InvalidProgramException("One of path elements is null or empty.");
@@ -96,13 +113,17 @@ namespace DevPack4Dataverse.Extension
             {
                 bool isLast = i == pathParts.Length - 1;
                 string currentFieldName = pathParts[i];
-                Entity ret = organizationService.Retrieve(drillReference.LogicalName,
+                Entity ret = organizationService.Retrieve(
+                    drillReference.LogicalName,
                     drillReference.Id,
-                    new ColumnSet(currentFieldName));
+                    new ColumnSet(currentFieldName)
+                );
 
                 if (!ret.Contains(currentFieldName))
                 {
-                    throw new InvalidProgramException("Retrieved record doesn't contain field in attributes collection.");
+                    throw new InvalidProgramException(
+                        "Retrieved record doesn't contain field in attributes collection."
+                    );
                 }
 
                 object retrievedField = ret[currentFieldName];
@@ -113,8 +134,10 @@ namespace DevPack4Dataverse.Extension
                     {
                         null => default,
                         T finalValue => finalValue,
-                        _ => throw new InvalidProgramException(
-                            $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}")
+                        _
+                            => throw new InvalidProgramException(
+                                $"Retrieved field is not same type as expected one, retrieved type is {retrievedField.GetType().Name}, expected type is {typeof(T).Name}"
+                            )
                     };
                 }
 
@@ -126,10 +149,14 @@ namespace DevPack4Dataverse.Extension
                 drillReference = retrievedField switch
                 {
                     EntityReference retrievedFieldEntityReference => retrievedFieldEntityReference,
-                    null => throw new InvalidProgramException(
-                        $"Retrieved field is null but it's not last element of path, current field name {currentFieldName}"),
-                    _ => throw new InvalidProgramException(
-                        $"Retrieved field is not {nameof(EntityReference)}, current field name {currentFieldName}, type of retrieved field {retrievedField.GetType().Name}")
+                    null
+                        => throw new InvalidProgramException(
+                            $"Retrieved field is null but it's not last element of path, current field name {currentFieldName}"
+                        ),
+                    _
+                        => throw new InvalidProgramException(
+                            $"Retrieved field is not {nameof(EntityReference)}, current field name {currentFieldName}, type of retrieved field {retrievedField.GetType().Name}"
+                        )
                 };
             }
 
@@ -139,64 +166,67 @@ namespace DevPack4Dataverse.Extension
         public static T? ExtExecute<T>(
             this IOrganizationService organizationService,
             OrganizationRequest request,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
             where T : OrganizationResponse
         {
             Guard.Against.Null(request);
-            if (
-                requestSettings?.ImpersonateAsUserByAADId is not null
-                || requestSettings?.ImpersonateAsUserByDataverseId is not null
-            )
+            if (requestSettings is not null)
             {
                 using ReplaceAndRestoreCallerId _ = new(Guard.Against.Null(organizationService), requestSettings);
-                requestSettings.AddToOrganizationRequest(request);
                 return Guard.Against.Null(organizationService).Execute(request) as T;
             }
-
-            requestSettings?.AddToOrganizationRequest(request);
             return Guard.Against.Null(organizationService).Execute(request) as T;
         }
 
         public static ExecuteMultipleResponse? ExtExecute(
             this IOrganizationService organizationService,
             ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             Guard.Against.Null(executeMultipleRequestBuilder);
 
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtExecute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.Build(), requestSettings);
         }
+
         public static Response? ExtExecute<Request, Response>(
             this IOrganizationService organizationService,
             RequestBuilder<Request> executeMultipleRequestBuilder,
-            RequestSettings? requestSettings = null
-        ) where Request : OrganizationRequest where Response : OrganizationResponse
+            RequestImpersonateSettings? requestSettings = null
+        )
+            where Request : OrganizationRequest
+            where Response : OrganizationResponse
         {
             Guard.Against.Null(executeMultipleRequestBuilder);
 
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtExecute<Response>(executeMultipleRequestBuilder.Build(), requestSettings);
         }
+
         public static Entity ExtRefreshRecord(
             this IOrganizationService organizationService,
             Entity record,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
-            Guard.Against.NullOrInvalidInput(
-                record,
-                nameof(record),
-                p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    record,
+                    nameof(record),
+                    p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+                );
 
             ColumnSet columns = new([.. record.Attributes.Keys]);
 
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtRetrieve(record.LogicalName, record.Id, columns, requestSettings);
         }
@@ -204,19 +234,22 @@ namespace DevPack4Dataverse.Extension
         public static T? ExtRefreshRecord<T>(
             this IOrganizationService organizationService,
             T record,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
             where T : Entity
         {
-            Guard.Against.NullOrInvalidInput(
-                record,
-                nameof(record),
-                p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    record,
+                    nameof(record),
+                    p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+                );
 
             ColumnSet columns = new([.. record.Attributes.Keys]);
 
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtRetrieve<T>(record.LogicalName, record.Id, columns, requestSettings);
         }
@@ -226,12 +259,13 @@ namespace DevPack4Dataverse.Extension
             string entityName,
             Guid id,
             ColumnSet columnSet,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             Guard.Against.Null(columnSet);
 
-            RetrieveResponse? retrieveResponse = Guard.Against
+            RetrieveResponse? retrieveResponse = Guard
+                .Against
                 .Null(organizationService)
                 .ExtExecute<RetrieveResponse>(
                     new RetrieveRequest
@@ -249,11 +283,12 @@ namespace DevPack4Dataverse.Extension
             string entityName,
             Guid id,
             ColumnSet columnSet,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
             where T : Entity
         {
-            return Guard.Against
+            return Guard
+                .Against
                 .Null(organizationService)
                 .ExtRetrieve(entityName, id, columnSet, requestSettings)
                 ?.ToEntity<T>();
@@ -262,7 +297,7 @@ namespace DevPack4Dataverse.Extension
         public static Entity[] ExtRetrieveMultiple(
             this IOrganizationService organizationService,
             QueryExpression queryExpression,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             Guard.Against.Null(queryExpression);
@@ -280,13 +315,15 @@ namespace DevPack4Dataverse.Extension
 
                 while (true)
                 {
-                    RetrieveMultipleResponse? retrieveMultipleResponse = Guard.Against
+                    RetrieveMultipleResponse? retrieveMultipleResponse = Guard
+                        .Against
                         .Null(organizationService)
                         .ExtExecute<RetrieveMultipleResponse>(
                             new RetrieveMultipleRequest { Query = queryExpression },
                             requestSettings
                         );
-                    EntityCollection retrieveMultipleResult = Guard.Against
+                    EntityCollection retrieveMultipleResult = Guard
+                        .Against
                         .Null(retrieveMultipleResponse)
                         .EntityCollection;
 
@@ -316,24 +353,23 @@ namespace DevPack4Dataverse.Extension
             }
             catch (Exception)
             {
-
                 return false;
             }
-
-
         }
 
         public static void ExtUpdateRecord(
             this IOrganizationService organizationService,
             Entity record,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
-            Guard.Against.NullOrInvalidInput(
-                record,
-                nameof(record),
-                p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    record,
+                    nameof(record),
+                    p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
+                );
 
             UpdateRequest request = new() { Target = record };
 
@@ -343,26 +379,31 @@ namespace DevPack4Dataverse.Extension
         public static EntityReference ExtUpsertRecord(
             this IOrganizationService organizationService,
             Entity record,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
         {
             Guard.Against.NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
 
             UpsertRequest request = new() { Target = record };
 
-            UpsertResponse? executeResponse = Guard.Against
+            UpsertResponse? executeResponse = Guard
+                .Against
                 .Null(organizationService)
                 .ExtExecute<UpsertResponse>(request, requestSettings);
 
             return Guard.Against.Null(executeResponse).Target;
         }
 
-        public static OrganizationServiceContext GetOrganizationServiceContext(this IOrganizationService serviceClient) => new(serviceClient);
+        public static OrganizationServiceContext GetOrganizationServiceContext(
+            this IOrganizationService serviceClient
+        ) => new(serviceClient);
 
-        public static T? GetOrganizationServiceContext<T>(this IOrganizationService serviceClient) where T : OrganizationServiceContext
+        public static T? GetOrganizationServiceContext<T>(this IOrganizationService serviceClient)
+            where T : OrganizationServiceContext
         {
             return (T?)Activator.CreateInstance(typeof(T), serviceClient);
         }
+
         public static void OptimizeConnections(this IOrganizationService _)
         {
             ServicePointManager.DefaultConnectionLimit = 65000;
@@ -370,10 +411,11 @@ namespace DevPack4Dataverse.Extension
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.UseNagleAlgorithm = false;
         }
+
         public static T[] RetrieveMultiple<T>(
             this IOrganizationService organizationService,
             QueryExpression queryExpression,
-            RequestSettings? requestSettings = null
+            RequestImpersonateSettings? requestSettings = null
         )
             where T : Entity
         {
@@ -392,13 +434,15 @@ namespace DevPack4Dataverse.Extension
 
                 while (true)
                 {
-                    RetrieveMultipleResponse? retrieveMultipleResponse = Guard.Against
+                    RetrieveMultipleResponse? retrieveMultipleResponse = Guard
+                        .Against
                         .Null(organizationService)
                         .ExtExecute<RetrieveMultipleResponse>(
                             new RetrieveMultipleRequest { Query = queryExpression },
                             requestSettings
                         );
-                    EntityCollection retrieveMultipleResult = Guard.Against
+                    EntityCollection retrieveMultipleResult = Guard
+                        .Against
                         .Null(retrieveMultipleResponse)
                         .EntityCollection;
 

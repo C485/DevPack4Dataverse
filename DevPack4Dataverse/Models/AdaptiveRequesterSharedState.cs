@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 namespace DevPack4Dataverse.Models;
+
 using DevPack4Dataverse.Utils;
 
 /// <summary>
@@ -22,16 +23,6 @@ using DevPack4Dataverse.Utils;
 /// </summary>
 public class AdaptiveRequesterSharedState
 {
-    /// <summary>
-    /// Gets or sets the buffer used to store the response times of previous requests.
-    /// </summary>
-    public TimeSpan[] ResponseTimeBuffer { get; set; }
-
-    /// <summary>
-    /// Gets or sets the buffer used to store the request counts of previous requests.
-    /// </summary>
-    public int[] RequestCountBuffer { get; set; }
-
     /// <summary>
     /// Gets or sets the index of the buffer, which is used to determine where to store the latest data.
     /// </summary>
@@ -41,6 +32,16 @@ public class AdaptiveRequesterSharedState
     /// Gets or sets the size of the buffer, which determines the number of previous requests to store.
     /// </summary>
     public int BufferSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets the buffer used to store the request counts of previous requests.
+    /// </summary>
+    public int[] RequestCountBuffer { get; set; }
+
+    /// <summary>
+    /// Gets or sets the buffer used to store the response times of previous requests.
+    /// </summary>
+    public TimeSpan[] ResponseTimeBuffer { get; set; }
 
     /// <summary>
     /// Calculates the exponential moving average (EMA) of response times and request counts, taking into account dynamic weights.

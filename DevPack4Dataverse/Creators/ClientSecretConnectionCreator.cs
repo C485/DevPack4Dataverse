@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Security;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Extension;
 using DevPack4Dataverse.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
-using System.Security;
 
 namespace DevPack4Dataverse.Creators;
 
@@ -33,12 +33,14 @@ public class ClientSecretConnectionCreator : IConnectionCreator
 
     public ClientSecretConnectionCreator(string dataverseUrl, string applicationId, SecureString secret)
     {
-        _crmUrl = Guard.Against.InvalidInput(
-            dataverseUrl,
-            nameof(dataverseUrl),
-            p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
-            $"{nameof(dataverseUrl)} - is null or not valid URL."
-        );
+        _crmUrl = Guard
+            .Against
+            .InvalidInput(
+                dataverseUrl,
+                nameof(dataverseUrl),
+                p => Uri.IsWellFormedUriString(p, UriKind.Absolute),
+                $"{nameof(dataverseUrl)} - is null or not valid URL."
+            );
 
         _appId = Guard.Against.NullOrEmpty(applicationId);
 
@@ -57,12 +59,14 @@ public class ClientSecretConnectionCreator : IConnectionCreator
         {
             ServiceClient crmServiceClient = new(new Uri(_crmUrl), _appId, _secret, true, GlobalLogger.Instance);
 
-            Guard.Against.NullOrInvalidInput(
-                crmServiceClient,
-                nameof(crmServiceClient),
-                p => p.IsReady,
-                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}"
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    crmServiceClient,
+                    nameof(crmServiceClient),
+                    p => p.IsReady,
+                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to URL: {_crmUrl} as AppId: {_appId}, LatestError: {crmServiceClient.LastError}"
+                );
 
             bool isConnectionValid = crmServiceClient.ExtTest();
             if (!isConnectionValid)
@@ -75,11 +79,9 @@ public class ClientSecretConnectionCreator : IConnectionCreator
         }
         catch (Exception e)
         {
-            GlobalLogger.Instance.LogError(
-                e,
-                "Unexpected error in {NameOfClass}",
-                nameof(ClientSecretConnectionCreator)
-            );
+            GlobalLogger
+                .Instance
+                .LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
             _isError = true;
             throw;
         }

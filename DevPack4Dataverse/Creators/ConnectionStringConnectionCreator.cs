@@ -66,12 +66,14 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         try
         {
             ServiceClient crmServiceClient = new(_connectionString, GlobalLogger.Instance);
-            Guard.Against.NullOrInvalidInput(
-                crmServiceClient,
-                nameof(crmServiceClient),
-                p => p.IsReady,
-                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
-            );
+            Guard
+                .Against
+                .NullOrInvalidInput(
+                    crmServiceClient,
+                    nameof(crmServiceClient),
+                    p => p.IsReady,
+                    $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
+                );
 
             bool isConnectionValid = crmServiceClient.ExtTest();
             if (!isConnectionValid)
@@ -84,11 +86,9 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
         catch (Exception e)
         {
-            GlobalLogger.Instance.LogError(
-                e,
-                "Unexpected error in {NameOfClass}",
-                nameof(ConnectionStringConnectionCreator)
-            );
+            GlobalLogger
+                .Instance
+                .LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
             _isError = true;
             throw;
         }

@@ -25,31 +25,6 @@ namespace DevPack4Dataverse.Models;
 public class AdaptiveRequesterSettings
 {
     /// <summary>
-    /// Gets or sets the minimum number of requests allowed.
-    /// </summary>
-    public int MinRequests { get; set; }
-
-    /// <summary>
-    /// Gets or sets the maximum number of requests allowed.
-    /// </summary>
-    public int MaxRequests { get; set; }
-
-    /// <summary>
-    /// Gets or sets the target response time for requests.
-    /// </summary>
-    public TimeSpan TargetResponseTime { get; set; }
-
-    /// <summary>
-    /// Gets or sets the initial number of requests per second.
-    /// </summary>
-    public int InitialRequestsPerSecond { get; set; }
-
-    /// <summary>
-    /// Gets or sets the buffer size used to store count and response time of previous requests.
-    /// </summary>
-    public int BufferSize { get; set; }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="AdaptiveRequesterSettings"/> class with default values.
     /// </summary>
     /// <remarks>
@@ -68,6 +43,31 @@ public class AdaptiveRequesterSettings
         InitialRequestsPerSecond = 5;
         BufferSize = 100;
     }
+
+    /// <summary>
+    /// Gets or sets the buffer size used to store count and response time of previous requests.
+    /// </summary>
+    public int BufferSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets the initial number of requests per second.
+    /// </summary>
+    public int InitialRequestsPerSecond { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of requests allowed.
+    /// </summary>
+    public int MaxRequests { get; set; }
+
+    /// <summary>
+    /// Gets or sets the minimum number of requests allowed.
+    /// </summary>
+    public int MinRequests { get; set; }
+
+    /// <summary>
+    /// Gets or sets the target response time for requests.
+    /// </summary>
+    public TimeSpan TargetResponseTime { get; set; }
 
     /// <summary>
     /// Validates the <see cref="AdaptiveRequesterSettings"/> and returns the instance if valid.

@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -27,33 +26,42 @@ public static class OptionSetFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
 
-    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
+    public static async Task<string> ExtMapOptionSetToString(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         OptionSetValue valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        
-
         Guard.Against.Null(valueToMap);
-        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode);
+        return await organizationService.ExtMapOptionSetToString(
+            logicalName,
+            fieldName,
+            valueToMap.Value,
+            languageCode
+        );
     }
 
-    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
+    public static async Task<string> ExtMapOptionSetToString(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         bool valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        
-
         Guard.Against.Null(valueToMap);
-        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await organizationService.ExtMapOptionSetToString(
+            logicalName,
+            fieldName,
+            Convert.ToInt32(valueToMap),
+            languageCode
+        );
     }
 
-    public static async Task<string> ExtMapOptionSetToString<T>(this IOrganizationServiceAsync organizationService,
+    public static async Task<string> ExtMapOptionSetToString<T>(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         T valueToMap,
@@ -61,10 +69,13 @@ public static class OptionSetFieldTypeMethods
     )
         where T : struct, Enum
     {
-        
-
         Guard.Against.Null(valueToMap);
-        return await organizationService.ExtMapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await organizationService.ExtMapOptionSetToString(
+            logicalName,
+            fieldName,
+            Convert.ToInt32(valueToMap),
+            languageCode
+        );
     }
 
     /// <summary>
@@ -78,30 +89,36 @@ public static class OptionSetFieldTypeMethods
     /// <exception cref="KeyNotFoundException"></exception>
     /// <exception cref="ArgumentException"></exception>
     /// <exception cref="ArgumentNullException"></exception>
-    public static async Task<string> ExtMapOptionSetToString(this IOrganizationServiceAsync organizationService,
+    public static async Task<string> ExtMapOptionSetToString(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         int valueToMap,
         int languageCode = NoLanguageFilter
     )
     {
-        
-
-        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(
+            logicalName,
+            fieldName
+        );
 
         OptionMetadata? mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
-        Guard.Against.Null(
-            mappedFieldValueMetadata,
-            message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
-        );
+        Guard
+            .Against
+            .Null(
+                mappedFieldValueMetadata,
+                message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
+            );
         if (languageCode == NoLanguageFilter)
         {
             return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
         }
-        LocalizedLabel? languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(
-            p => p.LanguageCode == languageCode
-        );
-        return Guard.Against
+        LocalizedLabel? languageDependentLabel = mappedFieldValueMetadata
+            .Label
+            .LocalizedLabels
+            .SingleOrDefault(p => p.LanguageCode == languageCode);
+        return Guard
+            .Against
             .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
             .Label;
     }
@@ -114,10 +131,12 @@ public static class OptionSetFieldTypeMethods
     /// <param name="fieldName">Required.</param>
     /// <returns>Label for field.</returns>
     /// <exception cref="KeyNotFoundException"></exception>
-    public static string ExtMapOptionSetToStringUsingFormatedValues(this IOrganizationServiceAsync organizationService, Entity sourceRecord, string fieldName)
+    public static string ExtMapOptionSetToStringUsingFormatedValues(
+        this IOrganizationServiceAsync organizationService,
+        Entity sourceRecord,
+        string fieldName
+    )
     {
-        
-
         Guard.Against.Null(sourceRecord);
         Guard.Against.NullOrEmpty(fieldName);
         if (sourceRecord.FormattedValues.Contains(fieldName))
@@ -129,7 +148,8 @@ public static class OptionSetFieldTypeMethods
         );
     }
 
-    public static async Task<T> ExtMapStringToEnum<T>(this IOrganizationServiceAsync organizationService,
+    public static async Task<T> ExtMapStringToEnum<T>(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         string valueToMap,
@@ -138,8 +158,6 @@ public static class OptionSetFieldTypeMethods
     )
         where T : struct, Enum
     {
-        
-
         OptionSetValue mapped = await organizationService.ExtMapStringToOptionSet(
             logicalName,
             fieldName,
@@ -151,7 +169,8 @@ public static class OptionSetFieldTypeMethods
         return (T)(object)Guard.Against.EnumOutOfRange<T>(Guard.Against.Null(mapped).Value);
     }
 
-    public static async Task<OptionSetValue> ExtMapStringToOptionSet(this IOrganizationServiceAsync organizationService,
+    public static async Task<OptionSetValue> ExtMapStringToOptionSet(
+        this IOrganizationServiceAsync organizationService,
         string logicalName,
         string fieldName,
         string valueToMap,
@@ -159,11 +178,12 @@ public static class OptionSetFieldTypeMethods
         bool compareIgnoreCase = true
     )
     {
-        
-
         Guard.Against.NullOrEmpty(valueToMap);
 
-        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await organizationService.ExtDownloadMetadataForField(
+            logicalName,
+            fieldName
+        );
 
         if (languageCode == NoLanguageFilter)
         {
@@ -175,14 +195,18 @@ public static class OptionSetFieldTypeMethods
                         compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
                     )
             );
-            Guard.Against.Null(
-                mappedFieldValueMetadata,
-                message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
-            );
-            Guard.Against.Null(
-                mappedFieldValueMetadata.Value,
-                message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
-            );
+            Guard
+                .Against
+                .Null(
+                    mappedFieldValueMetadata,
+                    message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
+                );
+            Guard
+                .Against
+                .Null(
+                    mappedFieldValueMetadata.Value,
+                    message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
+                );
             return new OptionSetValue(mappedFieldValueMetadata.Value.Value);
         }
 
@@ -199,10 +223,12 @@ public static class OptionSetFieldTypeMethods
                     )
                 )
                 {
-                    Guard.Against.Null(
-                        optionMetadata.Value,
-                        message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
-                    );
+                    Guard
+                        .Against
+                        .Null(
+                            optionMetadata.Value,
+                            message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
+                        );
                     return new OptionSetValue(optionMetadata.Value.Value);
                 }
             }
@@ -213,10 +239,12 @@ public static class OptionSetFieldTypeMethods
         );
     }
 
-    internal static async Task<OptionMetadataCollection> ExtDownloadMetadataForField(this IOrganizationServiceAsync organizationService, string logicalName, string fieldName)
+    internal static async Task<OptionMetadataCollection> ExtDownloadMetadataForField(
+        this IOrganizationServiceAsync organizationService,
+        string logicalName,
+        string fieldName
+    )
     {
-        
-
         RetrieveAttributeResponse? metadataInfo = await organizationService.ExtExecuteAsync<RetrieveAttributeResponse>(
             new RetrieveAttributeRequest
             {
@@ -230,18 +258,20 @@ public static class OptionSetFieldTypeMethods
             return [];
         }
         Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
-        Guard.Against.AgainstExpression(
-            (attributeType) =>
-            {
-                return attributeType
-                    is AttributeTypeCode.State
-                        or AttributeTypeCode.Status
-                        or AttributeTypeCode.Picklist
-                        or AttributeTypeCode.Boolean;
-            },
-            metadataInfo.AttributeMetadata.AttributeType.Value,
-            $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
-        );
+        Guard
+            .Against
+            .AgainstExpression(
+                (attributeType) =>
+                {
+                    return attributeType
+                        is AttributeTypeCode.State
+                            or AttributeTypeCode.Status
+                            or AttributeTypeCode.Picklist
+                            or AttributeTypeCode.Boolean;
+                },
+                metadataInfo.AttributeMetadata.AttributeType.Value,
+                $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
+            );
         return metadataInfo.AttributeMetadata switch
         {
             StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,

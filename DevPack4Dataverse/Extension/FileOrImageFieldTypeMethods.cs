@@ -18,7 +18,6 @@ using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Utils;
 using Microsoft.Crm.Sdk.Messages;
-using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -85,13 +84,15 @@ public static class FileOrImageFieldTypeMethods
             await organizationService.ExtExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest);
         Guard.Against.Null(fileBlockResponse);
         Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
-        Guard.Against.OutOfRange(
-            fileBlockResponse.FileSizeInBytes,
-            nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes),
-            0,
-            int.MaxValue,
-            $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB."
-        );
+        Guard
+            .Against
+            .OutOfRange(
+                fileBlockResponse.FileSizeInBytes,
+                nameof(InitializeFileBlocksDownloadResponse.FileSizeInBytes),
+                0,
+                int.MaxValue,
+                $"File size exceeded int maximum [{int.MaxValue}], it's a limitation of MemoryStream class. Maximum file size for 'file' field is 128MB."
+            );
 
         int sizeOfFileToDownload = Convert.ToInt32(fileBlockResponse.FileSizeInBytes);
 
@@ -115,9 +116,11 @@ public static class FileOrImageFieldTypeMethods
 
         ExecuteMultipleResponse? executeMultipleLogicResult = await organizationService.ExtExecuteAsync(requestBuilder);
         foreach (
-            DownloadBlockResponse downloadBlockResponse in Guard.Against
+            DownloadBlockResponse downloadBlockResponse in Guard
+                .Against
                 .Null(executeMultipleLogicResult)
-                .Results.Select(p => p.Value)
+                .Results
+                .Select(p => p.Value)
                 .Cast<DownloadBlockResponse>()
         )
         {

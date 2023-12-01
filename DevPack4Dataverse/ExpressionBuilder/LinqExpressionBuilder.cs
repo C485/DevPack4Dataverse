@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Linq.Expressions;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
 using Microsoft.Xrm.Sdk;
-using System.Linq.Expressions;
 
 namespace DevPack4Dataverse.ExpressionBuilder;
 
@@ -53,11 +53,13 @@ public static class LinqExpressionBuilder
         public void AddAnd(Expression<Func<U, bool>> expressionToAdd)
         {
             Guard.Against.Null(expressionToAdd);
-            Guard.Against.AgainstExpression(
-                p => p + 1 <= _maximumExpressions,
-                _expressionsAdded,
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
-            );
+            Guard
+                .Against
+                .AgainstExpression(
+                    p => p + 1 <= _maximumExpressions,
+                    _expressionsAdded,
+                    $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+                );
             _expression = _expression.And(expressionToAdd);
             _expressionsAdded++;
         }
@@ -66,11 +68,13 @@ public static class LinqExpressionBuilder
         {
             Guard.Against.Null(expressionToAdd);
             Guard.Against.Zero(expressionToAdd.ExpressionsAdded);
-            Guard.Against.AgainstExpression(
-                p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
-                _expressionsAdded,
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
-            );
+            Guard
+                .Against
+                .AgainstExpression(
+                    p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+                    _expressionsAdded,
+                    $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+                );
             _expression = _expression.And(expressionToAdd.Result);
             _expressionsAdded += expressionToAdd.ExpressionsAdded;
         }
@@ -78,11 +82,13 @@ public static class LinqExpressionBuilder
         public void AddOr(Expression<Func<U, bool>> expressionToAdd)
         {
             Guard.Against.Null(expressionToAdd);
-            Guard.Against.AgainstExpression(
-                p => p + 1 <= _maximumExpressions,
-                _expressionsAdded,
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
-            );
+            Guard
+                .Against
+                .AgainstExpression(
+                    p => p + 1 <= _maximumExpressions,
+                    _expressionsAdded,
+                    $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+                );
             _expression = _expression.Or(expressionToAdd);
             _expressionsAdded++;
         }
@@ -91,11 +97,13 @@ public static class LinqExpressionBuilder
         {
             Guard.Against.Null(expressionToAdd);
             Guard.Against.Zero(expressionToAdd.ExpressionsAdded);
-            Guard.Against.AgainstExpression(
-                p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
-                _expressionsAdded,
-                $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
-            );
+            Guard
+                .Against
+                .AgainstExpression(
+                    p => p + expressionToAdd.ExpressionsAdded <= _maximumExpressions,
+                    _expressionsAdded,
+                    $"Maximum expressions limit exceeded, limit is {_maximumExpressions}"
+                );
             _expression = _expression.Or(expressionToAdd.Result);
             _expressionsAdded += expressionToAdd.ExpressionsAdded;
         }

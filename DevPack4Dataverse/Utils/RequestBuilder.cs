@@ -1,7 +1,7 @@
 ﻿using Ardalis.GuardClauses;
 using Microsoft.Xrm.Sdk;
 
-namespace DevPack4Dataverse.New;
+namespace DevPack4Dataverse.Utils;
 
 public class RequestBuilder<T>
     where T : OrganizationRequest
@@ -19,12 +19,14 @@ public class RequestBuilder<T>
     }
 
     /// <summary>
-    ///     Known as 'tag'.
-    ///     https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#add-a-shared-variable-from-the-organization-service
+    ///     <see cref="ConcurrencyBehavior" />
+    ///     Specifies the type of optimistic concurrency behavior that should be performed by the Web service when processing
+    ///     this request.
+    ///     https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.concurrencybehavior?view=dataverse-sdk-latest
     /// </summary>
-    public RequestBuilder<T> WithSharedVariableName(string tagValue)
+    public RequestBuilder<T> WithConcurrencyBehavior(ConcurrencyBehavior concurrencyBehavior)
     {
-        _request[RequestHeaders.TagName] = tagValue;
+        _request[RequestHeaders.ConcurrencyBehaviorName] = concurrencyBehavior;
 
         return this;
     }
@@ -40,25 +42,12 @@ public class RequestBuilder<T>
     }
 
     /// <summary>
-    ///     <see cref="ConcurrencyBehavior" />
-    ///     Specifies the type of optimistic concurrency behavior that should be performed by the Web service when processing
-    ///     this request.
-    ///     https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.concurrencybehavior?view=dataverse-sdk-latest
+    ///     Known as 'tag'.
+    ///     https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#add-a-shared-variable-from-the-organization-service
     /// </summary>
-    public RequestBuilder<T> WithConcurrencyBehavior(ConcurrencyBehavior concurrencyBehavior)
+    public RequestBuilder<T> WithSharedVariableName(string tagValue)
     {
-        _request[RequestHeaders.ConcurrencyBehaviorName] = concurrencyBehavior;
-
-        return this;
-    }
-
-    /// <summary>
-    ///     A Boolean used to disable duplicate detection on a create or update operation.
-    ///     https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/detect-duplicate-data.md#use-suppressduplicatedetection-parameter-to-throw-errors-when-you-create-or-update-row
-    /// </summary>
-    public RequestBuilder<T> WithSuppressDuplicateDetection(bool suppressDuplicateDetection)
-    {
-        _request[RequestHeaders.SuppressDuplicateDetectionName] = suppressDuplicateDetection;
+        _request[RequestHeaders.TagName] = tagValue;
 
         return this;
     }
@@ -72,6 +61,17 @@ public class RequestBuilder<T>
     public RequestBuilder<T> WithSkipPluginExecution(bool skipPluginExecution)
     {
         _request[RequestHeaders.BypassCustomPluginExecutionName] = skipPluginExecution;
+
+        return this;
+    }
+
+    /// <summary>
+    ///     A Boolean used to disable duplicate detection on a create or update operation.
+    ///     https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/detect-duplicate-data.md#use-suppressduplicatedetection-parameter-to-throw-errors-when-you-create-or-update-row
+    /// </summary>
+    public RequestBuilder<T> WithSuppressDuplicateDetection(bool suppressDuplicateDetection)
+    {
+        _request[RequestHeaders.SuppressDuplicateDetectionName] = suppressDuplicateDetection;
 
         return this;
     }

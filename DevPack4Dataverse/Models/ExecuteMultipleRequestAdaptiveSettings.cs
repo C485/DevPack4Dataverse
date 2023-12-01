@@ -18,8 +18,13 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
 
-public class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpleSettings
+public class ExecuteMultipleRequestAdaptiveSettings
 {
+    /// <summary>
+    /// Settings for adaptive algorithm. Response time is taken to the count so next requests will have
+    /// </summary>
+    public AdaptiveRequesterSettings AdaptiveRequesterSettings { get; set; } = new();
+
     /// <summary>
     ///  <para>Optional.</para>
     ///  <para>Callback used for reporting error.</para>
@@ -28,6 +33,16 @@ public class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpleSettin
     ///  </para>
     /// </summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };
+
+    /// <summary>
+    ///  <para>Optional.</para>
+    ///  <para>Represents a number of record packs which size is defined by <see cref="AdaptiveRequesterSettings" />.</para>
+    ///  <para>This number should be equal or less to amount of connections in <see cref="DataverseDevPack" />.</para>
+    ///  <para>By default it's set to automatic, will always try to use all connections.</para>
+    ///  <para>When, concurrent settings for connection are ignored in automatic mode - for example</para>
+    ///  <para> in scenario when you've 4 connections with 4 concurrent setting, maximum threads used will be 4.</para>
+    /// </summary>
+    public int MaxDegreeOfParallelism { get; set; } = -1;
 
     /// <summary>
     ///  <para>Optional.</para>

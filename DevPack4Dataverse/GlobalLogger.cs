@@ -12,20 +12,16 @@ namespace DevPack4Dataverse;
 public sealed class GlobalLogger : ILogger
 {
     private static readonly object s_lockObject = new();
+    private readonly ConcurrentBag<ILogger> _loggers = [];
     private bool _consoleEnabled;
     private string? _logFilePath;
     private LogLevel _minimumLogLevel = LogLevel.Information;
-    private readonly ConcurrentBag<ILogger> _loggers = [];
 
     static GlobalLogger() { }
 
     private GlobalLogger() { }
 
-    public GlobalLogger SetMinimumLogLevel(LogLevel minimumLogLevel)
-    {
-        _minimumLogLevel = minimumLogLevel;
-        return this;
-    }
+    public static GlobalLogger Instance { get; } = new GlobalLogger();
 
     public GlobalLogger AddLogger(ILogger logger)
     {
@@ -33,23 +29,15 @@ public sealed class GlobalLogger : ILogger
         return this;
     }
 
-    public GlobalLogger SetLogFilePath(string logFilePath)
+    public IDisposable? BeginScope<TState>(TState state)
     {
-        _logFilePath = logFilePath;
-        return this;
+        return null;
     }
 
     public GlobalLogger EnableConsole()
     {
         _consoleEnabled = true;
         return this;
-    }
-
-    public static GlobalLogger Instance { get; } = new GlobalLogger();
-
-    public IDisposable? BeginScope<TState>(TState state)
-    {
-        return null;
     }
 
     public bool IsEnabled(LogLevel logLevel)
@@ -89,5 +77,17 @@ public sealed class GlobalLogger : ILogger
                 }
             }
         }
+    }
+
+    public GlobalLogger SetLogFilePath(string logFilePath)
+    {
+        _logFilePath = logFilePath;
+        return this;
+    }
+
+    public GlobalLogger SetMinimumLogLevel(LogLevel minimumLogLevel)
+    {
+        _minimumLogLevel = minimumLogLevel;
+        return this;
     }
 }

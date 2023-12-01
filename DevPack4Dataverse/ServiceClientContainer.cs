@@ -55,13 +55,19 @@ public sealed class ServiceClientContainerBuilder
     private readonly bool _applyConnectionOptymization;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
 
-    public ServiceClientContainerBuilder(bool applyConnectionOptimization = false, params IConnectionCreator[] connectionCreators)
+    public ServiceClientContainerBuilder(
+        bool applyConnectionOptimization = false,
+        params IConnectionCreator[] connectionCreators
+    )
     {
         _connectionCreators = new ConcurrentBag<IConnectionCreator>(connectionCreators);
         _applyConnectionOptymization = applyConnectionOptimization;
     }
 
-    public static ServiceClientContainerBuilder NewInstance(bool applyConnectionOptimization = false, params IConnectionCreator[] connectionCreators) => new(applyConnectionOptimization, connectionCreators);
+    public static ServiceClientContainerBuilder NewInstance(
+        bool applyConnectionOptimization = false,
+        params IConnectionCreator[] connectionCreators
+    ) => new(applyConnectionOptimization, connectionCreators);
 
     public void AddNewConnection(IConnectionCreator connectionCreator)
     {
@@ -74,7 +80,9 @@ public sealed class ServiceClientContainerBuilder
     {
         if (_connectionCreators.Any(p => p.IsError))
         {
-            throw new InvalidProgramException($"Unable to build {nameof(ServiceClientContainer)} because of at least one {nameof(IConnectionCreator)} has error state set to true.");
+            throw new InvalidProgramException(
+                $"Unable to build {nameof(ServiceClientContainer)} because of at least one {nameof(IConnectionCreator)} has error state set to true."
+            );
         }
         ServiceClientContainer serviceClientContainer = new();
         foreach (IConnectionCreator connectionCreator in _connectionCreators)
@@ -82,7 +90,9 @@ public sealed class ServiceClientContainerBuilder
             ServiceClient createdServiceClient = connectionCreator.Create(_applyConnectionOptymization);
             if (!connectionCreator.IsValid)
             {
-                throw new InvalidProgramException($"Unable to build {nameof(ServiceClientContainer)} because of at least one {nameof(IConnectionCreator)} encountered error while creating new instance.");
+                throw new InvalidProgramException(
+                    $"Unable to build {nameof(ServiceClientContainer)} because of at least one {nameof(IConnectionCreator)} encountered error while creating new instance."
+                );
             }
             if (_applyConnectionOptymization)
             {
