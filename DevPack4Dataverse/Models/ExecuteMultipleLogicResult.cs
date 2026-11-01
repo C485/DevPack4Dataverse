@@ -22,14 +22,24 @@ namespace DevPack4Dataverse.Models;
 
 public class ExecuteMultipleLogicResult
 {
+    /// <summary>True when execution stopped because the cancellation token was requested.</summary>
     public bool Cancelled { get; set; }
+
+    /// <summary>Number of requests attempted during execution.</summary>
     public int RecordsProcessed { get; set; }
 
+    /// <summary>Number of requests present in the builder when execution started.</summary>
     public int RecordsRequested { get; set; }
 
+    /// <summary>
+    /// Responses ordered by the original request order, across all ExecuteMultiple chunks.
+    /// </summary>
     public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } = [];
-    public Stopwatch Stopwatch { get; set; }
 
+    /// <summary>Elapsed execution time. Never null.</summary>
+    public Stopwatch Stopwatch { get; set; } = new();
+
+    /// <summary>Number of parallel workers used.</summary>
     public int ThreadsUsed { get; set; }
 
     public override string ToString()

@@ -84,6 +84,21 @@ public class ExecuteMultipleRequestBuilderTests
     }
 
     [Fact]
+    public void RequestWithResults_PreservesInsertionOrder()
+    {
+        var builder = Create();
+        builder.AddRequest(new OrganizationRequest("first"));
+        builder.AddRequest(new OrganizationRequest("second"));
+        builder.AddRequest(new OrganizationRequest("third"));
+
+        string[] names = builder
+            .RequestWithResults.Requests.Select(request => request.RequestName)
+            .ToArray();
+
+        Assert.Equal(new[] { "first", "second", "third" }, names);
+    }
+
+    [Fact]
     public void AddRequest_NullThrows()
     {
         var builder = Create();

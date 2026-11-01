@@ -22,6 +22,21 @@ public class RepeatedTaskTests
         Assert.True(count >= 1, $"Expected the action to run at least once but it ran {count} time(s).");
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Constructor_WithNonPositiveInterval_Throws(int milliseconds)
+    {
+        Assert.Throws<ArgumentException>(
+            () =>
+                new RepeatedTask(
+                    TimeSpan.FromMilliseconds(milliseconds),
+                    () => { },
+                    NullLogger.Instance
+                )
+        );
+    }
+
     [Fact]
     public async Task StopWithoutStart_IsNoOp()
     {

@@ -40,8 +40,8 @@ Gives ability to quickly call dataverse endpoint with optimized packs of request
  {
      executeMultipleRequestBuilder.AddDelete(item.ToEntityReference());
  }
- AdvancedExecuteMultipleRequestsStatistics executeStatistic = await dataverseDevPack.ExecuteMultiple
-     .Execute(executeMultipleRequestBuilder,
+ ExecuteMultipleLogicResult executeStatistic = await dataverseDevPack.ExecuteMultiple
+     .ExecuteAsync(executeMultipleRequestBuilder,
 	     new ExecuteMultipleRequestSettings
 	     {
 	         ErrorReport = (OrganizationRequest obj, string error) => Console.WriteLine($"Error: {error}"),
@@ -49,6 +49,15 @@ Gives ability to quickly call dataverse endpoint with optimized packs of request
 	         ReportProgressInterval = TimeSpan.FromMilliseconds(100)
 	     });
 ```
+
+Production notes:
+- Requests are split into chunks of `RequestSize`; it must be greater than zero.
+- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads.
+- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault.
+- `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
+- The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts.
+- Cancellation returns the partial result with `Cancelled = true` instead of throwing.
+- Automatic parallelism uses the available connections but always uses at least one worker.
                 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.

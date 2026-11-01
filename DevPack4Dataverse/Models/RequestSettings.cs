@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using Ardalis.GuardClauses;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -56,6 +57,7 @@ public sealed class RequestSettings : RequestImpersonateSettings
     public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
         using EntryExitLogger logGuard = new(logger);
+        Guard.Against.Null(organizationRequest, parameterName: nameof(organizationRequest));
         if (!string.IsNullOrEmpty(SharedVariable))
         {
             organizationRequest[RequestHeaders.TagName] = SharedVariable;

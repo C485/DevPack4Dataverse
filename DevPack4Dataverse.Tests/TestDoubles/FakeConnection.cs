@@ -15,6 +15,7 @@ public sealed class FakeConnection : IConnection
     public bool TryLockResult { get; set; } = true;
     public ulong Weight { get; set; }
     public Func<string, Guid, ColumnSet, Entity> RetrieveHandler { get; set; }
+    public Func<OrganizationRequest, OrganizationResponse> ExecuteHandler { get; set; }
 
     public ServiceClient PureServiceClient => null;
     public IStatistics Statistics => null;
@@ -56,7 +57,8 @@ public sealed class FakeConnection : IConnection
         throw new NotImplementedException();
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse => throw new NotImplementedException();
+        where T : OrganizationResponse =>
+        (T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException());
 
     public ExecuteMultipleResponse Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
@@ -67,7 +69,8 @@ public sealed class FakeConnection : IConnection
         RequestSettings requestSettings = null) => throw new NotImplementedException();
 
     public Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse => throw new NotImplementedException();
+        where T : OrganizationResponse =>
+        Task.FromResult((T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException()));
 
     public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null) =>
         throw new NotImplementedException();
