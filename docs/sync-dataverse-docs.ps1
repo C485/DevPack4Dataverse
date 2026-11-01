@@ -12,12 +12,21 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Destination = (Join-Path $PSScriptRoot 'powerapps-docs')
+    [string]$Destination
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryUrl = 'https://github.com/MicrosoftDocs/powerapps-docs.git'
 $sparsePath = 'powerapps-docs/developer/data-platform'
+
+if ([string]::IsNullOrWhiteSpace($Destination)) {
+    $scriptRoot = $PSScriptRoot
+    if ([string]::IsNullOrEmpty($scriptRoot)) {
+        $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+
+    $Destination = Join-Path $scriptRoot 'powerapps-docs'
+}
 
 if (Test-Path (Join-Path $Destination '.git')) {
     Write-Host "Pulling latest Dataverse documentation into $Destination..."
