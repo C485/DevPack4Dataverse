@@ -43,16 +43,6 @@ internal static class ExpressionCombiner
         );
     }
 
-    public static Expression<Func<T, bool>> Empty<T>(ILogger logger)
-    {
-        using EntryExitLogger logGuard = new(logger);
-
-        // In-memory predicate that matches nothing. The Dataverse LINQ provider cannot
-        // translate a bare boolean constant; non-empty builders replace this value with
-        // their first expression instead of combining it, so it never becomes a real filter.
-        return _ => false;
-    }
-
     public static Expression<Func<T, bool>> Or<T>(
         this Expression<Func<T, bool>> mainExpression,
         Expression<Func<T, bool>> expressionToAdd,

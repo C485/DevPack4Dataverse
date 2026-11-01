@@ -58,16 +58,27 @@ It will retrieve field fullname from lookup named ownerid in starting record ent
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint. 
 ### CreateLinqExpressionBuilder
-Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK. 
+Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK.
 ```C#
- ILinqExpressionBuilder<Entity> builder = connectionManager.CreateLinqExpressionBuilder<Entity>();
- foreach (string item in Enumerable.Range(1, 100).Select(p => $"Name {p}"))
- {
-     builder.AddOr(p => p["xx_name"] == item);
- }
- Expression<Func<Entity, bool>> finalExpression = builder.Result;
- serviceContext.xxSet.Where(finalExpression).ToArray();
+ILinqExpressionBuilder<Entity> builder = connectionManager.CreateLinqExpressionBuilder<Entity>();
+foreach (string item in Enumerable.Range(1, 100).Select(p => $"Name {p}"))
+{
+    builder.AddOr(p => p["xx_name"] == item);
+}
+
+if (builder.ExpressionsAdded > 0)
+{
+    Expression<Func<Entity, bool>> finalExpression = builder.Result;
+    serviceContext.xxSet.Where(finalExpression).ToArray();
+}
 ```
+
+Production notes:
+- Builders are mutable and **not thread-safe**; create one builder per query and use it from a single thread.
+- Check `ExpressionsAdded > 0` before using `Result`; an empty builder throws `InvalidOperationException`. If there are no conditions, skip the `Where` call to return unfiltered data.
+- Top-level `AddAnd(p => true)` and `AddOr(p => false)` are boolean identities and are ignored. `AddAnd(p => false)` and `AddOr(p => true)` throw `ArgumentException` because the Dataverse LINQ provider cannot translate a generic always-false/always-true filter.
+- The Dataverse LINQ provider supports a limited set of expression shapes. The builder combines expression trees but does not validate them; unsupported expressions fail during query translation.
+- Adding an empty builder, a builder to itself, or a builder whose `Result` is null throws an exception.
 
 
 ## Roadmap

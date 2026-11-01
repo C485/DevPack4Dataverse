@@ -46,6 +46,16 @@ public sealed class DataverseDevPack
         _logger = logger;
     }
 
+    /// <summary>
+    /// Creates a new predicate builder for <typeparamref name="T"/>.
+    /// </summary>
+    /// <remarks>
+    /// The builder is mutable and not thread-safe. Create one builder per query and use it from a single thread.
+    /// Check <see cref="ILinqExpressionBuilder{T}.ExpressionsAdded"/> before using
+    /// <see cref="ILinqExpressionBuilder{T}.Result"/>; an empty builder throws <see cref="InvalidOperationException"/>.
+    /// </remarks>
+    /// <typeparam name="T">An <see cref="Entity"/> or a class derived from it.</typeparam>
+    /// <returns>A new, empty expression builder.</returns>
     public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() =>
         LinqExpressionBuilder.Create<T>(_logger);
 }

@@ -29,12 +29,12 @@ public class LinqExpressionBuilderBehaviorTests
         entity => entity.GetAttributeValue<bool>(attributeName);
 
     [Fact]
-    public void EmptyBuilder_MatchesNothing()
+    public void EmptyBuilder_ResultThrows()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
         Assert.Equal(0u, builder.ExpressionsAdded);
-        Assert.False(builder.Result.Compile()(new Entity("account")));
+        Assert.Throws<InvalidOperationException>(() => builder.Result);
     }
 
     [Fact]
@@ -194,12 +194,12 @@ public class LinqExpressionBuilderBehaviorTests
 
         for (int index = 0; index < 500; index++)
         {
-            builder.AddAnd(entity => true);
+            builder.AddAnd(Flag("a"));
         }
 
         Assert.Equal(500u, builder.ExpressionsAdded);
-        Assert.True(builder.Result.Compile()(new Entity("account")));
-        Assert.ThrowsAny<ArgumentException>(() => builder.AddAnd(entity => true));
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
+        Assert.ThrowsAny<ArgumentException>(() => builder.AddAnd(Flag("a")));
     }
 
     [Fact]
@@ -208,14 +208,14 @@ public class LinqExpressionBuilderBehaviorTests
         var inner = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
         for (int index = 0; index < 500; index++)
         {
-            inner.AddAnd(entity => true);
+            inner.AddAnd(Flag("a"));
         }
 
         var outer = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
         outer.AddAnd(inner);
 
         Assert.Equal(500u, outer.ExpressionsAdded);
-        Assert.ThrowsAny<ArgumentException>(() => outer.AddOr(entity => true));
+        Assert.ThrowsAny<ArgumentException>(() => outer.AddOr(Flag("a")));
     }
 
     [Fact]
@@ -303,10 +303,10 @@ public class LinqExpressionBuilderBehaviorTests
         var counter = new CallCounter();
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
-        builder.AddAnd(entity => false);
+        builder.AddAnd(Flag("a"));
         builder.AddAnd(entity => counter.Record());
 
-        builder.Result.Compile()(new Entity("account"));
+        builder.Result.Compile()(Account(Guid.NewGuid(), ("a", false)));
 
         Assert.Equal(0, counter.Count);
     }
@@ -317,10 +317,10 @@ public class LinqExpressionBuilderBehaviorTests
         var counter = new CallCounter();
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
-        builder.AddOr(entity => true);
+        builder.AddOr(Flag("a"));
         builder.AddOr(entity => counter.Record());
 
-        builder.Result.Compile()(new Entity("account"));
+        builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true)));
 
         Assert.Equal(0, counter.Count);
     }
@@ -393,24 +393,156 @@ public class LinqExpressionBuilderBehaviorTests
     public void AddingBuilder_WithHugeExpressionCount_ThrowsInsteadOfOverflowing()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
-        builder.AddAnd(entity => true);
+        builder.AddAnd(Flag("a"));
         var huge = new FixedExpressionBuilder(uint.MaxValue, entity => true);
 
         Assert.ThrowsAny<ArgumentException>(() => builder.AddAnd(huge));
         Assert.Equal(1u, builder.ExpressionsAdded);
-        Assert.True(builder.Result.Compile()(new Entity("account")));
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
     }
 
     [Fact]
     public void AddingBuilderWithHugeExpressionCount_ToOr_ThrowsInsteadOfOverflowing()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
-        builder.AddOr(entity => false);
+        builder.AddOr(Flag("a"));
         var huge = new FixedExpressionBuilder(uint.MaxValue, entity => true);
 
         Assert.ThrowsAny<ArgumentException>(() => builder.AddOr(huge));
         Assert.Equal(1u, builder.ExpressionsAdded);
-        Assert.False(builder.Result.Compile()(new Entity("account")));
+        Assert.False(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", false))));
+    }
+
+    [Fact]
+    public void AddAnd_ConstantTrue_IsIgnored()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+        builder.AddAnd(entity => true);
+
+        Assert.Equal(1u, builder.ExpressionsAdded);
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
+    }
+
+    [Fact]
+    public void AddOr_ConstantFalse_IsIgnored()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddOr(Flag("a"));
+        builder.AddOr(entity => false);
+
+        Assert.Equal(1u, builder.ExpressionsAdded);
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
+    }
+
+    [Fact]
+    public void AddAnd_ConstantTrueAsFirstExpression_LeavesBuilderEmpty()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(entity => true);
+
+        Assert.Equal(0u, builder.ExpressionsAdded);
+        Assert.Throws<InvalidOperationException>(() => builder.Result);
+    }
+
+    [Fact]
+    public void AddOr_ConstantFalseAsFirstExpression_LeavesBuilderEmpty()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddOr(entity => false);
+
+        Assert.Equal(0u, builder.ExpressionsAdded);
+        Assert.Throws<InvalidOperationException>(() => builder.Result);
+    }
+
+    [Fact]
+    public void AddAnd_ConstantFalse_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+
+        Assert.Throws<ArgumentException>(() => builder.AddAnd(entity => false));
+        Assert.Equal(1u, builder.ExpressionsAdded);
+    }
+
+    [Fact]
+    public void AddOr_ConstantTrue_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddOr(Flag("a"));
+
+        Assert.Throws<ArgumentException>(() => builder.AddOr(entity => true));
+        Assert.Equal(1u, builder.ExpressionsAdded);
+    }
+
+    [Fact]
+    public void AddingInnerBuilder_WithConstantTrue_ToAnd_IsIgnored()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+        var inner = new FixedExpressionBuilder(1, entity => true);
+
+        builder.AddAnd(inner);
+
+        Assert.Equal(1u, builder.ExpressionsAdded);
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
+    }
+
+    [Fact]
+    public void AddingInnerBuilder_WithConstantFalse_ToOr_IsIgnored()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddOr(Flag("a"));
+        var inner = new FixedExpressionBuilder(1, entity => false);
+
+        builder.AddOr(inner);
+
+        Assert.Equal(1u, builder.ExpressionsAdded);
+        Assert.True(builder.Result.Compile()(Account(Guid.NewGuid(), ("a", true))));
+    }
+
+    [Fact]
+    public void AddingInnerBuilder_WithConstantFalse_ToAnd_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+        var inner = new FixedExpressionBuilder(1, entity => false);
+
+        Assert.Throws<ArgumentException>(() => builder.AddAnd(inner));
+        Assert.Equal(1u, builder.ExpressionsAdded);
+    }
+
+    [Fact]
+    public void AddingInnerBuilder_WithConstantTrue_ToOr_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddOr(Flag("a"));
+        var inner = new FixedExpressionBuilder(1, entity => true);
+
+        Assert.Throws<ArgumentException>(() => builder.AddOr(inner));
+        Assert.Equal(1u, builder.ExpressionsAdded);
+    }
+
+    [Fact]
+    public void AddingBuilder_WithNullResult_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+        var invalid = new FixedExpressionBuilder(1, null);
+
+        Assert.Throws<ArgumentNullException>(() => builder.AddAnd(invalid));
+        Assert.Equal(1u, builder.ExpressionsAdded);
+    }
+
+    [Fact]
+    public void AddingBuilder_ToItself_Throws()
+    {
+        var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
+        builder.AddAnd(Flag("a"));
+
+        Assert.Throws<ArgumentException>(() => builder.AddAnd(builder));
+        Assert.Throws<ArgumentException>(() => builder.AddOr(builder));
+        Assert.Equal(1u, builder.ExpressionsAdded);
     }
 
     private sealed class CallCounter

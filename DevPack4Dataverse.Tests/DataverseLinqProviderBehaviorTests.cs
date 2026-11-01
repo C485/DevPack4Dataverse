@@ -47,26 +47,30 @@ public class DataverseLinqProviderBehaviorTests
     }
 
     [Fact]
-    public void Builder_StartingWithTrue_ThenFilter_KeepsFilter()
+    public void Builder_IgnoresAddAndTrue_ThenFilter()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
         builder.AddAnd(entity => true);
+        Assert.Equal(0u, builder.ExpressionsAdded);
+
         builder.AddAnd(entity => entity["name"] == "Alice");
 
         QueryExpression query = Translate(builder.Result);
-
+        Assert.Equal(1u, builder.ExpressionsAdded);
         AssertSingleCondition(query, "name", ConditionOperator.Equal, "Alice");
     }
 
     [Fact]
-    public void Builder_StartingWithFalse_ThenOrFilter_KeepsFilter()
+    public void Builder_IgnoresAddOrFalse_ThenFilter()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
         builder.AddOr(entity => false);
+        Assert.Equal(0u, builder.ExpressionsAdded);
+
         builder.AddOr(entity => entity["name"] == "Alice");
 
         QueryExpression query = Translate(builder.Result);
-
+        Assert.Equal(1u, builder.ExpressionsAdded);
         AssertSingleCondition(query, "name", ConditionOperator.Equal, "Alice");
     }
 
@@ -156,11 +160,11 @@ public class DataverseLinqProviderBehaviorTests
     }
 
     [Fact]
-    public void EmptyBuilder_Result_IsNotTranslatableBySdk()
+    public void EmptyBuilder_Result_ThrowsInvalidOperationException()
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
-        Assert.Throws<NotSupportedException>(() => Translate(builder.Result));
+        Assert.Throws<InvalidOperationException>(() => builder.Result);
     }
 
     private static QueryExpression Translate(Expression<Func<Entity, bool>> predicate)
