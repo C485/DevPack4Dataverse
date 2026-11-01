@@ -43,12 +43,6 @@ internal static class ExpressionCombiner
         );
     }
 
-    public static Expression<Func<T, bool>> Empty<T>(ILogger logger)
-    {
-        using EntryExitLogger logGuard = new(logger);
-        return _ => false;
-    }
-
     public static Expression<Func<T, bool>> Or<T>(
         this Expression<Func<T, bool>> mainExpression,
         Expression<Func<T, bool>> expressionToAdd,
