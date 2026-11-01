@@ -15,8 +15,11 @@ namespace DevPack4Dataverse.Tests;
 [Trait("Type", "KnownBug")]
 public class KnownBugTests
 {
-    // Regression: LinqExpressionBuilder.AddAnd used to start from ExpressionCombiner.Empty
-    // (`_ => false`) and AND onto it, so every AND-built filter was permanently `false`.
+    // Regression: LinqExpressionBuilder.AddAnd used to AND the first condition with
+    // ExpressionCombiner.Empty (`_ => false`), so the in-memory predicate was always false.
+    // The Dataverse LINQ provider also rejects `false && ...` as an invalid where condition,
+    // verified in DataverseLinqProviderBehaviorTests. The first condition must replace the
+    // empty identity instead of being combined with it.
     [Fact]
     public void AddAnd_ShouldMatch_WhenSingleConditionMatches()
     {

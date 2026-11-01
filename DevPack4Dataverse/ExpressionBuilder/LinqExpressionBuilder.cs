@@ -54,7 +54,9 @@ public static class LinqExpressionBuilder
 
         /// <summary>
         /// Returns the accumulated expression. Before the first expression is added,
-        /// a neutral expression that matches nothing is returned.
+        /// a neutral in-memory expression that matches nothing is returned.
+        /// The Dataverse LINQ provider requires at least one translated condition,
+        /// so an empty builder's result cannot be used directly in a query.
         /// </summary>
         public Expression<Func<U, bool>> Result => _expression ?? ExpressionCombiner.Empty<U>(_logger);
 
