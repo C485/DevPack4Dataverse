@@ -30,12 +30,20 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
+/// <summary>
+/// Manages a pool of Dataverse connections and executes operations against them.
+/// </summary>
+/// <remarks>
+/// Connections are created in the background. Use <see cref="WaitForConnections"/> or
+/// <see cref="WaitForConnectionsAsync"/> before operations that require a minimum pool size.
+/// </remarks>
 public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 {
     private readonly bool _applyConnectionOptimalization;
     private readonly RepeatedTask _connectionCreator;
     private readonly ConcurrentBag<IConnectionCreator> _connectionCreators;
     private readonly ConcurrentBag<IConnection> _connections = new();
+    private int _disposed;
     private readonly ILogger _logger;
     private readonly TimeSpan _sleepTimeForConnectionCreator = TimeSpan.FromMilliseconds(100);
     private readonly TimeSpan _sleepTimeForConnectionGetter = TimeSpan.FromMilliseconds(10);
@@ -75,12 +83,95 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         _connectionCreator.Start();
     }
 
+    /// <summary>
+    /// Number of successfully created connections.
+    /// </summary>
     public int ConnectionCount
     {
         get
         {
             using EntryExitLogger logGuard = new(_logger);
             return _connections.Count;
+        }
+    }
+
+    /// <summary>
+    /// Blocks until at least <paramref name="count"/> connections have been created.
+    /// </summary>
+    /// <param name="count">Number of connections to wait for. Must be non-negative.</param>
+    /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
+    /// creators have failed.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
+    /// <remarks>
+    /// The method waits while connection creators are still working. Use
+    /// <see cref="WaitForConnectionsAsync"/> with a cancellation token for a bounded wait.
+    /// A zero count returns immediately.
+    /// </remarks>
+    public void WaitForConnections(int count)
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        Guard.Against.Negative(count, nameof(count));
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        while (true)
+        {
+            ThrowIfDisposed();
+            if (_connections.Count >= count)
+            {
+                return;
+            }
+
+            EnsureConnectionsCanBeCreated(count);
+            Thread.Sleep(_sleepTimeForConnectionGetter);
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously waits until at least <paramref name="count"/> connections have been created.
+    /// </summary>
+    /// <param name="count">Number of connections to wait for. Must be non-negative.</param>
+    /// <param name="cancellationToken">Token used to stop waiting.</param>
+    /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
+    /// creators have failed.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
+    /// <exception cref="OperationCanceledException">The cancellation token was requested.</exception>
+    /// <remarks>
+    /// A zero count returns immediately. Use a cancellation token for a bounded wait.
+    /// </remarks>
+    public async Task WaitForConnectionsAsync(
+        int count,
+        CancellationToken cancellationToken = default
+    )
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        Guard.Against.Negative(count, nameof(count));
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        while (true)
+        {
+            ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_connections.Count >= count)
+            {
+                return;
+            }
+
+            EnsureConnectionsCanBeCreated(count);
+            await Task.Delay(_sleepTimeForConnectionGetter, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -100,6 +191,10 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return secureString;
     }
 
+    /// <summary>
+    /// Adds a connection creator. The background creator picks it up on its next cycle.
+    /// </summary>
+    /// <param name="connectionCreator">Creator to add. Cannot be null.</param>
     public void AddNewConnection(IConnectionCreator connectionCreator)
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -107,6 +202,25 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         Guard.Against.Null(connectionCreator);
 
         _connectionCreators.Add(connectionCreator);
+    }
+
+    private void EnsureConnectionsCanBeCreated(int count)
+    {
+        int possibleConnections = _connectionCreators.Count(creator => !creator.IsError);
+        if (possibleConnections < count)
+        {
+            throw new InvalidOperationException(
+                $"Cannot wait for {count} connection(s): only {possibleConnections} connection creator(s) are available and not failed."
+            );
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            throw new ObjectDisposedException(nameof(SdkProxy));
+        }
     }
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
@@ -157,8 +271,16 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         await connectionLease.Connection.DeleteRecordAsync(entityReference, requestSettings).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Stops background connection creation. Safe to call multiple times.
+    /// </summary>
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _connectionCreator.StopAsync().GetAwaiter().GetResult();
     }
 
