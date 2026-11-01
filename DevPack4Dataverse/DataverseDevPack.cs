@@ -18,6 +18,7 @@ using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Sequential;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -85,4 +86,15 @@ public sealed class DataverseDevPack
     /// <exception cref="OperationCanceledException">The cancellation token was requested.</exception>
     public Task WaitForConnectionsAsync(int count, CancellationToken cancellationToken = default) =>
         SdkProxy.WaitForConnectionsAsync(count, cancellationToken);
+
+    /// <summary>
+    /// Creates a new sequential request builder.
+    /// </summary>
+    /// <remarks>
+    /// Steps execute one after another. Each step factory receives the results of all previous steps
+    /// through <see cref="SequentialRequestContext"/>. The builder is mutable and not thread-safe.
+    /// Execution stops at the first exception; there is no automatic rollback or transaction.
+    /// </remarks>
+    /// <returns>A new, empty sequential request builder.</returns>
+    public SequentialRequestBuilder CreateSequentialRequestBuilder() => new(SdkProxy, _logger);
 }

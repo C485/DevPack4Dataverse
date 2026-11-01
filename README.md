@@ -66,7 +66,30 @@ Production notes:
 - The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts.
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing.
 - Automatic parallelism uses the available connections but always uses at least one worker.
-                
+
+### Sequential requests
+Executes request steps one after another. Each step can read the results of every previous step from the `SequentialRequestContext` passed to its factory:
+```C#
+SequentialRequestContext results = await dataverseDevPack
+    .CreateSequentialRequestBuilder()
+    .Create(new Entity("account") { ["name"] = "Contoso" })
+    .ExecuteAction(
+        "new_Action",
+        context => new EntityReference("account", context.CreatedId(0)),
+        (context, request) => request["flag"] = true)
+    .Retrieve(
+        "account",
+        context => context.CreatedId(0),
+        new ColumnSet("name"))
+    .ExecuteAsync();
+
+// Inner logic with access to the results of steps 0, 1 and 2.
+Guid createdId = results.CreatedId(0);
+OrganizationResponse actionResponse = results.Response<OrganizationResponse>(1);
+Entity retrieved = results.RetrievedEntity(2);
+```
+Step indexes are zero-based. `Execute()` provides the synchronous variant and `ExecuteAsync(cancellationToken)` the asynchronous one. Steps stop at the first exception; there is no automatic transaction or rollback. The builder is mutable and not thread-safe, so create one builder per sequence. The same context is available to step factories through `CreatedId`, `RetrievedEntity`, `Response<T>`, indexing and `Last`.
+
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
 For example when we have lookup that points to record X, we can call FieldDrill with these parameters
