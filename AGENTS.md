@@ -16,6 +16,23 @@ When working with Dataverse code (SDK usage, Organization service, Web API, plug
 
 Use the relevant page under `powerapps-docs/developer/data-platform/` as the source of truth. Reference the documentation path in code comments or PR descriptions when the behavior is non-obvious.
 
+### Always sync the documentation first
+
+Before starting any Dataverse-related task, update the local documentation checkout so you are working from the latest docs:
+
+- **Preferred:** run `pwsh ./docs/sync-dataverse-docs.ps1` (or `powershell -File ./docs/sync-dataverse-docs.ps1`).
+- **Manual:**
+  ```bash
+  # First time only
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/MicrosoftDocs/powerapps-docs.git docs/powerapps-docs
+  git -C docs/powerapps-docs sparse-checkout set powerapps-docs/developer/data-platform
+
+  # Every subsequent Dataverse task
+  git -C docs/powerapps-docs pull --ff-only
+  ```
+
+Read the relevant files under `docs/powerapps-docs/powerapps-docs/developer/data-platform/` before changing Dataverse code. Never rely on a stale local copy. The local clone is intentionally ignored by git.
+
 ## Core Language Features
 
 ### Use Primary Constructors

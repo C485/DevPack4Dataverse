@@ -8,6 +8,27 @@ Use the Microsoft Power Apps documentation repository as the source of truth whe
 - **Dataverse developer docs:** https://github.com/MicrosoftDocs/powerapps-docs/tree/main/powerapps-docs/developer/data-platform
 - **Published documentation:** https://learn.microsoft.com/power-apps/developer/data-platform/
 
+## Local synced copy (required)
+
+Always sync the documentation before working on Dataverse code. The local checkout lives at `docs/powerapps-docs` and is ignored by git.
+
+```bash
+# First time only
+git clone --depth 1 --filter=blob:none --sparse https://github.com/MicrosoftDocs/powerapps-docs.git docs/powerapps-docs
+git -C docs/powerapps-docs sparse-checkout set powerapps-docs/developer/data-platform
+
+# Every subsequent Dataverse task
+git -C docs/powerapps-docs pull --ff-only
+```
+
+Or run:
+
+```powershell
+pwsh ./docs/sync-dataverse-docs.ps1
+```
+
+Read the relevant pages from `docs/powerapps-docs/powerapps-docs/developer/data-platform/` before implementing or changing behavior.
+
 ## What to consult
 
 | Area | Documentation path |
@@ -25,6 +46,6 @@ Use the Microsoft Power Apps documentation repository as the source of truth whe
 
 ## Working agreement
 
-1. Check the relevant documentation page before implementing or changing Dataverse behavior.
+1. Pull the latest documentation (`git -C docs/powerapps-docs pull --ff-only`) and check the relevant page before implementing or changing Dataverse behavior.
 2. Prefer the documentation repository and the published Microsoft Learn pages over blog posts or outdated samples.
 3. When behavior is non-obvious, reference the relevant documentation path in the PR description or code comment.
