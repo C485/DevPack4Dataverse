@@ -20,16 +20,6 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
 
-public class RequestImpersonateSettings
-{
-    public Guid? ImpersonateAsUserByAADId { get; set; }
-
-    /// <summary>
-    ///  Guid of SystemUser record id
-    /// </summary>
-    public Guid? ImpersonateAsUserByDataverseId { get; set; }
-}
-
 public sealed class RequestSettings : RequestImpersonateSettings
 {
     /// <summary>

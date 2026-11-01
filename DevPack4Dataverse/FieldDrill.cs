@@ -37,7 +37,7 @@ public class FieldDrill
     public T Retreive<T>(EntityReference obj, string path, string delimiter = ".")
     {
         using EntryExitLogger logGuard = new(_logger);
-        string[] pathParts = path.Split(delimiter);
+        string[] pathParts = path.Split([delimiter], StringSplitOptions.None);
         return Retreive<T>(obj, pathParts);
     }
 
@@ -103,8 +103,8 @@ public class FieldDrill
     public async Task<T> RetreiveAsync<T>(EntityReference obj, string path, string delimiter = ".")
     {
         using EntryExitLogger logGuard = new(_logger);
-        string[] pathParts = path.Split(delimiter);
-        return await RetreiveAsync<T>(obj, pathParts);
+        string[] pathParts = path.Split([delimiter], StringSplitOptions.None);
+        return await RetreiveAsync<T>(obj, pathParts).ConfigureAwait(false);
     }
 
     public async Task<T> RetreiveAsync<T>(EntityReference obj, params string[] pathParts)
@@ -124,11 +124,9 @@ public class FieldDrill
         {
             bool isLast = i == pathParts.Length - 1;
             string currentFieldName = pathParts[i];
-            Entity ret = await _sdkProxy.RetrieveAsync(
-                drillReference.LogicalName,
-                drillReference.Id,
-                new ColumnSet(currentFieldName)
-            );
+            Entity ret = await _sdkProxy
+                .RetrieveAsync(drillReference.LogicalName, drillReference.Id, new ColumnSet(currentFieldName))
+                .ConfigureAwait(false);
             Guard.Against.InvalidInput(
                 ret,
                 nameof(ret),

@@ -14,33 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-
-using DevPack4Dataverse.Playground.Examples;
 using Serilog;
 using Serilog.Extensions.Logging;
+using DevPack4Dataverse.Playground.Examples;
 
-namespace DevPack4Dataverse.Playground
+namespace DevPack4Dataverse.Playground;
+
+internal static class Program
 {
-    internal class Program
+    private static async Task Main(string[] args)
     {
-        private static async Task Main(string[] args)
-        {
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel
-                .Information()
-                .Enrich
-                .FromLogContext()
-                .WriteTo
-                .Console()
-                .WriteTo
-                .File($"log{timestamp}.txt")
-                .CreateLogger();
-            
-            var microsoftLogger = new SerilogLoggerFactory(Log.Logger)
-                .CreateLogger("");
-            await new AdvancedMultipleRequest(microsoftLogger).Execute();
-            Log.CloseAndFlush();
-        }
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel
+            .Information()
+            .Enrich
+            .FromLogContext()
+            .WriteTo
+            .Console()
+            .WriteTo
+            .File($"log{timestamp}.txt")
+            .CreateLogger();
+
+        var microsoftLogger = new SerilogLoggerFactory(Log.Logger).CreateLogger("");
+        await new AdvancedMultipleRequest(microsoftLogger).Execute().ConfigureAwait(false);
+        Log.CloseAndFlush();
     }
 }

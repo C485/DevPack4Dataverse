@@ -14,20 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using Ardalis.GuardClauses;
-
 namespace DevPack4Dataverse.Models;
 
-public class Statistic
+public class Statistic(TimeSpan startTimeSpan)
 {
-    private readonly TimeSpan _start;
     private TimeSpan? _end;
 
-    public Statistic(TimeSpan startTimeSpan) => _start = Guard.Against.Zero(startTimeSpan);
-
-    public ulong ElapsedMilliseconds => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMilliseconds) : 0;
-    public ulong ElapsedMinutes => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalMinutes) : 0;
-    public ulong ElapsedSeconds => _end.HasValue ? Convert.ToUInt64((_end.Value - _start).TotalSeconds) : 0;
+    public ulong ElapsedMilliseconds =>
+        _end.HasValue ? Convert.ToUInt64((_end.Value - startTimeSpan).TotalMilliseconds) : 0;
+    public ulong ElapsedMinutes => _end.HasValue ? Convert.ToUInt64((_end.Value - startTimeSpan).TotalMinutes) : 0;
+    public ulong ElapsedSeconds => _end.HasValue ? Convert.ToUInt64((_end.Value - startTimeSpan).TotalSeconds) : 0;
 
     public bool IsFromLastNMinutes(TimeSpan currentTimeSpan, uint minutes)
     {
@@ -41,6 +37,6 @@ public class Statistic
 
     public void SetEnd(TimeSpan endTimeSpan)
     {
-        _end = Guard.Against.Zero(endTimeSpan);
+        _end = endTimeSpan;
     }
 }

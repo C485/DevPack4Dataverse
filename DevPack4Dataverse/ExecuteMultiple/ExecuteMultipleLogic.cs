@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace DevPack4Dataverse.ExecuteMultiple;
 
@@ -96,9 +96,10 @@ public sealed class ExecuteMultipleLogic
                 executeMultipleRequestSettings
             );
 
-            await Parallel.ForEachAsync(
+            await AsyncParallel.ForEachAsync(
                 allRequestChunks,
-                new ParallelOptions { MaxDegreeOfParallelism = threadsCount, CancellationToken = cancellationToken },
+                threadsCount,
+                cancellationToken,
                 async (packOfRequests, _) =>
                 {
                     try
@@ -116,8 +117,9 @@ public sealed class ExecuteMultipleLogic
 
                         requestWithResults.Requests.AddRange(packOfRequests);
 
-                        ExecuteMultipleResponse responseWithResults =
-                            await _sdkProxy.ExecuteAsync<ExecuteMultipleResponse>(requestWithResults);
+                        ExecuteMultipleResponse responseWithResults = await _sdkProxy
+                            .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults)
+                            .ConfigureAwait(false);
 
                         foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                         {
@@ -143,11 +145,11 @@ public sealed class ExecuteMultipleLogic
 
                     Interlocked.Add(ref progress, packOfRequests.Length);
                 }
-            );
+            ).ConfigureAwait(false);
         }
         finally
         {
-            await repeatedTask.StopAsync();
+            await repeatedTask.StopAsync().ConfigureAwait(false);
         }
 
         logicResult.Stopwatch.Stop();
@@ -198,9 +200,10 @@ public sealed class ExecuteMultipleLogic
 
         ConcurrentBag<ExecuteMultipleResponseItem> responsesList = new();
 
-        await Parallel.ForEachAsync(
+        await AsyncParallel.ForEachAsync(
             allRequestChunks,
-            new ParallelOptions { MaxDegreeOfParallelism = threadsCount, CancellationToken = cancellationToken },
+            threadsCount,
+            cancellationToken,
             async (packOfRequests, _) =>
             {
                 ExecuteMultipleRequest requestWithResults =
@@ -212,9 +215,9 @@ public sealed class ExecuteMultipleLogic
 
                 requestWithResults.Requests.AddRange(packOfRequests);
 
-                ExecuteMultipleResponse responseWithResults = await _sdkProxy.ExecuteAsync<ExecuteMultipleResponse>(
-                    requestWithResults
-                );
+                ExecuteMultipleResponse responseWithResults = await _sdkProxy
+                    .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults)
+                    .ConfigureAwait(false);
 
                 foreach (ExecuteMultipleResponseItem responseItem in responseWithResults.Responses)
                 {
@@ -231,7 +234,7 @@ public sealed class ExecuteMultipleLogic
 
                 Interlocked.Add(ref progress, packOfRequests.Length);
             }
-        );
+        ).ConfigureAwait(false);
 
         logicResult.Stopwatch.Stop();
         logicResult.RecordsRequested = executeMultipleRequestBuilder.RequestWithResults.Requests.Count;

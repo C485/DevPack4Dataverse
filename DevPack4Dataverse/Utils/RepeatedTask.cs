@@ -23,8 +23,12 @@ public sealed class RepeatedTask
 {
     private readonly Action _action;
     private readonly ILogger _logger;
+#if NET6_0_OR_GREATER
     private readonly PeriodicTimer _periodicTimer;
-    private readonly CancellationTokenSource cancellationTokenSource;
+#else
+    private readonly TimeSpan _timeSpan;
+#endif
+    private readonly CancellationTokenSource _cancellationTokenSource;
     private Task _task;
 
     public RepeatedTask(TimeSpan timeSpan, Action action, ILogger logger)
@@ -32,8 +36,12 @@ public sealed class RepeatedTask
         using EntryExitLogger logGuard = new(logger);
         _logger = Guard.Against.Null(logger);
         _action = Guard.Against.Null(action);
-        cancellationTokenSource = new CancellationTokenSource();
+        _cancellationTokenSource = new CancellationTokenSource();
+#if NET6_0_OR_GREATER
         _periodicTimer = new PeriodicTimer(timeSpan);
+#else
+        _timeSpan = timeSpan;
+#endif
     }
 
     public void Start()
@@ -52,9 +60,9 @@ public sealed class RepeatedTask
             return;
         }
 
-        cancellationTokenSource.Cancel();
-        await _task;
-        cancellationTokenSource.Dispose();
+        _cancellationTokenSource.Cancel();
+        await _task.ConfigureAwait(false);
+        _cancellationTokenSource.Dispose();
     }
 
     private async Task TickAsync()
@@ -63,8 +71,18 @@ public sealed class RepeatedTask
 
         try
         {
-            while (await _periodicTimer.WaitForNextTickAsync(cancellationTokenSource.Token))
+            while (true)
             {
+#if NET6_0_OR_GREATER
+                if (!await _periodicTimer
+                    .WaitForNextTickAsync(_cancellationTokenSource.Token)
+                    .ConfigureAwait(false))
+                {
+                    break;
+                }
+#else
+                await Task.Delay(_timeSpan, _cancellationTokenSource.Token).ConfigureAwait(false);
+#endif
                 try
                 {
                     using EntryExitLogger logGuardInner = new(_logger, caller: $"{nameof(TickAsync)}-InnerFunction");
