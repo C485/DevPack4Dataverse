@@ -15,8 +15,8 @@ namespace DevPack4Dataverse.Tests;
 [Trait("Type", "KnownBug")]
 public class KnownBugTests
 {
-    // Bug 1: LinqExpressionBuilder.AddAnd starts from ExpressionCombiner.Empty => `_ => false`
-    // and ANDs onto it, so every AND-built filter is permanently `false`.
+    // Regression: LinqExpressionBuilder.AddAnd used to start from ExpressionCombiner.Empty
+    // (`_ => false`) and AND onto it, so every AND-built filter was permanently `false`.
     [Fact]
     public void AddAnd_ShouldMatch_WhenSingleConditionMatches()
     {
