@@ -58,4 +58,31 @@ public sealed class DataverseDevPack
     /// <returns>A new, empty expression builder.</returns>
     public ILinqExpressionBuilder<T> CreateLinqExpressionBuilder<T>() where T : Entity, new() =>
         LinqExpressionBuilder.Create<T>(_logger);
+
+    /// <summary>
+    /// Blocks until at least <paramref name="count"/> connections have been created.
+    /// </summary>
+    /// <param name="count">Number of connections to wait for. Must be non-negative.</param>
+    /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
+    /// creators have failed.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The underlying proxy has been disposed.</exception>
+    public void WaitForConnections(int count) => SdkProxy.WaitForConnections(count);
+
+    /// <summary>
+    /// Asynchronously waits until at least <paramref name="count"/> connections have been created.
+    /// </summary>
+    /// <param name="count">Number of connections to wait for. Must be non-negative.</param>
+    /// <param name="cancellationToken">Token used to stop waiting.</param>
+    /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
+    /// creators have failed.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">The underlying proxy has been disposed.</exception>
+    /// <exception cref="OperationCanceledException">The cancellation token was requested.</exception>
+    public Task WaitForConnectionsAsync(int count, CancellationToken cancellationToken = default) =>
+        SdkProxy.WaitForConnectionsAsync(count, cancellationToken);
 }

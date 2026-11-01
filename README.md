@@ -26,6 +26,14 @@ C --> D
 B --> D
 ```
 
+### Connection management
+Connections are created in the background. Wait for the required pool size before running work:
+```C#
+dataverseDevPack.WaitForConnections(4);
+await dataverseDevPack.WaitForConnectionsAsync(4, cancellationToken);
+```
+The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if fewer creators are configured than requested or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
+
 ### ExecuteMultiple
 Gives ability to quickly call dataverse endpoint with optimized packs of requests, multiple connections will be used to multiply speed and skip request per minute limits. In example bellow you can see how you can build unlimited in size requests that later will be sent to datavserse endpoint in packs.
 ```C# 
