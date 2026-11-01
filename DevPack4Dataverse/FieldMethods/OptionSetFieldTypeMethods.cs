@@ -48,7 +48,7 @@ public sealed class OptionSetFieldTypeMethods
         using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode);
+        return await MapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode).ConfigureAwait(false);
     }
 
     public async Task<string> MapOptionSetToString(
@@ -61,7 +61,7 @@ public sealed class OptionSetFieldTypeMethods
         using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode).ConfigureAwait(false);
     }
 
     public async Task<string> MapOptionSetToString<T>(
@@ -74,7 +74,7 @@ public sealed class OptionSetFieldTypeMethods
         using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
-        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode);
+        return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class OptionSetFieldTypeMethods
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName).ConfigureAwait(false);
 
         OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
         Guard.Against.Null(
@@ -155,7 +155,7 @@ public sealed class OptionSetFieldTypeMethods
             valueToMap,
             languageCode,
             compareIgnoreCase
-        );
+        ).ConfigureAwait(false);
 
         return (T)(object)Guard.Against.EnumOutOfRange<T>(Guard.Against.Null(mapped).Value);
     }
@@ -172,7 +172,7 @@ public sealed class OptionSetFieldTypeMethods
 
         Guard.Against.NullOrEmpty(valueToMap);
 
-        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName);
+        OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName).ConfigureAwait(false);
 
         if (languageCode == NoLanguageFilter)
         {
@@ -226,27 +226,31 @@ public sealed class OptionSetFieldTypeMethods
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        RetrieveAttributeResponse metadataInfo = await _sdkProxy.ExecuteAsync<RetrieveAttributeResponse>(
-            new RetrieveAttributeRequest
-            {
-                EntityLogicalName = logicalName,
-                LogicalName = fieldName,
-                RetrieveAsIfPublished = true
-            }
-        );
+        RetrieveAttributeResponse metadataInfo = await _sdkProxy
+            .ExecuteAsync<RetrieveAttributeResponse>(
+                new RetrieveAttributeRequest
+                {
+                    EntityLogicalName = logicalName,
+                    LogicalName = fieldName,
+                    RetrieveAsIfPublished = true
+                }
+            )
+            .ConfigureAwait(false);
         if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
         {
             return new OptionMetadataCollection();
         }
         Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
-        Guard.Against.AgainstExpression(
-            (attributeType) =>
+        Guard.Against.Expression(
+            attributeType =>
             {
                 return attributeType
-                    is AttributeTypeCode.State
+                    is not (
+                        AttributeTypeCode.State
                         or AttributeTypeCode.Status
                         or AttributeTypeCode.Picklist
-                        or AttributeTypeCode.Boolean;
+                        or AttributeTypeCode.Boolean
+                    );
             },
             metadataInfo.AttributeMetadata.AttributeType.Value,
             $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
@@ -258,11 +262,7 @@ public sealed class OptionSetFieldTypeMethods
             PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
             BooleanAttributeMetadata booleanAttributeMetadata
                 => new OptionMetadataCollection(
-                    new OptionMetadata[]
-                    {
-                        booleanAttributeMetadata.OptionSet.TrueOption,
-                        booleanAttributeMetadata.OptionSet.FalseOption
-                    }
+                    [booleanAttributeMetadata.OptionSet.TrueOption, booleanAttributeMetadata.OptionSet.FalseOption]
                 ),
             EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
             _

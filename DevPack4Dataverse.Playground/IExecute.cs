@@ -14,10 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-namespace DevPack4Dataverse.Playground
+namespace DevPack4Dataverse.Playground;
+
+public interface IExecute
 {
-    public interface IExecute
-    {
-        Task Execute();
-    }
+    Task Execute();
 }

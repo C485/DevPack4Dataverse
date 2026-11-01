@@ -33,7 +33,7 @@ public sealed class ConnectionLease : IDisposable
 
     ~ConnectionLease()
     {
-        Dispose(false);
+        DisposeConnection();
     }
 
     public IConnection Connection { get; }
@@ -42,7 +42,7 @@ public sealed class ConnectionLease : IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
+        DisposeConnection();
         GC.SuppressFinalize(this);
     }
 
@@ -53,7 +53,7 @@ public sealed class ConnectionLease : IDisposable
         return (T)Activator.CreateInstance(typeof(T), PureServiceClient);
     }
 
-    private void Dispose(bool disposing)
+    private void DisposeConnection()
     {
         if (_disposedValue)
         {

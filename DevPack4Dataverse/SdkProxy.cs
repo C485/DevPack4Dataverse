@@ -120,9 +120,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.CreateRecordAsync(record, requestSettings);
+        return await connectionLease.Connection.CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
@@ -144,22 +144,22 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        await connectionLease.Connection.DeleteRecordAsync(logicalName, id, requestSettings);
+        await connectionLease.Connection.DeleteRecordAsync(logicalName, id, requestSettings).ConfigureAwait(false);
     }
 
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        await connectionLease.Connection.DeleteRecordAsync(entityReference, requestSettings);
+        await connectionLease.Connection.DeleteRecordAsync(entityReference, requestSettings).ConfigureAwait(false);
     }
 
     public void Dispose()
     {
-        _connectionCreator.StopAsync().RunSynchronously();
+        _connectionCreator.StopAsync().GetAwaiter().GetResult();
     }
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
@@ -188,18 +188,18 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     )
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.ExecuteAsync(executeMultipleRequestBuilder, requestSettings);
+        return await connectionLease.Connection.ExecuteAsync(executeMultipleRequestBuilder, requestSettings).ConfigureAwait(false);
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
         where T : OrganizationResponse
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.ExecuteAsync<T>(request, requestSettings);
+        return await connectionLease.Connection.ExecuteAsync<T>(request, requestSettings).ConfigureAwait(false);
     }
 
     [SuppressMessage(
@@ -251,7 +251,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         {
             foreach (IConnection connection in _connections.OrderBy(p => p.GetConnectionWeight()))
             {
-                if (await connection.TryLockAsync())
+                if (await connection.TryLockAsync().ConfigureAwait(false))
                 {
                     if (_applyConnectionOptimalization)
                     {
@@ -262,7 +262,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 }
             }
 
-            await Task.Delay(_sleepTimeForConnectionGetter);
+            await Task.Delay(_sleepTimeForConnectionGetter).ConfigureAwait(false);
         }
     }
 
@@ -285,17 +285,17 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings);
+        return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
     public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings);
+        return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
@@ -323,9 +323,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     )
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RetrieveAsync(entityName, id, columnSet, requestSettings);
+        return await connectionLease.Connection.RetrieveAsync(entityName, id, columnSet, requestSettings).ConfigureAwait(false);
     }
 
     public async Task<T> RetrieveAsync<T>(
@@ -336,9 +336,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     ) where T : Entity
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RetrieveAsync<T>(entityName, id, columnSet, requestSettings);
+        return await connectionLease.Connection.RetrieveAsync<T>(entityName, id, columnSet, requestSettings).ConfigureAwait(false);
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
@@ -364,9 +364,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     )
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RetrieveMultipleAsync(queryExpression, requestSettings);
+        return await connectionLease.Connection.RetrieveMultipleAsync(queryExpression, requestSettings).ConfigureAwait(false);
     }
 
     public async Task<T[]> RetrieveMultipleAsync<T>(
@@ -375,9 +375,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     ) where T : Entity
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.RetrieveMultipleAsync<T>(queryExpression, requestSettings);
+        return await connectionLease.Connection.RetrieveMultipleAsync<T>(queryExpression, requestSettings).ConfigureAwait(false);
     }
 
     public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
@@ -391,9 +391,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        await connectionLease.Connection.UpdateRecordAsync(record, requestSettings);
+        await connectionLease.Connection.UpdateRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
@@ -407,9 +407,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
         using EntryExitLogger logGuard = new(_logger);
-        using ConnectionLease connectionLease = await GetConnectionAsync();
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease.Connection.UpsertRecordAsync(record, requestSettings);
+        return await connectionLease.Connection.UpsertRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
     private static void OptimalizeConnections()

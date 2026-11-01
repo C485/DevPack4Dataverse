@@ -35,13 +35,14 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
     public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
     {
         _connectionString = Guard.Against.NullOrEmpty(connectionString);
+        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
 
-        if (_connectionString.Contains("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase))
+        if (_connectionString.IndexOf("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase) >= 0)
         {
             return;
         }
 
-        if (_connectionString.Contains("RequireNewInstance", StringComparison.CurrentCultureIgnoreCase))
+        if (_connectionString.IndexOf("RequireNewInstance", StringComparison.CurrentCultureIgnoreCase) >= 0)
         {
             throw new InvalidProgramException(ConnectionStringInvalidError);
         }
@@ -56,7 +57,6 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
         }
 
         _connectionString += ";RequireNewInstance=True";
-        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
     }
 
     public bool IsCreated => _isCreated;

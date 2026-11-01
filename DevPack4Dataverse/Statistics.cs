@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Diagnostics;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
-using System.Diagnostics;
 
 namespace DevPack4Dataverse;
 
@@ -26,10 +26,7 @@ internal class Statistics : IStatistics
     private readonly List<Statistic> _statistics = new();
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
-    public void Finish(Statistic statistic)
-    {
-        statistic.SetEnd(_stopwatch.Elapsed);
-    }
+    public void Finish(Statistic statistic) => statistic.SetEnd(_stopwatch.Elapsed);
 
     public Statistic StartNew()
     {
