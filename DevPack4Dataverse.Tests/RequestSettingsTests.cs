@@ -45,6 +45,14 @@ public class RequestSettingsTests
     }
 
     [Fact]
+    public void AddToOrganizationRequest_NullRequest_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new RequestSettings().AddToOrganizationRequest(null, NullLogger.Instance)
+        );
+    }
+
+    [Fact]
     public void DoesNotAddHeaders_WhenDefaultsAreUsed()
     {
         var request = new UpdateRequest { Target = new Entity("account") { Id = Guid.NewGuid() } };

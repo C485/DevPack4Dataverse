@@ -24,12 +24,24 @@ using Microsoft.Xrm.Sdk.Messages;
 
 namespace DevPack4Dataverse.ExecuteMultiple;
 
+/// <summary>
+/// Thread-safe builder for <see cref="ExecuteMultipleRequest"/> requests.
+/// </summary>
+/// <remarks>
+/// Requests are enumerated in insertion order. Calling <see cref="RequestWithResults"/> creates a snapshot;
+/// changes made to this builder afterwards do not affect that snapshot.
+/// </remarks>
 public sealed class ExecuteMultipleRequestBuilder
 {
     private readonly bool _continueOnError;
     private readonly ILogger _logger;
-    private readonly ConcurrentBag<OrganizationRequest> _requests;
+    private readonly ConcurrentQueue<OrganizationRequest> _requests;
 
+    /// <summary>
+    /// Creates a new request builder.
+    /// </summary>
+    /// <param name="logger">Logger used by the builder. Cannot be null.</param>
+    /// <param name="continueOnError">Value used by <see cref="RequestWithResults"/> settings.</param>
     public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
     {
         using EntryExitLogger logGuard = new(logger);
@@ -38,8 +50,15 @@ public sealed class ExecuteMultipleRequestBuilder
         _continueOnError = continueOnError;
     }
 
+    /// <summary>
+    /// Number of requests currently in the builder.
+    /// </summary>
     public int Count => _requests.Count;
 
+    /// <summary>
+    /// Creates a snapshot request with <c>ReturnResponses = true</c> and the configured
+    /// <c>ContinueOnError</c> value. Requests are in insertion order.
+    /// </summary>
     public ExecuteMultipleRequest RequestWithResults =>
         new()
         {
@@ -92,7 +111,7 @@ public sealed class ExecuteMultipleRequestBuilder
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
-        _requests.Add(request);
+        _requests.Enqueue(request);
     }
 
     public void AddUpdate(Entity record, RequestSettings requestSettings = null)

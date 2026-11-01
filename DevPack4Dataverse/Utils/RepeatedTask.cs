@@ -36,6 +36,12 @@ public sealed class RepeatedTask
         using EntryExitLogger logGuard = new(logger);
         _logger = Guard.Against.Null(logger);
         _action = Guard.Against.Null(action);
+        Guard.Against.Expression(
+            p => p <= TimeSpan.Zero,
+            timeSpan,
+            "Interval must be greater than zero.",
+            nameof(timeSpan)
+        );
         _cancellationTokenSource = new CancellationTokenSource();
 #if NET6_0_OR_GREATER
         _periodicTimer = new PeriodicTimer(timeSpan);

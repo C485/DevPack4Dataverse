@@ -120,9 +120,9 @@ public sealed class FileOrImageFieldTypeMethods
         Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic
             .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
             .ConfigureAwait(false);
+        // ExecuteMultipleLogic returns responses in the original request order across all chunks.
         foreach (
             DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results
-                .OrderBy(p => p.RequestIndex)
                 .Select(p => p.Response)
                 .Cast<DownloadBlockResponse>()
         )
