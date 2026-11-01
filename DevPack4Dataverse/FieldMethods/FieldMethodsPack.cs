@@ -25,10 +25,14 @@ public sealed class FieldMethodsPack
     public readonly OptionSetFieldTypeMethods ChoiceFieldTypeMethods;
     public readonly FileOrImageFieldTypeMethods FileOrImageFieldTypeMethods;
 
+    /// <summary>Helpers for Money/currency fields and exchange-rate conversion.</summary>
+    public readonly MoneyFieldTypeMethods MoneyFieldTypeMethods;
+
     public FieldMethodsPack(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
     {
         using EntryExitLogger logGuard = new(logger);
         ChoiceFieldTypeMethods = new OptionSetFieldTypeMethods(sdkProxy, logger);
         FileOrImageFieldTypeMethods = new FileOrImageFieldTypeMethods(sdkProxy, executeMultipleLogic, logger);
+        MoneyFieldTypeMethods = new MoneyFieldTypeMethods(sdkProxy, logger);
     }
 }

@@ -95,6 +95,23 @@ Gives ability to go down by lookup fields simply by defining path as string with
 For example when we have lookup that points to record X, we can call FieldDrill with these parameters
 `await dataverseDevPack.FieldDrill.RetreiveAsync<string>(item.ToEntityReference(), "ownerid.fullname");`
 It will retrieve field fullname from lookup named ownerid in starting record entity reference.
+### Money fields
+`FieldMethods.MoneyFieldTypeMethods` provides helpers for transaction-currency and base-currency amounts:
+```C#
+MoneyFieldTypeMethods money = dataverseDevPack.FieldMethods.MoneyFieldTypeMethods;
+
+money.SetValue(account, "creditlimit", 1500m);
+decimal? amount = money.GetValue(account, "creditlimit");
+decimal? baseAmount = money.GetBaseValue(account, "creditlimit");
+
+decimal exchangeRate = await money.GetExchangeRateAsync(account);
+decimal baseValue = money.ConvertToBase(amount.Value, exchangeRate);
+decimal transactionValue = money.ConvertFromBase(baseValue, exchangeRate);
+
+string formatted = money.GetFormattedValue(account, "creditlimit");
+```
+`SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
+
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint. 
 ### CreateLinqExpressionBuilder
