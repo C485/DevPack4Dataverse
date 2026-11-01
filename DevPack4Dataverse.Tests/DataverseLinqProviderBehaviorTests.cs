@@ -23,6 +23,14 @@ namespace DevPack4Dataverse.Tests;
 public class DataverseLinqProviderBehaviorTests
 {
     [Fact]
+    public void GetAttributeValueExpression_TranslatesToCondition()
+    {
+        QueryExpression query = Translate(entity => entity.GetAttributeValue<string>("name") == "Alice");
+
+        AssertSingleCondition(query, "name", ConditionOperator.Equal, "Alice");
+    }
+
+    [Fact]
     public void TrueAndFilter_KeepsFilter_AndDropsOnlyTrue()
     {
         QueryExpression query = Translate(entity => true && entity["name"] == "Alice");
