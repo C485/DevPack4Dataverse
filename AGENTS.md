@@ -1,9 +1,20 @@
 ---
 applyTo: '**/*.cs'
-description: 'C# 14 best practices and formatting guidelines for AI code generation.'
+description: 'C# 14 best practices, formatting guidelines, and Dataverse documentation requirements for AI code generation.'
 ---
 
 # C# 14 Best Practices for AI Code Generation Instructions
+
+## Dataverse Documentation (Required)
+
+When working with Dataverse code (SDK usage, Organization service, Web API, plug-ins, metadata, queries, solutions, etc.), always consult the Microsoft Power Apps documentation source before implementing or changing behavior:
+
+- **Documentation repository:** https://github.com/MicrosoftDocs/powerapps-docs/tree/main
+- **Dataverse developer docs:** https://github.com/MicrosoftDocs/powerapps-docs/tree/main/powerapps-docs/developer/data-platform
+- **Published documentation:** https://learn.microsoft.com/power-apps/developer/data-platform/
+- **Repository reference:** `docs/dataverse-documentation.md`
+
+Use the relevant page under `powerapps-docs/developer/data-platform/` as the source of truth. Reference the documentation path in code comments or PR descriptions when the behavior is non-obvious.
 
 ## Core Language Features
 
