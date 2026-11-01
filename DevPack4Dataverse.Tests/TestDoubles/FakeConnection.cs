@@ -14,6 +14,7 @@ public sealed class FakeConnection : IConnection
     public int TryLockCount { get; private set; }
     public bool TryLockResult { get; set; } = true;
     public ulong Weight { get; set; }
+    public Func<string, Guid, ColumnSet, Entity> RetrieveHandler { get; set; }
 
     public ServiceClient PureServiceClient => null;
     public IStatistics Statistics => null;
@@ -81,7 +82,7 @@ public sealed class FakeConnection : IConnection
         throw new NotImplementedException();
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+        RetrieveHandler?.Invoke(entityName, id, columnSet) ?? throw new NotImplementedException();
 
     public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
         where T : Entity => throw new NotImplementedException();
@@ -90,7 +91,8 @@ public sealed class FakeConnection : IConnection
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null) => throw new NotImplementedException();
+        RequestSettings requestSettings = null) =>
+        Task.FromResult(Retrieve(entityName, id, columnSet));
 
     public Task<T> RetrieveAsync<T>(
         string entityName,
