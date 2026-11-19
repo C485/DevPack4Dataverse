@@ -128,7 +128,10 @@ public sealed class MapperWrapper
             .ConfigureAwait(false);
 
         List<MappingError> errors = new(result.Errors);
-        if (Options.ValidateAfterSave)
+        if (
+            Options.ValidateAfterSave
+            && (Options.ValidateAfterMapperValidation || !result.ValidationWasRun)
+        )
         {
             errors.AddRange(
                 await ValidateAsync(result.SavedReferences, cancellationToken)
@@ -137,6 +140,55 @@ public sealed class MapperWrapper
         }
 
         return new MapperWrapperResult(result, errors);
+    }
+
+    /// <summary>
+    /// Executes several registered mappers as one batch and validates the combined saved records once.
+    /// </summary>
+    public async Task<MapperBatchResult> ExecuteAllAsync(
+        IEnumerable<MapperExecution> executions,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (executions == null)
+        {
+            throw new ArgumentNullException(nameof(executions));
+        }
+
+        List<IMappingResult> results = new();
+        List<MappingError> errors = new();
+        List<EntityReference> referencesToValidate = new();
+        List<MapperExecution> executionList = executions.ToList();
+        if (executionList.Any(p => p == null))
+        {
+            throw new ArgumentException("Mapper executions cannot contain null.", nameof(executions));
+        }
+
+        IMapper[] mappers = executionList.Select(p => Get(p.Name)).ToArray();
+        for (int index = 0; index < executionList.Count; index++)
+        {
+            MapperExecution execution = executionList[index];
+            IMappingResult result = await mappers[index]
+                .ExecuteAsync(execution.Source, execution.RunOptions, cancellationToken)
+                .ConfigureAwait(false);
+            results.Add(result);
+            errors.AddRange(result.Errors);
+
+            if (Options.ValidateAfterMapperValidation || !result.ValidationWasRun)
+            {
+                referencesToValidate.AddRange(result.SavedReferences);
+            }
+        }
+
+        if (Options.ValidateAfterSave)
+        {
+            errors.AddRange(
+                await ValidateAsync(referencesToValidate, cancellationToken)
+                    .ConfigureAwait(false)
+            );
+        }
+
+        return new MapperBatchResult(results, errors);
     }
 
     public async Task<IReadOnlyList<MappingError>> ValidateAsync(
@@ -149,10 +201,14 @@ public sealed class MapperWrapper
             throw new ArgumentNullException(nameof(savedRecords));
         }
 
-        if (Options.Validator != null && Options.ValidationFields.Count == 0)
+        if (
+            Options.Validator != null
+            && Options.ValidationFields.Count == 0
+            && Options.ValidationFieldsByEntity.Count == 0
+        )
         {
             throw new MapperConfigurationException(
-                "Wrapper ValidateAfterSave requires ValidationFields when a validator is set."
+                "Wrapper ValidateAfterSave requires ValidationFields or ValidationFieldsByEntity."
             );
         }
 
@@ -161,10 +217,28 @@ public sealed class MapperWrapper
             .Select(p => new ValidationTarget(p, null, null, null))
             .ToList();
 
+        if (Options.Validator != null)
+        {
+            foreach (
+                IGrouping<string, ValidationTarget> group in targets.GroupBy(
+                    p => p.Reference.LogicalName,
+                    StringComparer.OrdinalIgnoreCase
+                )
+            )
+            {
+                if (Options.GetValidationFields(group.Key).Count == 0)
+                {
+                    throw new MapperConfigurationException(
+                        $"Wrapper ValidateAfterSave has no validation fields for '{group.Key}'."
+                    );
+                }
+            }
+        }
+
         return await _validationReader
             .ValidateAsync(
                 targets,
-                Options.ValidationFields,
+                Options.GetValidationFields,
                 Options.Validator,
                 null,
                 Options.RequestSettings,

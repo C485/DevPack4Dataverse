@@ -25,6 +25,7 @@ namespace DevPack4Dataverse.Mapper.Internal;
 internal sealed class RecordStore
 {
     private readonly IEntityCache _cache;
+    private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
     private readonly MapperWrapperOptions _wrapperOptions;
 
@@ -36,6 +37,7 @@ internal sealed class RecordStore
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _wrapperOptions = wrapperOptions ?? throw new ArgumentNullException(nameof(wrapperOptions));
     }
@@ -60,7 +62,7 @@ internal sealed class RecordStore
 
         if (useCache && !forceRefresh)
         {
-            CachedEntity cached = await _cache.GetAsync(key, cancellationToken).ConfigureAwait(false);
+            CachedEntity cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
             if (cached != null)
             {
                 string[] missing = columns
@@ -82,7 +84,7 @@ internal sealed class RecordStore
 
                 if (missingValues == null)
                 {
-                    await _cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+                    await RemoveCacheKeyAsync(key, cancellationToken).ConfigureAwait(false);
                     return null;
                 }
 
@@ -109,7 +111,7 @@ internal sealed class RecordStore
         {
             if (forceRefresh)
             {
-                await _cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+                await RemoveCacheKeyAsync(key, cancellationToken).ConfigureAwait(false);
             }
 
             return null;
@@ -140,7 +142,7 @@ internal sealed class RecordStore
             }
         }
 
-        await _cache.ClearAsync(logicalName, cancellationToken).ConfigureAwait(false);
+        await ClearCacheAsync(logicalName, cancellationToken).ConfigureAwait(false);
 
         QueryExpression query = new()
         {
@@ -266,18 +268,145 @@ internal sealed class RecordStore
         }
     }
 
-    private Task CacheEntryAsync(
+    public async Task RemoveRecordAsync(Entity entity, CancellationToken cancellationToken)
+    {
+        if (entity == null)
+        {
+            return;
+        }
+
+        if (entity.Id != Guid.Empty)
+        {
+            await RemoveCacheKeysByRecordIdAsync(entity.LogicalName, entity.Id, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        EntityKey key = EntityKey.FromEntity(entity);
+        if (key != null)
+        {
+            await RemoveCacheKeyAsync(key, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (entity.KeyAttributes != null && entity.KeyAttributes.Count > 0)
+        {
+            await RemoveCacheKeyAsync(
+                    EntityKey.ByAlternateKey(entity.LogicalName, entity.KeyAttributes),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task CacheEntryAsync(
         EntityKey key,
         CachedEntity entry,
         CancellationToken cancellationToken
     )
     {
-        return _cache.SetAsync(
-            key,
-            entry,
-            _wrapperOptions.GetCacheTtl(key.LogicalName),
-            cancellationToken
-        );
+        try
+        {
+            await _cache
+                .SetAsync(
+                    key,
+                    entry,
+                    _wrapperOptions.GetCacheTtl(key.LogicalName),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        )
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not write mapper cache entry for {LogicalName}. Mapping continues without cache.",
+                key.LogicalName
+            );
+        }
+    }
+
+    private async Task<CachedEntity> GetCacheEntryAsync(
+        EntityKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            return await _cache.GetAsync(key, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        )
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not read mapper cache entry for {LogicalName}. Reading from Dataverse.",
+                key.LogicalName
+            );
+            return null;
+        }
+    }
+
+    private async Task RemoveCacheKeyAsync(EntityKey key, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        )
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not remove mapper cache entry for {LogicalName}. Mapping continues.",
+                key.LogicalName
+            );
+        }
+    }
+
+    private async Task RemoveCacheKeysByRecordIdAsync(
+        string logicalName,
+        Guid id,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            await _cache
+                .RemoveByRecordIdAsync(logicalName, id, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        )
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not remove mapper cache entries for {LogicalName}:{Id}. Mapping continues.",
+                logicalName,
+                id
+            );
+        }
+    }
+
+    private async Task ClearCacheAsync(string logicalName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _cache.ClearAsync(logicalName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        )
+        {
+            _logger.LogWarning(
+                exception,
+                "Could not clear mapper cache for {LogicalName}. Continuing without cache.",
+                logicalName
+            );
+        }
     }
 
     private static EntityKey TryCreateAlternateKey(

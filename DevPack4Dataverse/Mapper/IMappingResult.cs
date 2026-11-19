@@ -26,4 +26,6 @@ public interface IMappingResult
     IReadOnlyList<MappingError> Errors { get; }
 
     IReadOnlyList<EntityReference> SavedReferences { get; }
+
+    bool ValidationWasRun { get; }
 }

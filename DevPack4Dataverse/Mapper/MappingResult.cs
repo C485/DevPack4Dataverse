@@ -25,11 +25,13 @@ public sealed class MappingResult<TTarget> : IMappingResult
 {
     internal MappingResult(
         IReadOnlyList<MappedRecord<TTarget>> records,
-        IReadOnlyList<MappingError> errors
+        IReadOnlyList<MappingError> errors,
+        bool validationWasRun = false
     )
     {
         Records = records ?? Array.Empty<MappedRecord<TTarget>>();
         Errors = errors ?? Array.Empty<MappingError>();
+        ValidationWasRun = validationWasRun;
     }
 
     public IReadOnlyList<MappedRecord<TTarget>> Records { get; }
@@ -37,6 +39,8 @@ public sealed class MappingResult<TTarget> : IMappingResult
     public IReadOnlyList<MappingError> Errors { get; }
 
     public bool HasErrors => Errors.Count > 0;
+
+    public bool ValidationWasRun { get; }
 
     public IReadOnlyList<EntityReference> SavedReferences =>
         Records.Where(p => p.Reference != null).Select(p => p.Reference).ToArray();

@@ -26,7 +26,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
     public async Task<IReadOnlyList<MappingError>> ValidateAsync(
         IReadOnlyList<ValidationTarget> targets,
-        ISet<string> fields,
+        Func<string, ISet<string>> fieldsProvider,
         Func<Entity, MappingValidationContext, IEnumerable<string>> validator,
         string mapperName,
         RequestSettings requestSettings,
@@ -34,13 +34,33 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
     )
     {
         List<MappingError> errors = new();
-        List<ValidationTarget> validTargets = targets
-            .Where(p => p?.Reference != null && p.Reference.Id != Guid.Empty)
-            .ToList();
+        List<ValidationTarget> validTargets = new();
+        foreach (ValidationTarget target in targets)
+        {
+            if (target?.Reference == null)
+            {
+                continue;
+            }
 
-        Dictionary<Guid, Entity> records = await RetrieveAsync(
+            if (target.Reference.Id == Guid.Empty)
+            {
+                errors.Add(
+                    new MappingError(
+                        target.Source,
+                        target.Target,
+                        null,
+                        $"Saved record reference '{target.Reference.LogicalName}' has no id."
+                    )
+                );
+                continue;
+            }
+
+            validTargets.Add(target);
+        }
+
+        Dictionary<string, Entity> records = await RetrieveAsync(
                 validTargets,
-                fields,
+                fieldsProvider,
                 requestSettings,
                 cancellationToken
             )
@@ -48,7 +68,8 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
         foreach (ValidationTarget target in validTargets)
         {
-            if (!records.TryGetValue(target.Reference.Id, out Entity record))
+            string key = ValidationKey(target.Reference.LogicalName, target.Reference.Id);
+            if (!records.TryGetValue(key, out Entity record))
             {
                 errors.Add(
                     new MappingError(
@@ -108,18 +129,15 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
         return errors;
     }
 
-    private async Task<Dictionary<Guid, Entity>> RetrieveAsync(
+    private async Task<Dictionary<string, Entity>> RetrieveAsync(
         IReadOnlyList<ValidationTarget> targets,
-        ISet<string> fields,
+        Func<string, ISet<string>> fieldsProvider,
         RequestSettings requestSettings,
         CancellationToken cancellationToken
     )
     {
-        Dictionary<Guid, Entity> result = new();
-        string[] columns = fields?
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? Array.Empty<string>();
+        Dictionary<string, Entity> result = new();
+        string[] columns = Array.Empty<string>();
 
         foreach (
             IGrouping<string, ValidationTarget> group in targets.GroupBy(
@@ -128,6 +146,12 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
             )
         )
         {
+            ISet<string> fields = fieldsProvider?.Invoke(group.Key);
+            columns =
+                fields?
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray() ?? Array.Empty<string>();
             Guid[] ids = group.Select(p => p.Reference.Id).Distinct().ToArray();
             for (int offset = 0; offset < ids.Length; offset += MaxIdsPerQuery)
             {
@@ -149,13 +173,16 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
                 foreach (Entity record in records)
                 {
-                    result[record.Id] = record;
+                    result[ValidationKey(group.Key, record.Id)] = record;
                 }
             }
         }
 
         return result;
     }
+
+    private static string ValidationKey(string logicalName, Guid id) =>
+        logicalName.ToLowerInvariant() + "|" + id.ToString("N");
 }
 
 internal sealed class ValidationTarget(

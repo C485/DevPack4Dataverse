@@ -29,7 +29,6 @@ namespace DevPack4Dataverse.Mapper;
 public sealed class Mapper<TSource, TTarget> : IMapper
     where TTarget : class, new()
 {
-    private readonly IEntityCache _cache;
     private readonly IModelEntityConverter<TTarget> _converter;
     private readonly Func<MappingContext<TSource, TTarget>, EntityKey> _entityKeyFactory;
     private readonly IEntityLock _entityLock;
@@ -52,7 +51,6 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         RecordStore recordStore,
         ValidationReader validationReader,
         MapperWrapperOptions wrapperOptions,
-        IEntityCache cache,
         IEntityLock entityLock
     )
     {
@@ -66,7 +64,6 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         _recordStore = recordStore;
         _validationReader = validationReader;
         _wrapperOptions = wrapperOptions;
-        _cache = cache;
         _entityLock = entityLock;
     }
 
@@ -174,7 +171,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             );
         }
 
-        return new MappingResult<TTarget>(records, errors);
+        return new MappingResult<TTarget>(records, errors, validateAfterSave);
     }
 
     async Task<IMappingResult> IMapper.ExecuteAsync(
@@ -233,8 +230,8 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             .GetAsync(
                 key,
                 requiredColumns,
+                false,
                 true,
-                state.ForceRefresh,
                 state.RequestSettings,
                 cancellationToken
             )
@@ -274,7 +271,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         }
 
         await _sdkProxy.UpdateRecordAsync(update, state.RequestSettings).ConfigureAwait(false);
-        await RemoveCacheAsync(entity, cancellationToken).ConfigureAwait(false);
+        await _recordStore.RemoveRecordAsync(entity, cancellationToken).ConfigureAwait(false);
 
         return new MappedRecord<TTarget>(
             context.Source,
@@ -340,6 +337,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             entity.Id = id;
         }
 
+        await _recordStore.RemoveRecordAsync(entity, cancellationToken).ConfigureAwait(false);
         await _recordStore.CacheSavedAsync(entity, cancellationToken).ConfigureAwait(false);
 
         return new MappedRecord<TTarget>(
@@ -461,39 +459,13 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         return await _validationReader
             .ValidateAsync(
                 targets,
-                fields,
+                _ => fields,
                 _options.Validator,
                 Name,
                 requestSettings,
                 cancellationToken
             )
             .ConfigureAwait(false);
-    }
-
-    private async Task RemoveCacheAsync(Entity entity, CancellationToken cancellationToken)
-    {
-        EntityKey key = EntityKey.FromEntity(entity);
-        if (key != null)
-        {
-            await _cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (entity.Id != Guid.Empty)
-        {
-            await _cache
-                .RemoveAsync(EntityKey.ById(entity.LogicalName, entity.Id), cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        if (entity.KeyAttributes != null && entity.KeyAttributes.Count > 0)
-        {
-            await _cache
-                .RemoveAsync(
-                    EntityKey.ByAlternateKey(entity.LogicalName, entity.KeyAttributes),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-        }
     }
 
     private static string[] GetRequiredColumns(Entity entity, EntityKey key)

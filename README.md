@@ -186,7 +186,21 @@ Mapper behaviour:
 ```C#
 mapperWrapper.Register("order", mapper);
 MapperWrapperResult wrapperResult = await mapperWrapper.ExecuteAsync("order", order);
+
+// Run several registered mappers as one batch and validate the combined records once.
+MapperBatchResult batchResult = await mapperWrapper.ExecuteAllAsync(
+    new[]
+    {
+        new MapperExecution("order", order),
+        new MapperExecution("order-line", line)
+    });
 ```
+Wrapper validation can use one global field set or per-table field sets:
+```C#
+mapperWrapper.Options.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
+mapperWrapper.Options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+```
+If the mapper already ran `ValidateAfterSave`, wrapper validation is skipped to avoid duplicate reads. Set `MapperWrapperOptions.ValidateAfterMapperValidation = true` when both validators must run.
 The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:```C#
 IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync("localhost");
 MapperWrapper redisWrapper = new(
@@ -196,7 +210,7 @@ MapperWrapper redisWrapper = new(
     new RedisEntityCache(redis),
     new RedisEntityLock(redis));
 ```
-Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached.
+Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached.
 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.

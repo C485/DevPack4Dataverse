@@ -3,6 +3,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.Mapper;
+using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -370,14 +371,126 @@ public class MapperCoreTests
         }
     }
 
+    [Fact]
+    public async Task SaveDiff_ReadsFreshRecordEvenWhenCacheHasCopy()
+    {
+        Guid id = Guid.NewGuid();
+        var cache = new InMemoryEntityCache();
+        await cache.SetAsync(
+            EntityKey.ById("account", id),
+            new CachedEntity(new Entity("account", id) { ["name"] = "Cached" }, new[] { "name" }),
+            TimeSpan.FromMinutes(1)
+        );
+        Entity update = null;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", id) { ["name"] = "Database" }
+            },
+            UpdateRecordHandler = entity => update = entity
+        };
+        var (proxy, wrapper) = Create(fake, null, cache);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+                .WithLogicalName("account")
+                .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            var result = await mapper.ExecuteAsync(
+                new AccountUpdate { Id = id, Name = "Cached" }
+            );
+
+            Assert.False(result.Records[0].Skipped);
+            Assert.NotNull(update);
+            Assert.Equal("Cached", update["name"]);
+        }
+    }
+
+    [Fact]
+    public async Task Update_InvalidatesAlternateKeyCacheEntries()
+    {
+        Guid id = Guid.NewGuid();
+        Entity cached = new("account", id)
+        {
+            ["name"] = "Old",
+            ["accountnumber"] = "A-1"
+        };
+        EntityKey alternateKey = EntityKey.ByAlternateKey(
+            "account",
+            new KeyValuePair<string, object>("accountnumber", "A-1")
+        );
+        var cache = new InMemoryEntityCache();
+        await cache.SetAsync(
+            EntityKey.ById("account", id),
+            new CachedEntity(cached, new[] { "name", "accountnumber" }),
+            TimeSpan.FromMinutes(1)
+        );
+        await cache.SetAsync(
+            alternateKey,
+            new CachedEntity(cached, new[] { "name", "accountnumber" }),
+            TimeSpan.FromMinutes(1)
+        );
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", id) { ["name"] = "Old", ["accountnumber"] = "A-1" }
+            },
+            UpdateRecordHandler = _ => { }
+        };
+        var (proxy, wrapper) = Create(fake, null, cache);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+                .WithLogicalName("account")
+                .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await mapper.ExecuteAsync(new AccountUpdate { Id = id, Name = "New" });
+
+            Assert.Null(await cache.GetAsync(alternateKey));
+        }
+    }
+
+    [Fact]
+    public async Task CacheFailure_DoesNotFailSuccessfulCreate()
+    {
+        Guid id = Guid.NewGuid();
+        var fake = new FakeConnection { CreateRecordHandler = _ => id };
+        var (proxy, wrapper) = Create(fake, null, new ThrowingCache());
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            var result = await mapper.ExecuteAsync(new OrderSource { Name = "Contoso" });
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(id, result.Records[0].Reference.Id);
+        }
+    }
+
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        MapperWrapperOptions options = null
+        MapperWrapperOptions options = null,
+        IEntityCache cache = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
         proxy.WaitForConnections(1);
-        return (proxy, new MapperWrapper(proxy, NullLogger.Instance, options));
+        return (proxy, new MapperWrapper(proxy, NullLogger.Instance, options, cache));
     }
 
     public sealed class OrderSource
@@ -413,12 +526,30 @@ public class MapperCoreTests
                 ["name"] = model.Name,
                 ["quantity"] = model.Quantity
             };
+    }
 
-        public OrderModel FromEntity(Entity entity) =>
-            new()
-            {
-                Name = entity.GetAttributeValue<string>("name"),
-                Quantity = entity.GetAttributeValue<int>("quantity")
-            };
+    private sealed class ThrowingCache : IEntityCache
+    {
+        public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+            Task.FromResult<CachedEntity>(null);
+
+        public Task SetAsync(
+            EntityKey key,
+            CachedEntity entry,
+            TimeSpan timeToLive,
+            CancellationToken cancellationToken = default
+        ) => throw new InvalidOperationException("cache unavailable");
+
+        public Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("cache unavailable");
+
+        public Task RemoveByRecordIdAsync(
+            string logicalName,
+            Guid id,
+            CancellationToken cancellationToken = default
+        ) => throw new InvalidOperationException("cache unavailable");
+
+        public Task ClearAsync(string logicalName, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("cache unavailable");
     }
 }

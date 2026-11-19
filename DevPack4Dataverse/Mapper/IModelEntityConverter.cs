@@ -25,6 +25,4 @@ namespace DevPack4Dataverse.Mapper;
 public interface IModelEntityConverter<TModel>
 {
     Entity ToEntity(TModel model);
-
-    TModel FromEntity(Entity entity);
 }

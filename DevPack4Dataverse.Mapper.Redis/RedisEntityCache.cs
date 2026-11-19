@@ -55,8 +55,7 @@ public sealed class RedisEntityCache : IEntityCache
             return null;
         }
 
-        CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
-        return dto?.ToCachedEntity();
+        return Deserialize(value);
     }
 
     public async Task SetAsync(
@@ -67,9 +66,22 @@ public sealed class RedisEntityCache : IEntityCache
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string json = JsonConvert.SerializeObject(CachedEntityDto.From(entry));
+        string json = Serialize(entry);
         TimeSpan? expiry = timeToLive > TimeSpan.Zero ? timeToLive : (TimeSpan?)null;
         await _database.StringSetAsync(Key(key), json, expiry).ConfigureAwait(false);
+
+        if (entry.Record.Id != Guid.Empty)
+        {
+            StackExchange.Redis.RedisKey indexKey = IndexKey(
+                entry.Record.LogicalName,
+                entry.Record.Id
+            );
+            await _database.SetAddAsync(indexKey, Key(key).ToString()).ConfigureAwait(false);
+            if (expiry.HasValue)
+            {
+                await _database.KeyExpireAsync(indexKey, expiry).ConfigureAwait(false);
+            }
+        }
     }
 
     public Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default)
@@ -78,9 +90,83 @@ public sealed class RedisEntityCache : IEntityCache
         return _database.KeyDeleteAsync(Key(key));
     }
 
+    public async Task RemoveByRecordIdAsync(
+        string logicalName,
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        StackExchange.Redis.RedisKey indexKey = IndexKey(logicalName, id);
+        StackExchange.Redis.RedisValue[] indexedKeys = await _database
+            .SetMembersAsync(indexKey)
+            .ConfigureAwait(false);
+
+        if (indexedKeys.Length > 0)
+        {
+            foreach (StackExchange.Redis.RedisValue indexedKey in indexedKeys)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await _database.KeyDeleteAsync(indexedKey.ToString()).ConfigureAwait(false);
+            }
+
+            await _database.KeyDeleteAsync(indexKey).ConfigureAwait(false);
+            return;
+        }
+
+        // shortcut: entries created before the id index existed are removed by scanning.
+        foreach (StackExchange.Redis.RedisKey key in EnumerateKeys(logicalName, cancellationToken))
+        {
+            StackExchange.Redis.RedisValue value = await _database
+                .StringGetAsync(key)
+                .ConfigureAwait(false);
+            if (value.IsNull)
+            {
+                continue;
+            }
+
+            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            if (dto?.Id == id)
+            {
+                await _database.KeyDeleteAsync(key).ConfigureAwait(false);
+            }
+        }
+    }
+
     public async Task ClearAsync(
         string logicalName,
         CancellationToken cancellationToken = default
+    )
+    {
+        foreach (StackExchange.Redis.RedisKey key in EnumerateKeys(logicalName, cancellationToken))
+        {
+            await _database.KeyDeleteAsync(key).ConfigureAwait(false);
+        }
+
+        foreach (
+            StackExchange.Redis.RedisKey key in EnumerateKeysByPattern(
+                _prefix + "id:" + logicalName.ToLowerInvariant() + "|*",
+                cancellationToken
+            )
+        )
+        {
+            await _database.KeyDeleteAsync(key).ConfigureAwait(false);
+        }
+    }
+
+    internal static string Serialize(CachedEntity entry) =>
+        JsonConvert.SerializeObject(CachedEntityDto.From(entry));
+
+    internal static CachedEntity Deserialize(string json) =>
+        JsonConvert.DeserializeObject<CachedEntityDto>(json)?.ToCachedEntity();
+
+    private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeys(
+        string logicalName,
+        CancellationToken cancellationToken
+    ) => EnumerateKeysByPattern(KeyPrefix(logicalName) + "*", cancellationToken);
+
+    private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeysByPattern(
+        string pattern,
+        CancellationToken cancellationToken
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -92,18 +178,18 @@ public sealed class RedisEntityCache : IEntityCache
 
         StackExchange.Redis.IServer server = _connection.GetServer(endpoints[0]);
         foreach (
-            StackExchange.Redis.RedisKey key in server.Keys(
-                pattern: KeyPrefix(logicalName) + "*",
-                pageSize: 1000
-            )
+            StackExchange.Redis.RedisKey key in server.Keys(pattern: pattern, pageSize: 1000)
         )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _database.KeyDeleteAsync(key).ConfigureAwait(false);
+            yield return key;
         }
     }
 
     private StackExchange.Redis.RedisKey Key(EntityKey key) => _prefix + key;
+
+    private StackExchange.Redis.RedisKey IndexKey(string logicalName, Guid id) =>
+        _prefix + "id:" + logicalName.ToLowerInvariant() + "|" + id.ToString("N");
 
     private string KeyPrefix(string logicalName) =>
         _prefix + logicalName.ToLowerInvariant() + "|";
@@ -168,6 +254,8 @@ public sealed class RedisEntityCache : IEntityCache
         public string Name { get; set; }
         public string Type { get; set; }
         public string Value { get; set; }
+        public string ReferenceName { get; set; }
+        public List<CachedAttributeDto> ReferenceKeyAttributes { get; set; } = new();
 
         public static CachedAttributeDto From(string name, object value)
         {
@@ -225,13 +313,30 @@ public sealed class RedisEntityCache : IEntityCache
                         optionSet.Value.ToString(CultureInfo.InvariantCulture)
                     );
                 case EntityReference reference:
-                    return Create(
+                    CachedAttributeDto referenceDto = Create(
                         name,
                         "entityreference",
-                        reference.LogicalName
-                            + "|"
-                            + reference.Id.ToString("N")
+                        reference.LogicalName + "|" + reference.Id.ToString("N")
                     );
+                    referenceDto.ReferenceName = reference.Name;
+                    if (reference.KeyAttributes != null)
+                    {
+                        foreach (
+                            KeyValuePair<string, object> keyAttribute in reference.KeyAttributes
+                        )
+                        {
+                            CachedAttributeDto keyDto = From(
+                                keyAttribute.Key,
+                                keyAttribute.Value
+                            );
+                            if (keyDto != null)
+                            {
+                                referenceDto.ReferenceKeyAttributes.Add(keyDto);
+                            }
+                        }
+                    }
+
+                    return referenceDto;
                 case byte[] bytes:
                     return Create(name, "bytes", Convert.ToBase64String(bytes));
                 default:
@@ -274,9 +379,17 @@ public sealed class RedisEntityCache : IEntityCache
                 case "entityreference":
                     string[] parts = Value.Split('|');
                     Guid id = Guid.Parse(parts[1]);
-                    return id == Guid.Empty
-                        ? new EntityReference(parts[0])
-                        : new EntityReference(parts[0], id);
+                    EntityReference reference =
+                        id == Guid.Empty
+                            ? new EntityReference(parts[0])
+                            : new EntityReference(parts[0], id);
+                    reference.Name = ReferenceName;
+                    foreach (CachedAttributeDto keyAttribute in ReferenceKeyAttributes)
+                    {
+                        reference.KeyAttributes[keyAttribute.Name] = keyAttribute.ToValue();
+                    }
+
+                    return reference;
                 case "bytes":
                     return Convert.FromBase64String(Value);
                 default:

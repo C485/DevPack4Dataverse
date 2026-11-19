@@ -299,7 +299,6 @@ public sealed class MapperBuilder<TSource, TTarget>
             _recordStore,
             _validationReader,
             _wrapperOptions,
-            _cache,
             _entityLock
         );
     }
@@ -321,20 +320,41 @@ public sealed class MapperBuilder<TSource, TTarget>
 
         if (memberExpression.Member is PropertyInfo property)
         {
-            return new MemberDescriptor(
-                property.Name,
-                (target, value) => property.SetValue(target, value, null)
-            );
+            return new MemberDescriptor(property.Name, CreatePropertySetter(property));
         }
 
         if (memberExpression.Member is FieldInfo field)
         {
-            return new MemberDescriptor(field.Name, (target, value) => field.SetValue(target, value));
+            return new MemberDescriptor(field.Name, CreateFieldSetter(field));
         }
 
         throw new MapperConfigurationException(
             "Target mapping must be a property or field access expression."
         );
+    }
+
+    private static Action<TTarget, object> CreatePropertySetter(PropertyInfo property)
+    {
+        ParameterExpression target = Expression.Parameter(typeof(TTarget), "target");
+        ParameterExpression value = Expression.Parameter(typeof(object), "value");
+        Expression propertyAccess = Expression.Property(target, property);
+        Expression assign = Expression.Assign(
+            propertyAccess,
+            Expression.Convert(value, property.PropertyType)
+        );
+        return Expression.Lambda<Action<TTarget, object>>(assign, target, value).Compile();
+    }
+
+    private static Action<TTarget, object> CreateFieldSetter(FieldInfo field)
+    {
+        ParameterExpression target = Expression.Parameter(typeof(TTarget), "target");
+        ParameterExpression value = Expression.Parameter(typeof(object), "value");
+        Expression fieldAccess = Expression.Field(target, field);
+        Expression assign = Expression.Assign(
+            fieldAccess,
+            Expression.Convert(value, field.FieldType)
+        );
+        return Expression.Lambda<Action<TTarget, object>>(assign, target, value).Compile();
     }
 
     private void EnsureEntityTarget()

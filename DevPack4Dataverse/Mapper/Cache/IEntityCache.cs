@@ -33,5 +33,11 @@ public interface IEntityCache
 
     Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default);
 
+    Task RemoveByRecordIdAsync(
+        string logicalName,
+        Guid id,
+        CancellationToken cancellationToken = default
+    );
+
     Task ClearAsync(string logicalName, CancellationToken cancellationToken = default);
 }

@@ -38,13 +38,39 @@ public sealed class MapperWrapperOptions
     public RequestSettings RequestSettings { get; set; } = new();
 
     /// <summary>
-    /// Validates every saved record. When set, <see cref="ValidationFields"/> must contain the
-    /// columns the validator needs.
+    /// Validates every saved record. When set, validation fields must be supplied either in
+    /// <see cref="ValidationFields"/> or in <see cref="ValidationFieldsByEntity"/>.
     /// </summary>
     public Func<Entity, MappingValidationContext, IEnumerable<string>> Validator { get; set; }
 
+    /// <summary>Fallback validation fields used when no per-table fields are configured.</summary>
     public ISet<string> ValidationFields { get; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Validation fields keyed by Dataverse logical entity name.</summary>
+    public IDictionary<string, ISet<string>> ValidationFieldsByEntity { get; } =
+        new Dictionary<string, ISet<string>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// When true, wrapper validation runs even if the mapper already performed its own
+    /// post-save validation. Defaults to false to avoid duplicate reads.
+    /// </summary>
+    public bool ValidateAfterMapperValidation { get; set; }
+
+    /// <summary>Returns per-table validation fields, falling back to <see cref="ValidationFields"/>.</summary>
+    public ISet<string> GetValidationFields(string logicalName)
+    {
+        if (
+            !string.IsNullOrWhiteSpace(logicalName)
+            && ValidationFieldsByEntity.TryGetValue(logicalName, out ISet<string> fields)
+            && fields != null
+        )
+        {
+            return fields;
+        }
+
+        return ValidationFields;
+    }
 
     public TimeSpan GetCacheTtl(string logicalName)
     {

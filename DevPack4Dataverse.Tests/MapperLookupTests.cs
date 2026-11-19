@@ -4,6 +4,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
 using DevPack4Dataverse.Mapper;
+using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -514,11 +515,44 @@ public class MapperLookupTests
         }
     }
 
-    private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(FakeConnection fake)
+    [Fact]
+    public async Task CacheReadFailure_FallsBackToDataverse()
+    {
+        Guid id = Guid.NewGuid();
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[] { new Entity("account", id) }
+        };
+        var (proxy, wrapper) = Create(fake, new ThrowingReadCache());
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    new LookupMappingOptions()
+                )
+                .Build();
+
+            var result = await mapper.ExecuteAsync(
+                new LookupSource { AccountId = id }
+            );
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(id, result.Records[0].Target.Account.Id);
+        }
+    }
+
+    private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
+        FakeConnection fake,
+        IEntityCache cache = null
+    )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
         proxy.WaitForConnections(1);
-        return (proxy, new MapperWrapper(proxy, NullLogger.Instance));
+        return (proxy, new MapperWrapper(proxy, NullLogger.Instance, null, cache));
     }
 
     public sealed class LookupSource
@@ -543,5 +577,30 @@ public class MapperLookupTests
     {
         public string FirstNumber { get; set; }
         public string SecondNumber { get; set; }
+    }
+
+    private sealed class ThrowingReadCache : IEntityCache
+    {
+        public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("cache unavailable");
+
+        public Task SetAsync(
+            EntityKey key,
+            CachedEntity entry,
+            TimeSpan timeToLive,
+            CancellationToken cancellationToken = default
+        ) => Task.CompletedTask;
+
+        public Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task RemoveByRecordIdAsync(
+            string logicalName,
+            Guid id,
+            CancellationToken cancellationToken = default
+        ) => Task.CompletedTask;
+
+        public Task ClearAsync(string logicalName, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

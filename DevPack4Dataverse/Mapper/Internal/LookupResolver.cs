@@ -211,6 +211,7 @@ internal sealed class LookupResolver
                 .ConfigureAwait(false);
         }
 
+        await _recordStore.RemoveRecordAsync(entity, cancellationToken).ConfigureAwait(false);
         await _recordStore.CacheSavedAsync(entity, cancellationToken).ConfigureAwait(false);
         return entity;
     }

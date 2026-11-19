@@ -25,6 +25,11 @@ public sealed class InMemoryEntityCache : IEntityCache
 {
     private readonly ConcurrentDictionary<string, CacheEntry> _entries =
         new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<
+        string,
+        ConcurrentDictionary<string, byte>
+    > _keysByRecord = new(StringComparer.Ordinal);
+    private int _setCount;
 
     public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default)
     {
@@ -60,14 +65,55 @@ public sealed class InMemoryEntityCache : IEntityCache
 
         DateTime expiresUtc =
             timeToLive > TimeSpan.Zero ? DateTime.UtcNow.Add(timeToLive) : DateTime.MaxValue;
-        _entries[key.ToString()] = new CacheEntry(entry, expiresUtc);
+        string cacheKey = key.ToString();
+        if (_entries.TryGetValue(cacheKey, out CacheEntry previous))
+        {
+            UnindexEntry(cacheKey, previous.Value);
+        }
+
+        CacheEntry newEntry = new(entry, expiresUtc);
+        _entries[cacheKey] = newEntry;
+        IndexEntry(cacheKey, entry);
+
+        if (Interlocked.Increment(ref _setCount) % 256 == 0)
+        {
+            RemoveExpiredEntries();
+        }
+
         return Task.CompletedTask;
     }
 
     public Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _entries.TryRemove(key.ToString(), out _);
+        string cacheKey = key.ToString();
+        if (_entries.TryRemove(cacheKey, out CacheEntry entry))
+        {
+            UnindexEntry(cacheKey, entry.Value);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveByRecordIdAsync(
+        string logicalName,
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string indexKey = RecordIndexKey(logicalName, id);
+        if (!_keysByRecord.TryRemove(indexKey, out ConcurrentDictionary<string, byte> keys))
+        {
+            return Task.CompletedTask;
+        }
+
+        foreach (string cacheKey in keys.Keys)
+        {
+            _entries.TryRemove(cacheKey, out _);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -78,11 +124,63 @@ public sealed class InMemoryEntityCache : IEntityCache
         string prefix = logicalName.ToLowerInvariant() + "|";
         foreach (string key in _entries.Keys.Where(p => p.StartsWith(prefix, StringComparison.Ordinal)))
         {
-            _entries.TryRemove(key, out _);
+            if (_entries.TryRemove(key, out CacheEntry entry))
+            {
+                UnindexEntry(key, entry.Value);
+            }
         }
 
         return Task.CompletedTask;
     }
+
+    private void RemoveExpiredEntries()
+    {
+        DateTime now = DateTime.UtcNow;
+        foreach (KeyValuePair<string, CacheEntry> entry in _entries)
+        {
+            if (entry.Value.ExpiresUtc <= now && _entries.TryRemove(entry.Key, out CacheEntry removed))
+            {
+                UnindexEntry(entry.Key, removed.Value);
+            }
+        }
+    }
+
+    private void IndexEntry(string cacheKey, CachedEntity entry)
+    {
+        if (entry.Record.Id == Guid.Empty)
+        {
+            return;
+        }
+
+        ConcurrentDictionary<string, byte> keys = _keysByRecord.GetOrAdd(
+            RecordIndexKey(entry.Record.LogicalName, entry.Record.Id),
+            _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal)
+        );
+        keys[cacheKey] = 0;
+    }
+
+    private void UnindexEntry(string cacheKey, CachedEntity entry)
+    {
+        if (entry.Record.Id == Guid.Empty)
+        {
+            return;
+        }
+
+        string indexKey = RecordIndexKey(entry.Record.LogicalName, entry.Record.Id);
+        if (!_keysByRecord.TryGetValue(indexKey, out ConcurrentDictionary<string, byte> keys))
+        {
+            return;
+        }
+
+        keys.TryRemove(cacheKey, out _);
+        if (keys.IsEmpty)
+        {
+            _keysByRecord.TryRemove(indexKey, out _);
+        }
+    }
+
+    private static string RecordIndexKey(string logicalName, Guid id) =>
+        logicalName.ToLowerInvariant() + "|" + id.ToString("N");
 
     private sealed class CacheEntry(CachedEntity value, DateTime expiresUtc)
     {

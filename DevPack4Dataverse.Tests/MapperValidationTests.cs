@@ -136,6 +136,164 @@ public class MapperValidationTests
     }
 
     [Fact]
+    public async Task WrapperValidation_UsesPerEntityFieldSets()
+    {
+        Guid accountId = Guid.NewGuid();
+        Guid contactId = Guid.NewGuid();
+        List<QueryExpression> queries = new();
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = query =>
+            {
+                queries.Add(query);
+                return new[]
+                {
+                    new Entity(query.EntityName, query.EntityName == "account" ? accountId : contactId)
+                };
+            }
+        };
+        var options = new MapperWrapperOptions
+        {
+            Validator = (_, _) => Array.Empty<string>()
+        };
+        options.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
+        options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+        var (proxy, wrapper) = Create(fake, options);
+
+        using (proxy)
+        {
+            await wrapper.ValidateAsync(
+                new[]
+                {
+                    new EntityReference("account", accountId),
+                    new EntityReference("contact", contactId)
+                }
+            );
+
+            Assert.Equal(2, queries.Count);
+            Assert.Contains(
+                queries,
+                query =>
+                    query.EntityName == "account"
+                    && query.ColumnSet.Columns.Contains("name")
+                    && !query.ColumnSet.Columns.Contains("email")
+            );
+            Assert.Contains(
+                queries,
+                query =>
+                    query.EntityName == "contact"
+                    && query.ColumnSet.Columns.Contains("email")
+                    && !query.ColumnSet.Columns.Contains("name")
+            );
+        }
+    }
+
+    [Fact]
+    public async Task WrapperExecuteAll_ValidatesCombinedSavedRecordsOnce()
+    {
+        Guid firstId = Guid.NewGuid();
+        Guid secondId = Guid.NewGuid();
+        Guid[] ids = { firstId, secondId };
+        int createIndex = 0;
+        int validationReads = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ => ids[createIndex++],
+            RetrieveMultipleHandler = _ =>
+            {
+                validationReads++;
+                return ids
+                    .Select(id => new Entity("account", id) { ["name"] = "Saved" })
+                    .ToArray();
+            }
+        };
+        var options = new MapperWrapperOptions { ValidateAfterSave = true };
+        options.ValidationFields.Add("name");
+        var (proxy, wrapper) = Create(fake, options);
+
+        using (proxy)
+        {
+            var first = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("first")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+            var second = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("second")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+            wrapper.Register("first", first);
+            wrapper.Register("second", second);
+
+            var result = await wrapper.ExecuteAllAsync(
+                new[]
+                {
+                    new MapperExecution("first", new OrderSource { Name = "One" }),
+                    new MapperExecution("second", new OrderSource { Name = "Two" })
+                }
+            );
+
+            Assert.Equal(2, result.MapperResults.Count);
+            Assert.Equal(1, validationReads);
+        }
+    }
+
+    [Fact]
+    public async Task WrapperValidation_DoesNotRepeatAlreadyRunMapperValidation()
+    {
+        Guid id = Guid.NewGuid();
+        int validationReads = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ => id,
+            RetrieveMultipleHandler = _ =>
+            {
+                validationReads++;
+                return new[] { new Entity("account", id) { ["name"] = "One" } };
+            }
+        };
+        var wrapperOptions = new MapperWrapperOptions { ValidateAfterSave = true };
+        wrapperOptions.ValidationFields.Add("name");
+        var (proxy, wrapper) = Create(fake, wrapperOptions);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .WithOptions(options => options.ValidateAfterSave = true)
+                .Build();
+            wrapper.Register("orders", mapper);
+
+            var result = await wrapper.ExecuteAsync(
+                "orders",
+                new OrderSource { Name = "One" }
+            );
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(1, validationReads);
+        }
+    }
+
+    [Fact]
+    public async Task WrapperValidation_ReportsReferenceWithoutId()
+    {
+        var fake = new FakeConnection();
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            IReadOnlyList<MappingError> errors = await wrapper.ValidateAsync(
+                new[] { new EntityReference("account") }
+            );
+
+            Assert.Contains(errors, error => error.Message.Contains("has no id"));
+        }
+    }
+
+    [Fact]
     public async Task WrapperValidation_RequiresFieldsWhenValidatorIsSet()
     {
         var fake = new FakeConnection();
