@@ -67,6 +67,26 @@ Production notes:
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing.
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
+### ExecuteTransaction
+Executes all requests as one atomic database transaction. If any request fails, Dataverse rolls back every change and the fault identifies the failed request index:
+```C#
+ExecuteTransactionRequestBuilder transaction = dataverseDevPack.CreateTransactionRequestBuilder();
+transaction.AddCreate(new Entity("account") { ["name"] = "Account 1" });
+transaction.AddCreate(new Entity("account") { ["name"] = "Account 2" });
+
+try
+{
+    ExecuteTransactionResponse response = await dataverseDevPack.SdkProxy.ExecuteAsync(transaction);
+    Guid createdId = (Guid)response.Responses[0].Results["id"];
+}
+catch (FaultException<OrganizationServiceFault> fault)
+{
+    int failedRequestIndex = ((ExecuteTransactionFault)fault.Detail).FaultedRequestIndex;
+    throw;
+}
+```
+Requests execute in insertion order. `ReturnResponses` is `true` by default; pass `false` to `CreateTransactionRequestBuilder` when responses are not needed. A transaction cannot contain an `ExecuteMultipleRequest` or another `ExecuteTransactionRequest`; the builder rejects both. The builder is thread-safe and a snapshot is taken when execution starts.
+
 ### Sequential requests
 Executes request steps one after another. Each step can read the results of every previous step from the `SequentialRequestContext` passed to its factory:
 ```C#

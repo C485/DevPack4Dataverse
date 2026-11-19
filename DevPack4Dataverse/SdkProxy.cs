@@ -20,6 +20,7 @@ using System.Net;
 using System.Security;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
@@ -313,6 +314,53 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         return await connectionLease.Connection.ExecuteAsync(executeMultipleRequestBuilder, requestSettings).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes all requests built by <paramref name="executeTransactionRequestBuilder"/> in one transaction.
+    /// </summary>
+    /// <param name="executeTransactionRequestBuilder">Builder containing requests. Cannot be null.</param>
+    /// <param name="requestSettings">Optional settings applied to the transaction request.</param>
+    /// <returns>Responses in request order when the builder returns responses.</returns>
+    /// <remarks>If any request fails, all changes are rolled back by the service.</remarks>
+    public ExecuteTransactionResponse Execute(
+        ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
+        RequestSettings requestSettings = null
+    )
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        Guard.Against.Null(executeTransactionRequestBuilder);
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.Execute<ExecuteTransactionResponse>(
+            executeTransactionRequestBuilder.Request,
+            requestSettings
+        );
+    }
+
+    /// <summary>
+    /// Asynchronously executes all requests built by <paramref name="executeTransactionRequestBuilder"/>
+    /// in one transaction.
+    /// </summary>
+    /// <param name="executeTransactionRequestBuilder">Builder containing requests. Cannot be null.</param>
+    /// <param name="requestSettings">Optional settings applied to the transaction request.</param>
+    /// <returns>Responses in request order when the builder returns responses.</returns>
+    /// <remarks>If any request fails, all changes are rolled back by the service.</remarks>
+    public async Task<ExecuteTransactionResponse> ExecuteAsync(
+        ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
+        RequestSettings requestSettings = null
+    )
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        Guard.Against.Null(executeTransactionRequestBuilder);
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+
+        return await connectionLease
+            .Connection.ExecuteAsync<ExecuteTransactionResponse>(
+                executeTransactionRequestBuilder.Request,
+                requestSettings
+            )
+            .ConfigureAwait(false);
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)

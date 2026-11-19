@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
@@ -97,4 +98,18 @@ public sealed class DataverseDevPack
     /// </remarks>
     /// <returns>A new, empty sequential request builder.</returns>
     public SequentialRequestBuilder CreateSequentialRequestBuilder() => new(SdkProxy, _logger);
+
+    /// <summary>
+    /// Creates a new transaction request builder.
+    /// </summary>
+    /// <remarks>
+    /// All requests are executed in one atomic database transaction. If any request fails, all changes
+    /// are rolled back by the service. The builder is thread-safe and preserves insertion order.
+    /// </remarks>
+    /// <param name="returnResponses">
+    /// When <c>true</c>, the executed transaction returns one response per request.
+    /// </param>
+    /// <returns>A new, empty transaction request builder.</returns>
+    public ExecuteTransactionRequestBuilder CreateTransactionRequestBuilder(bool returnResponses = true) =>
+        new(_logger, returnResponses);
 }
