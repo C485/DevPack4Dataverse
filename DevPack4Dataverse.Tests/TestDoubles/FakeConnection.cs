@@ -17,6 +17,7 @@ public sealed class FakeConnection : IConnection
     public RequestSettings LastRequestSettings { get; private set; }
     public Func<string, Guid, ColumnSet, Entity> RetrieveHandler { get; set; }
     public Func<OrganizationRequest, OrganizationResponse> ExecuteHandler { get; set; }
+    public Func<OrganizationRequest, Task<OrganizationResponse>> AsyncExecuteHandler { get; set; }
     public Func<Entity, Guid> CreateRecordHandler { get; set; }
     public Action<Entity> UpdateRecordHandler { get; set; }
     public Func<QueryExpression, Entity[]> RetrieveMultipleHandler { get; set; }
@@ -79,9 +80,17 @@ public sealed class FakeConnection : IConnection
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         RequestSettings requestSettings = null) => throw new NotImplementedException();
 
-    public Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse =>
-        Task.FromResult(Execute<T>(request, requestSettings));
+    public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+        where T : OrganizationResponse
+    {
+        LastRequestSettings = requestSettings;
+        if (AsyncExecuteHandler != null)
+        {
+            return (T)await AsyncExecuteHandler(request).ConfigureAwait(false);
+        }
+
+        return Execute<T>(request, requestSettings);
+    }
 
     public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null) =>
         throw new NotImplementedException();
