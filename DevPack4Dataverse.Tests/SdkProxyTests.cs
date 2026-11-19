@@ -1,5 +1,8 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
+using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -23,5 +26,55 @@ public class SdkProxyTests
         var proxy = new SdkProxy(NullLogger.Instance, false);
 
         Assert.ThrowsAny<ArgumentException>(() => proxy.GetConnection());
+    }
+
+    [Fact]
+    public void ExecuteTransaction_BuilderSendsRequest()
+    {
+        OrganizationRequest captured = null;
+        var fake = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                captured = request;
+                return new ExecuteTransactionResponse();
+            }
+        };
+        using var proxy = new SdkProxy(NullLogger.Instance, false, new FakeConnectionCreator(fake));
+        proxy.WaitForConnections(1);
+        var builder = new ExecuteTransactionRequestBuilder(NullLogger.Instance);
+        builder.AddCreate(new Entity("account"));
+
+        ExecuteTransactionResponse response = proxy.Execute(builder);
+
+        Assert.NotNull(response);
+        var request = Assert.IsType<ExecuteTransactionRequest>(captured);
+        Assert.Single(request.Requests);
+        Assert.True(request.ReturnResponses);
+    }
+
+    [Fact]
+    public async Task ExecuteTransactionAsync_BuilderSendsRequest()
+    {
+        OrganizationRequest captured = null;
+        var fake = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                captured = request;
+                return new ExecuteTransactionResponse();
+            }
+        };
+        using var proxy = new SdkProxy(NullLogger.Instance, false, new FakeConnectionCreator(fake));
+        await proxy.WaitForConnectionsAsync(1);
+        var builder = new ExecuteTransactionRequestBuilder(NullLogger.Instance, returnResponses: false);
+        builder.AddCreate(new Entity("account"));
+
+        ExecuteTransactionResponse response = await proxy.ExecuteAsync(builder);
+
+        Assert.NotNull(response);
+        var request = Assert.IsType<ExecuteTransactionRequest>(captured);
+        Assert.Single(request.Requests);
+        Assert.False(request.ReturnResponses);
     }
 }
