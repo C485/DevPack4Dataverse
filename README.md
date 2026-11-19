@@ -71,6 +71,21 @@ Production notes:
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing.
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
+#### Adaptive execution
+For large create/update/delete runs, `ExecuteAdaptiveAsync` adjusts batch size and parallelism while it works:
+```C#
+ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple.ExecuteAdaptiveAsync(
+    executeMultipleRequestBuilder,
+    new AdaptiveRequesterSettings
+    {
+        InitialBatchSize = 4,
+        InitialDegreeOfParallelism = 4,
+        TargetBatchDuration = TimeSpan.FromSeconds(3),
+        EvaluationRecordCount = 40
+    });
+```
+It starts with the configured batch size and parallel requests. Every `EvaluationRecordCount` records it compares the wave duration with `TargetBatchDuration`. Slow waves reduce the batch size first, then parallelism; fast waves increase the batch size first, then parallelism. `ErrorReport` and `ReportProgress` work as in the regular ExecuteMultiple path. Results remain ordered by the original request order. `BatchSizeUsed` and `ThreadsUsed` on the result show the final values.
+
 ### ExecuteTransaction
 Executes all requests as one atomic database transaction. If any request fails, Dataverse rolls back every change and the fault identifies the failed request index:
 ```C#

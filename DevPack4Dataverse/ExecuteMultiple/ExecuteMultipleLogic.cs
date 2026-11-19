@@ -329,6 +329,210 @@ public sealed class ExecuteMultipleLogic
         }
     }
 
+    /// <summary>
+    /// Executes requests adaptively, adjusting ExecuteMultiple batch size first and then parallelism.
+    /// </summary>
+    /// <param name="executeMultipleRequestBuilder">Builder containing requests. Cannot be null.</param>
+    /// <param name="settings">Adaptive settings. Defaults are used when null.</param>
+    /// <param name="requestSettings">Optional settings applied to the outer batch requests.</param>
+    /// <param name="cancellationToken">Token used to stop scheduling further waves.</param>
+    /// <returns>Execution statistics and responses ordered by the original request order.</returns>
+    public async Task<ExecuteMultipleLogicResult> ExecuteAdaptiveAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        AdaptiveRequesterSettings settings = null,
+        RequestSettings requestSettings = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        using EntryExitLogger logGuard = new(_logger);
+        Guard.Against.Null(executeMultipleRequestBuilder, parameterName: nameof(executeMultipleRequestBuilder));
+        settings = (settings ?? new AdaptiveRequesterSettings()).Validate();
+
+        OrganizationRequest[] requests = executeMultipleRequestBuilder.RequestWithResults.Requests.ToArray();
+        if (requests.Length == 0)
+        {
+            return CreateEmptyResult();
+        }
+
+        int batchSize = settings.InitialBatchSize;
+        int degreeOfParallelism = settings.InitialDegreeOfParallelism;
+        ExecuteMultipleLogicResult logicResult = new()
+        {
+            Stopwatch = Stopwatch.StartNew(),
+            ThreadsUsed = degreeOfParallelism,
+            BatchSizeUsed = batchSize
+        };
+
+        int progress = 0;
+        int nextIndex = 0;
+        long recordsSinceAdjustment = 0;
+        ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
+
+        while (nextIndex < requests.Length)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
+            List<RequestChunk> wave = TakeAdaptiveWave(
+                requests,
+                ref nextIndex,
+                batchSize,
+                degreeOfParallelism
+            );
+            Stopwatch waveStopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                await AsyncParallel
+                    .ForEachAsync(
+                        wave,
+                        degreeOfParallelism,
+                        cancellationToken,
+                        async (chunk, token) =>
+                        {
+                            OrganizationRequest[] packOfRequests = chunk.Requests;
+                            try
+                            {
+                                ExecuteMultipleResponse responseWithResults =
+                                    await ExecutePackAsync(
+                                            packOfRequests,
+                                            true,
+                                            requestSettings,
+                                            token
+                                        )
+                                        .ConfigureAwait(false);
+
+                                StoreResponses(
+                                    responseWithResults,
+                                    packOfRequests,
+                                    chunk.StartIndex,
+                                    responsesByIndex,
+                                    settings.ErrorReport,
+                                    false
+                                );
+                            }
+                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                            {
+                                throw;
+                            }
+                            catch (Exception exception)
+                            {
+                                foreach (OrganizationRequest request in packOfRequests)
+                                {
+                                    settings.ErrorReport?.Invoke(request, exception.ToString());
+                                }
+                            }
+
+                            Interlocked.Add(ref progress, packOfRequests.Length);
+                        }
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Cancellation is reported through logicResult.Cancelled.
+                break;
+            }
+
+            waveStopwatch.Stop();
+            int waveRecords = 0;
+            foreach (RequestChunk chunk in wave)
+            {
+                waveRecords += chunk.Requests.Length;
+            }
+
+            recordsSinceAdjustment += waveRecords;
+            if (
+                wave.Count == degreeOfParallelism
+                && recordsSinceAdjustment >= settings.EvaluationRecordCount
+            )
+            {
+                AdjustAdaptiveSettings(
+                    settings,
+                    waveStopwatch.Elapsed,
+                    ref batchSize,
+                    ref degreeOfParallelism
+                );
+                recordsSinceAdjustment = 0;
+            }
+
+            settings.ReportProgress?.Invoke(progress, requests.Length);
+        }
+
+        ExecuteMultipleLogicResult result = CompleteResult(
+            logicResult,
+            responsesByIndex,
+            progress,
+            requests.Length,
+            cancellationToken
+        );
+        result.ThreadsUsed = degreeOfParallelism;
+        result.BatchSizeUsed = batchSize;
+        settings.ReportProgress?.Invoke(progress, requests.Length);
+        return result;
+    }
+
+    private static List<RequestChunk> TakeAdaptiveWave(
+        OrganizationRequest[] requests,
+        ref int nextIndex,
+        int batchSize,
+        int degreeOfParallelism
+    )
+    {
+        List<RequestChunk> chunks = new(degreeOfParallelism);
+        for (
+            int index = 0;
+            index < degreeOfParallelism && nextIndex < requests.Length;
+            index++
+        )
+        {
+            int count = Math.Min(batchSize, requests.Length - nextIndex);
+            OrganizationRequest[] packOfRequests = new OrganizationRequest[count];
+            Array.Copy(requests, nextIndex, packOfRequests, 0, count);
+            chunks.Add(new RequestChunk(nextIndex, packOfRequests));
+            nextIndex += count;
+        }
+
+        return chunks;
+    }
+
+    private static void AdjustAdaptiveSettings(
+        AdaptiveRequesterSettings settings,
+        TimeSpan waveDuration,
+        ref int batchSize,
+        ref int degreeOfParallelism
+    )
+    {
+        if (waveDuration > settings.TargetBatchDuration)
+        {
+            if (batchSize > settings.MinBatchSize)
+            {
+                batchSize--;
+            }
+            else if (degreeOfParallelism > settings.MinDegreeOfParallelism)
+            {
+                degreeOfParallelism--;
+            }
+
+            return;
+        }
+
+        long fastThresholdTicks = settings.TargetBatchDuration.Ticks * 7 / 10;
+        if (waveDuration.Ticks < fastThresholdTicks)
+        {
+            if (batchSize < settings.MaxBatchSize)
+            {
+                batchSize++;
+            }
+            else if (degreeOfParallelism < settings.MaxDegreeOfParallelism)
+            {
+                degreeOfParallelism++;
+            }
+        }
+    }
+
     private static void ValidateSettings(ExecuteMultipleRequestSimpleSettings settings)
     {
         Guard.Against.Null(settings, parameterName: nameof(settings));

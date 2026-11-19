@@ -259,6 +259,138 @@ public class ExecuteMultipleLogicTests
     }
 
     [Fact]
+    public async Task AdaptiveExecuteAsync_ProcessesAllRequestsInOrder()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                var batch = (ExecuteMultipleRequest)request;
+                return Response(
+                    batch
+                        .Requests.Select(
+                            (item, index) =>
+                                Success(index, item.RequestName)
+                        )
+                        .ToArray()
+                );
+            }
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connection)
+        );
+        var logic = new ExecuteMultipleLogic(proxy, NullLogger.Instance);
+        string[] names = Enumerable.Range(0, 50).Select(i => $"req-{i}").ToArray();
+        ExecuteMultipleRequestBuilder builder = BuilderWith(names);
+
+        ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+            builder,
+            new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 3,
+                InitialDegreeOfParallelism = 2,
+                EvaluationRecordCount = 10,
+                TargetBatchDuration = TimeSpan.FromHours(1),
+                MinBatchSize = 1,
+                MaxBatchSize = 10,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4
+            }
+        );
+
+        Assert.False(result.Cancelled);
+        Assert.Equal(50, result.RecordsRequested);
+        Assert.Equal(50, result.RecordsProcessed);
+        Assert.Equal(
+            names,
+            result.Results.Select(
+                item => ((MarkerResponse)item.Response).Marker
+            )
+        );
+        Assert.True(result.BatchSizeUsed >= 3);
+        Assert.True(result.ThreadsUsed >= 2);
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_ReducesBatchAndThreadsWhenSlow()
+    {
+        var connection = new FakeConnection
+        {
+            AsyncExecuteHandler = async request =>
+            {
+                await Task.Delay(30);
+                var batch = (ExecuteMultipleRequest)request;
+                return Response(
+                    batch
+                        .Requests.Select(
+                            (item, index) =>
+                                Success(index, item.RequestName)
+                        )
+                        .ToArray()
+                );
+            }
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connection)
+        );
+        var logic = new ExecuteMultipleLogic(proxy, NullLogger.Instance);
+        ExecuteMultipleRequestBuilder builder = BuilderWith(
+            Enumerable.Range(0, 80).Select(i => $"req-{i}").ToArray()
+        );
+
+        ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+            builder,
+            new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 4,
+                InitialDegreeOfParallelism = 4,
+                EvaluationRecordCount = 8,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(1),
+                MinBatchSize = 1,
+                MaxBatchSize = 20,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 8
+            }
+        );
+
+        Assert.Equal(80, result.RecordsProcessed);
+        Assert.Equal(1, result.BatchSizeUsed);
+        Assert.Equal(1, result.ThreadsUsed);
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_WithCanceledToken_ReturnsCancelledResult()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = _ => Response(Success(0, "req"))
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connection)
+        );
+        var logic = new ExecuteMultipleLogic(proxy, NullLogger.Instance);
+        ExecuteMultipleRequestBuilder builder = BuilderWith("req");
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+            builder,
+            new AdaptiveRequesterSettings(),
+            cancellationToken: cancellationTokenSource.Token
+        );
+
+        Assert.True(result.Cancelled);
+        Assert.Empty(result.Results);
+        Assert.Equal(0, result.RecordsProcessed);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithCanceledToken_ReturnsCancelledResult()
     {
         var (proxy, logic) = Create(_ => Response(Success(0, "req")));

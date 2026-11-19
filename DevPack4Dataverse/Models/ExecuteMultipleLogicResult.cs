@@ -42,6 +42,9 @@ public sealed class ExecuteMultipleLogicResult
     /// <summary>Number of parallel workers used.</summary>
     public int ThreadsUsed { get; set; }
 
+    /// <summary>Final batch size used by adaptive execution; zero for regular execution.</summary>
+    public int BatchSizeUsed { get; set; }
+
     public override string ToString()
     {
         StringBuilder sb = new();
@@ -65,6 +68,10 @@ public sealed class ExecuteMultipleLogicResult
         sb.Append(nameof(ThreadsUsed));
         sb.Append(": ");
         sb.Append(ThreadsUsed);
+        sb.AppendLine();
+        sb.Append(nameof(BatchSizeUsed));
+        sb.Append(": ");
+        sb.Append(BatchSizeUsed);
         sb.AppendLine();
         sb.Append("Results count: ");
         sb.Append(Results.Count);
