@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net462;net472;net48;net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Title>DevPack for Dataverse - Mapper Redis</Title>
+    <Copyright>Kamil Skoracki/C485@GitHub</Copyright>
+    <Description>Optional Redis cache and distributed lock adapters for DevPack4Dataverse Mapper.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevPack4Dataverse\DevPack4Dataverse.csproj" />
+  </ItemGroup>
+
+</Project>

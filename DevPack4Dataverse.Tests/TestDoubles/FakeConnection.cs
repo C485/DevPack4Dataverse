@@ -14,8 +14,12 @@ public sealed class FakeConnection : IConnection
     public int TryLockCount { get; private set; }
     public bool TryLockResult { get; set; } = true;
     public ulong Weight { get; set; }
+    public RequestSettings LastRequestSettings { get; private set; }
     public Func<string, Guid, ColumnSet, Entity> RetrieveHandler { get; set; }
     public Func<OrganizationRequest, OrganizationResponse> ExecuteHandler { get; set; }
+    public Func<Entity, Guid> CreateRecordHandler { get; set; }
+    public Action<Entity> UpdateRecordHandler { get; set; }
+    public Func<QueryExpression, Entity[]> RetrieveMultipleHandler { get; set; }
 
     public ServiceClient PureServiceClient => null;
     public IStatistics Statistics => null;
@@ -38,11 +42,15 @@ public sealed class FakeConnection : IConnection
         return Task.FromResult(TryLockResult);
     }
 
-    public Guid CreateRecord(Entity record, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+    public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
+    {
+        LastRequestSettings = requestSettings;
+        return CreateRecordHandler?.Invoke(record)
+        ?? throw new NotImplementedException();
+    }
 
     public Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+        Task.FromResult(CreateRecord(record, requestSettings));
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null) =>
         throw new NotImplementedException();
@@ -57,8 +65,11 @@ public sealed class FakeConnection : IConnection
         throw new NotImplementedException();
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse =>
-        (T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException());
+        where T : OrganizationResponse
+    {
+        LastRequestSettings = requestSettings;
+        return (T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException());
+    }
 
     public ExecuteMultipleResponse Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
@@ -103,25 +114,42 @@ public sealed class FakeConnection : IConnection
         ColumnSet columnSet,
         RequestSettings requestSettings = null) where T : Entity => throw new NotImplementedException();
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    {
+        LastRequestSettings = requestSettings;
+        return RetrieveMultipleHandler?.Invoke(queryExpression)
+        ?? throw new NotImplementedException();
+    }
 
     public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
-        where T : Entity => throw new NotImplementedException();
+        where T : Entity => RetrieveMultiple(queryExpression, requestSettings).Cast<T>().ToArray();
 
     public Task<Entity[]> RetrieveMultipleAsync(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null) => throw new NotImplementedException();
+        RequestSettings requestSettings = null) =>
+        Task.FromResult(RetrieveMultiple(queryExpression, requestSettings));
 
     public Task<T[]> RetrieveMultipleAsync<T>(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null) where T : Entity => throw new NotImplementedException();
+        RequestSettings requestSettings = null) where T : Entity =>
+        Task.FromResult(RetrieveMultiple<T>(queryExpression, requestSettings));
 
-    public void UpdateRecord(Entity record, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    {
+        LastRequestSettings = requestSettings;
+        if (UpdateRecordHandler == null)
+        {
+            throw new NotImplementedException();
+        }
 
-    public Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null) =>
-        throw new NotImplementedException();
+        UpdateRecordHandler(record);
+    }
+
+    public Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    {
+        UpdateRecord(record, requestSettings);
+        return Task.CompletedTask;
+    }
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null) =>
         throw new NotImplementedException();
