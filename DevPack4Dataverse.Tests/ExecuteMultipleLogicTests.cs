@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -200,6 +200,61 @@ public class ExecuteMultipleLogicTests
                     new ExecuteMultipleRequestSimpleSettings { RequestSize = 1 }
                 )
             );
+        }
+    }
+
+    [Fact]
+    public async Task SimpleExecuteAsync_PassesOuterRequestSettings()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = _ => Response(Success(0, "req"))
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connection)
+        );
+        var logic = new ExecuteMultipleLogic(proxy, NullLogger.Instance);
+        var requestSettings = new RequestSettings();
+        ExecuteMultipleRequestBuilder builder = BuilderWith("req");
+
+        await logic.ExecuteAsync(
+            builder,
+            new ExecuteMultipleRequestSimpleSettings { RequestSize = 1 },
+            requestSettings: requestSettings
+        );
+
+        Assert.Same(requestSettings, connection.LastRequestSettings);
+    }
+
+    [Fact]
+    public async Task SimpleExecuteAsync_DoesNotSendLaterChunksAfterFault()
+    {
+        int calls = 0;
+        var (proxy, logic) = Create(_ =>
+        {
+            calls++;
+            return Response(Failure(0));
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("first", "second");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () =>
+                    logic.ExecuteAsync(
+                        builder,
+                        new ExecuteMultipleRequestSimpleSettings
+                        {
+                            RequestSize = 1,
+                            MaxDegreeOfParallelism = 4
+                        }
+                    )
+            );
+
+            Assert.Equal(1, calls);
         }
     }
 

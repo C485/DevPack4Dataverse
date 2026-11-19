@@ -19,6 +19,7 @@ using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.ExpressionBuilder;
 using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Mapper;
 using DevPack4Dataverse.Sequential;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
@@ -112,4 +113,12 @@ public sealed class DataverseDevPack
     /// <returns>A new, empty transaction request builder.</returns>
     public ExecuteTransactionRequestBuilder CreateTransactionRequestBuilder(bool returnResponses = true) =>
         new(_logger, returnResponses);
+
+    /// <summary>
+    /// Creates a mapper container with the shared connection pool.
+    /// </summary>
+    /// <param name="options">Global cache, lock, and validation options.</param>
+    /// <returns>A new mapper wrapper.</returns>
+    public MapperWrapper CreateMapperWrapper(MapperWrapperOptions options = null) =>
+        new(SdkProxy, _logger, options);
 }

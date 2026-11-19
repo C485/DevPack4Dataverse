@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +27,7 @@ public class ExecuteMultipleRequestSimpleSettings
     ///  <para>By default it's set to automatic, will always try to use all connections.</para>
     ///  <para>When, concurrent settings for connection are ignored in automatic mode - for example</para>
     ///  <para> in scenario when you've 4 connections with 4 concurrent setting, maximum threads used will be 4.</para>
+    ///  <para>The stop-on-error simple settings overload executes chunks sequentially and ignores this value.</para>
     /// </summary>
     public int MaxDegreeOfParallelism { get; set; } = -1;
 

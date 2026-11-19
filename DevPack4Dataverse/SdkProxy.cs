@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Buffers;
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security;
 using Ardalis.GuardClauses;
@@ -273,16 +273,46 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     }
 
     /// <summary>
-    /// Stops background connection creation. Safe to call multiple times.
+    /// Stops background connection creation and disposes connection clients.
+    /// Safe to call multiple times.
     /// </summary>
     public void Dispose()
+    {
+        DisposeAsync().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Asynchronously stops background connection creation and disposes connection clients.
+    /// Safe to call multiple times.
+    /// </summary>
+    public async Task DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
         }
 
-        _connectionCreator.StopAsync().GetAwaiter().GetResult();
+        try
+        {
+            await _connectionCreator.StopAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (IConnection connection in _connections)
+            {
+                try
+                {
+                    connection.PureServiceClient?.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(
+                        exception,
+                        "Could not dispose a Dataverse connection while stopping the proxy."
+                    );
+                }
+            }
+        }
     }
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
@@ -372,11 +402,6 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return await connectionLease.Connection.ExecuteAsync<T>(request, requestSettings).ConfigureAwait(false);
     }
 
-    [SuppressMessage(
-        "Minor Code Smell",
-        "S3267:Loops should be simplified with \"LINQ\" expressions",
-        Justification = "No locking in LINQ"
-    )]
     public ConnectionLease GetConnection()
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -390,16 +415,37 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
-            foreach (IConnection connection in _connections.OrderBy(p => p.GetConnectionWeight()))
+            int connectionCount = _connections.Count;
+            WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
+                Math.Max(1, connectionCount)
+            );
+            int filled = 0;
+            try
             {
-                if (connection.TryLock())
+                foreach (IConnection connection in _connections)
                 {
-                    if (_applyConnectionOptimalization)
-                    {
-                        connection.ApplyConnectionOptimalization();
-                    }
-                    return new ConnectionLease(connection);
+                    AddWeightedConnection(ref buffer, ref filled, connection);
                 }
+
+                Array.Sort(buffer, 0, filled, WeightedConnectionComparer.Instance);
+                for (int index = 0; index < filled; index++)
+                {
+                    IConnection connection = buffer[index].Connection;
+                    if (connection.TryLock())
+                    {
+                        if (_applyConnectionOptimalization)
+                        {
+                            connection.ApplyConnectionOptimalization();
+                        }
+
+                        return new ConnectionLease(connection);
+                    }
+                }
+            }
+            finally
+            {
+                Array.Clear(buffer, 0, filled);
+                ArrayPool<WeightedConnection>.Shared.Return(buffer);
             }
 
             Thread.Sleep(_sleepTimeForConnectionGetter);
@@ -419,17 +465,37 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
-            foreach (IConnection connection in _connections.OrderBy(p => p.GetConnectionWeight()))
+            int connectionCount = _connections.Count;
+            WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
+                Math.Max(1, connectionCount)
+            );
+            int filled = 0;
+            try
             {
-                if (await connection.TryLockAsync().ConfigureAwait(false))
+                foreach (IConnection connection in _connections)
                 {
-                    if (_applyConnectionOptimalization)
-                    {
-                        connection.ApplyConnectionOptimalization();
-                    }
-
-                    return new ConnectionLease(connection);
+                    AddWeightedConnection(ref buffer, ref filled, connection);
                 }
+
+                Array.Sort(buffer, 0, filled, WeightedConnectionComparer.Instance);
+                for (int index = 0; index < filled; index++)
+                {
+                    IConnection connection = buffer[index].Connection;
+                    if (await connection.TryLockAsync().ConfigureAwait(false))
+                    {
+                        if (_applyConnectionOptimalization)
+                        {
+                            connection.ApplyConnectionOptimalization();
+                        }
+
+                        return new ConnectionLease(connection);
+                    }
+                }
+            }
+            finally
+            {
+                Array.Clear(buffer, 0, filled);
+                ArrayPool<WeightedConnection>.Shared.Return(buffer);
             }
 
             await Task.Delay(_sleepTimeForConnectionGetter).ConfigureAwait(false);
@@ -580,6 +646,43 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         return await connectionLease.Connection.UpsertRecordAsync(record, requestSettings).ConfigureAwait(false);
+    }
+
+    private readonly struct WeightedConnection(IConnection connection, ulong weight)
+    {
+        public IConnection Connection { get; } = connection;
+        public ulong Weight { get; } = weight;
+    }
+
+    private static void AddWeightedConnection(
+        ref WeightedConnection[] buffer,
+        ref int filled,
+        IConnection connection
+    )
+    {
+        if (filled == buffer.Length)
+        {
+            WeightedConnection[] larger = ArrayPool<WeightedConnection>.Shared.Rent(
+                Math.Max(1, buffer.Length * 2)
+            );
+            Array.Copy(buffer, larger, filled);
+            Array.Clear(buffer, 0, filled);
+            ArrayPool<WeightedConnection>.Shared.Return(buffer);
+            buffer = larger;
+        }
+
+        buffer[filled++] = new WeightedConnection(
+            connection,
+            connection.GetConnectionWeight()
+        );
+    }
+
+    private sealed class WeightedConnectionComparer : IComparer<WeightedConnection>
+    {
+        public static WeightedConnectionComparer Instance { get; } = new();
+
+        public int Compare(WeightedConnection x, WeightedConnection y) =>
+            x.Weight.CompareTo(y.Weight);
     }
 
     private static void OptimalizeConnections()

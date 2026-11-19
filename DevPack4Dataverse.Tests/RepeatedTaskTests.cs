@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using DevPack4Dataverse.Utils;
 
@@ -42,6 +42,27 @@ public class RepeatedTaskTests
     {
         var task = new RepeatedTask(TimeSpan.FromMilliseconds(15), () => { }, NullLogger.Instance);
 
+        await task.StopAsync();
+    }
+
+    [Fact]
+    public async Task StopTwice_IsNoOp()
+    {
+        var task = new RepeatedTask(TimeSpan.FromMilliseconds(15), () => { }, NullLogger.Instance);
+        task.Start();
+        await Task.Delay(50);
+
+        await task.StopAsync();
+        await task.StopAsync();
+    }
+
+    [Fact]
+    public async Task StartTwice_Throws()
+    {
+        var task = new RepeatedTask(TimeSpan.FromMilliseconds(15), () => { }, NullLogger.Instance);
+        task.Start();
+
+        Assert.Throws<InvalidOperationException>(() => task.Start());
         await task.StopAsync();
     }
 }

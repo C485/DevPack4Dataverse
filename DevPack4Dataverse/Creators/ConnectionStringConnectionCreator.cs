@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Creators;
 
-public class ConnectionStringConnectionCreator : IConnectionCreator
+public sealed class ConnectionStringConnectionCreator : IConnectionCreator
 {
     private const string ConnectionStringInvalidError =
         "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
@@ -34,15 +34,15 @@ public class ConnectionStringConnectionCreator : IConnectionCreator
 
     public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
     {
-        _connectionString = Guard.Against.NullOrEmpty(connectionString);
+        _connectionString = Guard.Against.NullOrWhiteSpace(connectionString);
         _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
 
-        if (_connectionString.IndexOf("RequireNewInstance=True", StringComparison.CurrentCultureIgnoreCase) >= 0)
+        if (_connectionString.IndexOf("RequireNewInstance=True", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return;
         }
 
-        if (_connectionString.IndexOf("RequireNewInstance", StringComparison.CurrentCultureIgnoreCase) >= 0)
+        if (_connectionString.IndexOf("RequireNewInstance", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             throw new InvalidProgramException(ConnectionStringInvalidError);
         }

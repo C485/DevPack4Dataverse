@@ -17,13 +17,16 @@ B[ExecuteMultiple]
 C[FieldDrill]
 D[SdkProxy]
 E[CreateLinqExpressionBuilder]
+F[Mapper]
 A --> |Can use ExecuteMultiple.CreateRequestBuilder|B
 A --> C
 A --> D
 A --> E
+A --> |Can use CreateMapperWrapper|F
 E --> |LINQ expressions as param|A
 C --> D
 B --> D
+F --> D
 ```
 
 ### Connection management
@@ -36,7 +39,7 @@ The synchronous method waits until the count is reached; the asynchronous overlo
 
 ### ExecuteMultiple
 Gives ability to quickly call dataverse endpoint with optimized packs of requests, multiple connections will be used to multiply speed and skip request per minute limits. In example bellow you can see how you can build unlimited in size requests that later will be sent to datavserse endpoint in packs.
-```C# 
+```C#
  Entity[] recordsInCrm = dataverseDevPack.SdkProxy.RetrieveMultiple(new QueryExpression
  {
      EntityName = EntityName,
@@ -61,7 +64,8 @@ Gives ability to quickly call dataverse endpoint with optimized packs of request
 Production notes:
 - Requests are split into chunks of `RequestSize`; it must be greater than zero.
 - `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads.
-- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault.
+- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and runs chunks sequentially.
+- Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
 - The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts.
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing.
@@ -110,6 +114,106 @@ Entity retrieved = results.RetrievedEntity(2);
 ```
 Step indexes are zero-based. `Execute()` provides the synchronous variant and `ExecuteAsync(cancellationToken)` the asynchronous one. Steps stop at the first exception; there is no automatic transaction or rollback. The builder is mutable and not thread-safe, so create one builder per sequence. The same context is available to step factories through `CreatedId`, `RetrievedEntity`, `Response<T>`, indexing and `Last`.
 
+### Mapper
+Maps POCO or `Entity` sources to `Entity` or POCO targets. Stages run in order against the same target, so later stages can read earlier values. Lookups can resolve by basic key (`logicalName` + `Guid`) or Dataverse alternate key.
+```C#
+MapperWrapper mapperWrapper = dataverseDevPack.CreateMapperWrapper(
+    new MapperWrapperOptions
+    {
+        DefaultCacheTtl = TimeSpan.FromMinutes(10),
+        LockTimeout = TimeSpan.FromSeconds(20)
+    });
+
+Mapper<Order, Entity> mapper = mapperWrapper
+    .CreateMapperBuilder<Order, Entity>("order")
+    .WithLogicalName("new_order")
+    .WithEntityKey(context => EntityKey.ById("new_order", context.Source.Id))
+    .Map("new_name", context => context.Source.Name)
+    .MapLookup(
+        "new_customerid",
+        context => EntityKey.ByAlternateKey(
+            "account",
+            new KeyValuePair<string, object>("accountnumber", context.Source.AccountNumber)),
+        new LookupMappingOptions
+        {
+            Fields = { "name", "accountnumber" },
+            AlternateKeyAttributes = { "accountnumber" },
+            RetrievalMode = LookupRetrievalMode.RetrieveAllRecords,
+            CreateIfNotExists = true
+        },
+        context => new Entity("account") { ["name"] = context.Source.CustomerName })
+    .NextStage()
+    .Map("new_summary", context =>
+        context.Target.GetAttributeValue<string>("new_name") + " / " + context.Source.Region)
+    .WithOptions(options =>
+    {
+        options.RequestSettings.ImpersonateAsUserByDataverseId = userId;
+        options.RequestSettings.SkipPluginExecution = true;
+        options.SkipFieldsToChanged.Add("modifiedon");
+        options.PreSave = context => context.Target["new_name"] = context.Target
+            .GetAttributeValue<string>("new_name")
+            ?.Trim();
+        options.ValidateAfterSave = true;
+        options.ValidationFields.Add("new_name");
+        options.Validator = (record, validationContext) =>
+            string.IsNullOrWhiteSpace(record.GetAttributeValue<string>("new_name"))
+                ? new[] { "Name is required." }
+                : Array.Empty<string>();
+    })
+    .Build();
+
+MappingResult<Entity> result = await mapper.ExecuteAsync(order);
+
+// Force a fresh lookup read and refresh cached entries for this run:
+await mapper.ExecuteAsync(order, new MappingRunOptions { ForceRefresh = true });
+```
+Every lookup mapping has its own options:
+- `UseCache`
+- `RetrievalMode`: `OneByOne` or `RetrieveAllRecords`
+- `CreateIfNotExists`
+- `ThrowIfEmpty`
+- `ThrowIfNotFound`
+- `Fields` and `AlternateKeyAttributes`; only these columns are retrieved, and missing fields on a cached record are fetched individually.
+- Force refresh is set per run through `MappingRunOptions.ForceRefresh`.
+
+Mapper behaviour:
+- `PreSave` runs before change detection.
+- `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
+- Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
+- Only changed attributes are sent on update; unchanged records are skipped.
+- Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
+- POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.
+
+`MapperWrapper` is the global mapper container. It owns shared cache, lock, and wrapper-level validation:
+```C#
+mapperWrapper.Register("order", mapper);
+MapperWrapperResult wrapperResult = await mapperWrapper.ExecuteAsync("order", order);
+
+// Run several registered mappers as one batch and validate the combined records once.
+MapperBatchResult batchResult = await mapperWrapper.ExecuteAllAsync(
+    new[]
+    {
+        new MapperExecution("order", order),
+        new MapperExecution("order-line", line)
+    });
+```
+Wrapper validation can use one global field set or per-table field sets:
+```C#
+mapperWrapper.Options.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
+mapperWrapper.Options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+```
+If the mapper already ran `ValidateAfterSave`, wrapper validation is skipped to avoid duplicate reads. Set `MapperWrapperOptions.ValidateAfterMapperValidation = true` when both validators must run.
+The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:```C#
+IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync("localhost");
+MapperWrapper redisWrapper = new(
+    dataverseDevPack.SdkProxy,
+    logger,
+    new MapperWrapperOptions { LockTimeout = TimeSpan.FromSeconds(20) },
+    new RedisEntityCache(redis),
+    new RedisEntityLock(redis));
+```
+Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) so the lock does not expire just because the acquisition wait was long. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached.
+
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
 For example when we have lookup that points to record X, we can call FieldDrill with these parameters
@@ -133,7 +237,7 @@ string formatted = money.GetFormattedValue(account, "creditlimit");
 `SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
 
 ### SdkProxy
-Gives ability to quickly execute any type of request to dataverse endpoint. 
+Gives ability to quickly execute any type of request to dataverse endpoint.
 ### CreateLinqExpressionBuilder
 Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK.
 ```C#
@@ -160,7 +264,6 @@ Production notes:
 
 ## Roadmap
 
-- Add model to model mapper for integration
 - QueryBuilder for faster and better requests / also for LINQ
 - LINQ support
 - and more...

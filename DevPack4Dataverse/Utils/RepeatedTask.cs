@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,10 @@ public sealed class RepeatedTask
     private readonly TimeSpan _timeSpan;
 #endif
     private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly object _sync = new();
     private Task _task;
+    private bool _started;
+    private bool _stopped;
 
     public RepeatedTask(TimeSpan timeSpan, Action action, ILogger logger)
     {
@@ -54,21 +57,54 @@ public sealed class RepeatedTask
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        _task = TickAsync();
+        lock (_sync)
+        {
+            if (_started)
+            {
+                throw new InvalidOperationException("The repeated task has already been started.");
+            }
+
+            if (_stopped)
+            {
+                throw new InvalidOperationException("The repeated task has already been stopped.");
+            }
+
+            _started = true;
+            _task = TickAsync();
+        }
     }
 
     public async Task StopAsync()
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        if (_task == null)
+        Task task;
+        bool cancel;
+        lock (_sync)
         {
-            return;
+            if (_task == null)
+            {
+                _stopped = true;
+                _cancellationTokenSource.Dispose();
+                return;
+            }
+
+            cancel = !_stopped;
+            _stopped = true;
+            task = _task;
         }
 
-        _cancellationTokenSource.Cancel();
-        await _task.ConfigureAwait(false);
-        _cancellationTokenSource.Dispose();
+        if (cancel)
+        {
+            _cancellationTokenSource.Cancel();
+        }
+
+        await task.ConfigureAwait(false);
+
+        if (cancel)
+        {
+            _cancellationTokenSource.Dispose();
+        }
     }
 
     private async Task TickAsync()

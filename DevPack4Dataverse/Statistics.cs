@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,18 +20,32 @@ using DevPack4Dataverse.Models;
 
 namespace DevPack4Dataverse;
 
-internal class Statistics : IStatistics
+internal sealed class Statistics : IStatistics
 {
+    private const int MaxStatisticsRetained = 100_000;
     private readonly object _lock = new();
     private readonly List<Statistic> _statistics = new();
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private ulong _totalSeconds;
 
-    public void Finish(Statistic statistic) => statistic.SetEnd(_stopwatch.Elapsed);
+    public void Finish(Statistic statistic)
+    {
+        statistic.SetEnd(_stopwatch.Elapsed);
+        lock (_lock)
+        {
+            _totalSeconds += statistic.ElapsedSeconds;
+        }
+    }
 
     public Statistic StartNew()
     {
         lock (_lock)
         {
+            if (_statistics.Count >= MaxStatisticsRetained)
+            {
+                _statistics.RemoveRange(0, MaxStatisticsRetained / 2);
+            }
+
             Statistic statsEntry = new(_stopwatch.Elapsed);
             _statistics.Add(statsEntry);
             return statsEntry;
@@ -42,12 +56,7 @@ internal class Statistics : IStatistics
     {
         lock (_lock)
         {
-            ulong totalSeconds = 0;
-            foreach (Statistic item in _statistics)
-            {
-                totalSeconds += item.ElapsedSeconds;
-            }
-            return totalSeconds;
+            return _totalSeconds;
         }
     }
 
