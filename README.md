@@ -2,11 +2,16 @@
 # DevPack4Dataverse
 
 DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on top of the SDK for Dataverse. Designed with the idea of optimizing and speeding up work with external communication with Dataverse API.
+
+## Supported frameworks
+
+`net462`, `net472`, `net48`, `net8.0`, `net10.0`
+
+The optional Redis mapper adapters live in the separate `DevPack4Dataverse.Mapper.Redis` project.
+
 ## License
 
 [Apache License 2.0](https://github.com/C485/DevPack4Dataverse/blob/master/LICENSE.md)
-
-
 
 # Features
 
@@ -18,15 +23,24 @@ C[FieldDrill]
 D[SdkProxy]
 E[CreateLinqExpressionBuilder]
 F[Mapper]
+G[Adaptive requester]
+H[ExecuteTransaction]
+I[Sequential requests]
 A --> |Can use ExecuteMultiple.CreateRequestBuilder|B
 A --> C
 A --> D
 A --> E
 A --> |Can use CreateMapperWrapper|F
+A --> |ExecuteMultiple.ExecuteAdaptiveAsync|G
+A --> |CreateTransactionRequestBuilder|H
+A --> |CreateSequentialRequestBuilder|I
 E --> |LINQ expressions as param|A
 C --> D
 B --> D
 F --> D
+G --> D
+H --> D
+I --> D
 ```
 
 ### Connection management
@@ -38,7 +52,7 @@ await dataverseDevPack.WaitForConnectionsAsync(4, cancellationToken);
 The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if fewer creators are configured than requested or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
 
 ### ExecuteMultiple
-Gives ability to quickly call dataverse endpoint with optimized packs of requests, multiple connections will be used to multiply speed and skip request per minute limits. In example bellow you can see how you can build unlimited in size requests that later will be sent to datavserse endpoint in packs.
+Gives the ability to quickly call the Dataverse endpoint with optimized packs of requests. Multiple connections are used to increase throughput and avoid request-per-minute limits. In the example below you can build an unlimited number of requests that are later sent to Dataverse in packs.
 ```C#
  Entity[] recordsInCrm = dataverseDevPack.SdkProxy.RetrieveMultiple(new QueryExpression
  {
@@ -218,7 +232,8 @@ mapperWrapper.Options.ValidationFieldsByEntity["account"] = new HashSet<string> 
 mapperWrapper.Options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
 ```
 If the mapper already ran `ValidateAfterSave`, wrapper validation is skipped to avoid duplicate reads. Set `MapperWrapperOptions.ValidateAfterMapperValidation = true` when both validators must run.
-The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:```C#
+The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:
+```C#
 IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync("localhost");
 MapperWrapper redisWrapper = new(
     dataverseDevPack.SdkProxy,
@@ -280,5 +295,4 @@ Production notes:
 ## Roadmap
 
 - QueryBuilder for faster and better requests / also for LINQ
-- LINQ support
 - and more...
