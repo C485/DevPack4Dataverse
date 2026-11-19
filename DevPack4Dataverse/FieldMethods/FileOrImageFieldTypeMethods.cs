@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,20 +121,22 @@ public sealed class FileOrImageFieldTypeMethods
             .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
             .ConfigureAwait(false);
         // ExecuteMultipleLogic returns responses in the original request order across all chunks.
-        foreach (
-            DownloadBlockResponse downloadBlockResponse in executeMultipleLogicResult.Results
-                .Select(p => p.Response)
-                .Cast<DownloadBlockResponse>()
-        )
+        foreach (ExecuteMultipleResponseItem responseItem in executeMultipleLogicResult.Results)
         {
+            DownloadBlockResponse downloadBlockResponse =
+                (DownloadBlockResponse)responseItem.Response;
             await fileContentStream
-                .WriteAsync(downloadBlockResponse.Data, 0, downloadBlockResponse.Data.Length)
+                .WriteAsync(
+                    downloadBlockResponse.Data,
+                    0,
+                    downloadBlockResponse.Data.Length
+                )
                 .ConfigureAwait(false);
         }
 
         return new FileData
         {
-            Data = fileContentStream.ToArray(),
+            Data = GetFileBytes(fileContentStream),
             Name = fileBlockResponse.FileName,
             Size = fileBlockResponse.FileSizeInBytes
         };
@@ -201,10 +203,7 @@ public sealed class FileOrImageFieldTypeMethods
                 FileContinuationToken = fileBlockResponse.FileContinuationToken,
                 FileName = fileName,
                 MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
-                BlockList = requestBuilder.RequestWithResults.Requests
-                    .Cast<UploadBlockRequest>()
-                    .Select(p => p.BlockId)
-                    .ToArray()
+                BlockList = GetBlockIds(requestBuilder)
             };
         CommitFileBlocksUploadResponse commitFileBlocksUploadResponse = await _sdkProxy
             .ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest)
@@ -222,6 +221,31 @@ public sealed class FileOrImageFieldTypeMethods
 
         Guid genGuid = Guid.NewGuid();
         return Convert.ToBase64String(genGuid.ToByteArray());
+    }
+
+    private static byte[] GetFileBytes(MemoryStream stream)
+    {
+        if (
+            stream.TryGetBuffer(out ArraySegment<byte> buffer)
+            && buffer.Array != null
+            && buffer.Count == buffer.Array.Length
+        )
+        {
+            return buffer.Array;
+        }
+
+        return stream.ToArray();
+    }
+
+    private static string[] GetBlockIds(ExecuteMultipleRequestBuilder requestBuilder)
+    {
+        List<string> blockIds = new(requestBuilder.Count);
+        foreach (OrganizationRequest request in requestBuilder.RequestWithResults.Requests)
+        {
+            blockIds.Add(((UploadBlockRequest)request).BlockId);
+        }
+
+        return blockIds.ToArray();
     }
 
     public sealed class FileData

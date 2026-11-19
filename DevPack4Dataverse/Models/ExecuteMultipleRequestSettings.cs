@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
 
-public class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpleSettings
+public sealed class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpleSettings
 {
     /// <summary>
     ///  <para>Optional.</para>

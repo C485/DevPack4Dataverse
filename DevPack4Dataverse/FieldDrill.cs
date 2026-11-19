@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ namespace DevPack4Dataverse;
 /// attribute names, and every intermediate field must contain an <see cref="EntityReference"/>.
 /// The type has no mutable state; concurrent calls delegate to the supplied <see cref="SdkProxy"/>.
 /// </remarks>
-public class FieldDrill
+public sealed class FieldDrill
 {
     private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;

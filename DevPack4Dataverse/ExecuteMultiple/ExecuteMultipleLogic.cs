@@ -361,17 +361,24 @@ public sealed class ExecuteMultipleLogic
         logicResult.Stopwatch.Stop();
         logicResult.RecordsRequested = requestCount;
         logicResult.RecordsProcessed = progress;
-        logicResult.Results = responsesByIndex
-            .OrderBy(pair => pair.Key)
-            .Select(pair => pair.Value)
-            .ToArray();
+        List<ExecuteMultipleResponseItem> orderedResponses = new(responsesByIndex.Count);
+        for (int index = 0; index < requestCount; index++)
+        {
+            if (responsesByIndex.TryGetValue(index, out ExecuteMultipleResponseItem response))
+            {
+                orderedResponses.Add(response);
+            }
+        }
+
+        logicResult.Results = orderedResponses.ToArray();
         logicResult.Cancelled = cancellationToken.IsCancellationRequested;
         return logicResult;
     }
 
     private static RequestChunk[] RequestsToChunks(OrganizationRequest[] requests, int requestSize)
     {
-        var chunks = new List<RequestChunk>();
+        int chunkCount = (requests.Length + requestSize - 1) / requestSize;
+        var chunks = new List<RequestChunk>(chunkCount);
         for (int offset = 0; offset < requests.Length; offset += requestSize)
         {
             int count = Math.Min(requestSize, requests.Length - offset);

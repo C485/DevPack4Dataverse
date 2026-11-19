@@ -44,14 +44,17 @@ internal sealed class RecordStore
 
     public async Task<Entity> GetAsync(
         EntityKey key,
-        IReadOnlyCollection<string> requiredColumns,
+        IEnumerable<string> requiredColumns,
         bool useCache,
         bool forceRefresh,
         RequestSettings requestSettings,
         CancellationToken cancellationToken
     )
     {
-        HashSet<string> columns = new(requiredColumns ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        HashSet<string> columns = new(
+            requiredColumns ?? Enumerable.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase
+        );
         if (key.IsAlternateKey)
         {
             foreach (string attribute in key.AlternateKey.Keys)
@@ -127,13 +130,16 @@ internal sealed class RecordStore
 
     public async Task LoadAllAsync(
         string logicalName,
-        IReadOnlyCollection<string> requiredColumns,
-        IReadOnlyCollection<string> alternateKeyAttributes,
+        IEnumerable<string> requiredColumns,
+        IEnumerable<string> alternateKeyAttributes,
         RequestSettings requestSettings,
         CancellationToken cancellationToken
     )
     {
-        HashSet<string> columns = new(requiredColumns ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        HashSet<string> columns = new(
+            requiredColumns ?? Enumerable.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase
+        );
         if (alternateKeyAttributes != null)
         {
             foreach (string attribute in alternateKeyAttributes)
@@ -154,7 +160,7 @@ internal sealed class RecordStore
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
 
-        string[] attributes = alternateKeyAttributes?.ToArray() ?? Array.Empty<string>();
+        IEnumerable<string> attributes = alternateKeyAttributes ?? Enumerable.Empty<string>();
         foreach (Entity record in records)
         {
             if (record.Id != Guid.Empty)

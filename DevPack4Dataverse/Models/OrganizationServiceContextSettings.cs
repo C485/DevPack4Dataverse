@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@ limitations under the License.
 
 namespace DevPack4Dataverse.Models;
 
-public class OrganizationServiceContextSettings
+public sealed class OrganizationServiceContextSettings
 {
     public static readonly OrganizationServiceContextSettings Default = new();
 

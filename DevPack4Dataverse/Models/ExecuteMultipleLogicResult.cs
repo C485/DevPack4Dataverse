@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.Models;
 
-public class ExecuteMultipleLogicResult
+public sealed class ExecuteMultipleLogicResult
 {
     /// <summary>True when execution stopped because the cancellation token was requested.</summary>
     public bool Cancelled { get; set; }

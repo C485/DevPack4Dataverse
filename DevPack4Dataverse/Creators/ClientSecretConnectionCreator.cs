@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Creators;
 
-public class ClientSecretConnectionCreator : IConnectionCreator
+public sealed class ClientSecretConnectionCreator : IConnectionCreator
 {
     private readonly string _appId;
     private readonly string _crmUrl;

@@ -73,7 +73,7 @@ internal sealed class LookupResolver
         Entity record = await _recordStore
             .GetAsync(
                 key,
-                options.Fields.ToArray(),
+                options.Fields,
                 options.UseCache,
                 forceRefresh,
                 state.RequestSettings,
@@ -90,7 +90,7 @@ internal sealed class LookupResolver
             record = await _recordStore
                 .GetAsync(
                     key,
-                    options.Fields.ToArray(),
+                    options.Fields,
                     true,
                     false,
                     state.RequestSettings,
@@ -142,8 +142,8 @@ internal sealed class LookupResolver
 
         Task load = _recordStore.LoadAllAsync(
             logicalName,
-            options.Fields.ToArray(),
-            options.AlternateKeyAttributes.ToArray(),
+            options.Fields,
+            options.AlternateKeyAttributes,
             state.RequestSettings,
             cancellationToken
         );

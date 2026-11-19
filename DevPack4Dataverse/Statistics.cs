@@ -20,7 +20,7 @@ using DevPack4Dataverse.Models;
 
 namespace DevPack4Dataverse;
 
-internal class Statistics : IStatistics
+internal sealed class Statistics : IStatistics
 {
     private const int MaxStatisticsRetained = 100_000;
     private readonly object _lock = new();

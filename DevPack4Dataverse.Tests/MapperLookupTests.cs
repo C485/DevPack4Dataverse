@@ -12,6 +12,16 @@ namespace DevPack4Dataverse.Tests;
 public class MapperLookupTests
 {
     [Fact]
+    public void EntityKey_SingleAlternateAttributeOverload()
+    {
+        EntityKey key = EntityKey.ByAlternateKey("account", "accountnumber", "A-1");
+
+        Assert.Equal("account", key.LogicalName);
+        Assert.False(key.IsEmpty);
+        Assert.Equal("A-1", key.AlternateKey["accountnumber"]);
+    }
+
+    [Fact]
     public async Task BasicKey_ResolvesLookupAndRequestsOnlyConfiguredColumns()
     {
         Guid id = Guid.NewGuid();

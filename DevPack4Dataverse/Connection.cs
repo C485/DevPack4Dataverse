@@ -79,7 +79,7 @@ public sealed class Connection : IConnection
 
         Guid createdRecordId = await CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
 
-        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+        ColumnSet columns = CreateColumnSet(record.Attributes.Keys);
 
         return await RetrieveAsync(record.LogicalName, createdRecordId, columns, requestSettings)
             .ConfigureAwait(false);
@@ -227,7 +227,7 @@ public sealed class Connection : IConnection
             p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
         );
 
-        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+        ColumnSet columns = CreateColumnSet(record.Attributes.Keys);
 
         return Retrieve(record.LogicalName, record.Id, columns, requestSettings);
     }
@@ -242,7 +242,7 @@ public sealed class Connection : IConnection
             p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
         );
 
-        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+        ColumnSet columns = CreateColumnSet(record.Attributes.Keys);
 
         return Retrieve<T>(record.LogicalName, record.Id, columns, requestSettings);
     }
@@ -257,7 +257,7 @@ public sealed class Connection : IConnection
             p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
         );
 
-        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+        ColumnSet columns = CreateColumnSet(record.Attributes.Keys);
 
         return await RetrieveAsync<T>(record.LogicalName, record.Id, columns, requestSettings).ConfigureAwait(false);
     }
@@ -272,7 +272,7 @@ public sealed class Connection : IConnection
             p => p.Id != Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
         );
 
-        ColumnSet columns = new(record.Attributes.Keys.ToArray());
+        ColumnSet columns = CreateColumnSet(record.Attributes.Keys);
 
         return await RetrieveAsync(record.LogicalName, record.Id, columns, requestSettings).ConfigureAwait(false);
     }
@@ -339,9 +339,9 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        return await RetrieveAsync(entityName, id, columnSet, requestSettings)
-            .ContinueWith(p => p.Result?.ToEntity<T>())
+        Entity entity = await RetrieveAsync(entityName, id, columnSet, requestSettings)
             .ConfigureAwait(false);
+        return entity?.ToEntity<T>();
     }
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
@@ -411,9 +411,9 @@ public sealed class Connection : IConnection
                 );
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-                foreach (T record in retrieveMultipleResult.Entities.Select(p => p.ToEntity<T>()))
+                foreach (Entity entity in retrieveMultipleResult.Entities)
                 {
-                    yield return record;
+                    yield return entity.ToEntity<T>();
                 }
 
                 if (!retrieveMultipleResult.MoreRecords)
@@ -499,9 +499,9 @@ public sealed class Connection : IConnection
                 ).ConfigureAwait(false);
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-                foreach (T record in retrieveMultipleResult.Entities.Select(p => p.ToEntity<T>()))
+                foreach (Entity entity in retrieveMultipleResult.Entities)
                 {
-                    yield return record;
+                    yield return entity.ToEntity<T>();
                 }
 
                 if (!retrieveMultipleResult.MoreRecords)
@@ -627,5 +627,16 @@ public sealed class Connection : IConnection
         UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings).ConfigureAwait(false);
 
         return Guard.Against.Null(executeResponse).Target;
+    }
+
+    private static ColumnSet CreateColumnSet(IEnumerable<string> columns)
+    {
+        ColumnSet columnSet = new();
+        foreach (string column in columns)
+        {
+            columnSet.AddColumn(column);
+        }
+
+        return columnSet;
     }
 }
