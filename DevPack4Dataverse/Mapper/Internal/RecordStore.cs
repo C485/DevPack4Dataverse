@@ -374,9 +374,17 @@ internal sealed class RecordStore
     {
         try
         {
-            await _cache
-                .RemoveByRecordIdAsync(logicalName, id, cancellationToken)
-                .ConfigureAwait(false);
+            if (_cache is IEntityCacheByRecordId byRecordId)
+            {
+                await byRecordId
+                    .RemoveByRecordIdAsync(logicalName, id, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                // Older external caches cannot remove by record id; clearing the table is safe.
+                await _cache.ClearAsync(logicalName, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (Exception exception) when (
             !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested)

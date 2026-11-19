@@ -21,15 +21,16 @@ namespace DevPack4Dataverse.Mapper.Cache;
 /// <summary>
 /// Default thread-safe in-memory entity cache.
 /// </summary>
-public sealed class InMemoryEntityCache : IEntityCache
+public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
 {
+    private const int MaxEntries = 100_000;
     private readonly ConcurrentDictionary<string, CacheEntry> _entries =
         new(StringComparer.Ordinal);
+    private readonly ConcurrentQueue<string> _evictionQueue = new();
     private readonly ConcurrentDictionary<
         string,
         ConcurrentDictionary<string, byte>
     > _keysByRecord = new(StringComparer.Ordinal);
-    private int _setCount;
 
     public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default)
     {
@@ -43,7 +44,10 @@ public sealed class InMemoryEntityCache : IEntityCache
                 return Task.FromResult(entry.Value);
             }
 
-            _entries.TryRemove(cacheKey, out _);
+            if (_entries.TryRemove(cacheKey, out CacheEntry expired))
+            {
+                UnindexEntry(cacheKey, expired.Value);
+            }
         }
 
         return Task.FromResult<CachedEntity>(null);
@@ -74,11 +78,9 @@ public sealed class InMemoryEntityCache : IEntityCache
         CacheEntry newEntry = new(entry, expiresUtc);
         _entries[cacheKey] = newEntry;
         IndexEntry(cacheKey, entry);
-
-        if (Interlocked.Increment(ref _setCount) % 256 == 0)
-        {
-            RemoveExpiredEntries();
-        }
+        _evictionQueue.Enqueue(cacheKey);
+        TrimCacheIfNeeded();
+        while (_evictionQueue.Count > MaxEntries && _evictionQueue.TryDequeue(out _)) { }
 
         return Task.CompletedTask;
     }
@@ -133,14 +135,13 @@ public sealed class InMemoryEntityCache : IEntityCache
         return Task.CompletedTask;
     }
 
-    private void RemoveExpiredEntries()
+    private void TrimCacheIfNeeded()
     {
-        DateTime now = DateTime.UtcNow;
-        foreach (KeyValuePair<string, CacheEntry> entry in _entries)
+        while (_entries.Count > MaxEntries && _evictionQueue.TryDequeue(out string key))
         {
-            if (entry.Value.ExpiresUtc <= now && _entries.TryRemove(entry.Key, out CacheEntry removed))
+            if (_entries.TryRemove(key, out CacheEntry entry))
             {
-                UnindexEntry(entry.Key, removed.Value);
+                UnindexEntry(key, entry.Value);
             }
         }
     }

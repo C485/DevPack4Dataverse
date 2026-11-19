@@ -40,6 +40,12 @@ public sealed class MapperOptions<TSource, TTarget>
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// When true, the change check may use a cached copy of the current record. Defaults to
+    /// false, which always reads the record fresh from Dataverse.
+    /// </summary>
+    public bool UseCacheForChangeDetection { get; set; }
+
+    /// <summary>
     /// Returns validation error messages for a freshly read record. When null and validation
     /// is enabled, the mapper only verifies that the saved record exists.
     /// </summary>

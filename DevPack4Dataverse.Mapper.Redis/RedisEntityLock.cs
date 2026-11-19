@@ -27,11 +27,13 @@ public sealed class RedisEntityLock : IEntityLock
         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
     private readonly StackExchange.Redis.IDatabase _database;
+    private readonly TimeSpan _lockTimeToLive;
     private readonly string _prefix;
 
     public RedisEntityLock(
         StackExchange.Redis.IConnectionMultiplexer connection,
-        string keyPrefix = "devpack:mapper:lock:"
+        string keyPrefix = "devpack:mapper:lock:",
+        TimeSpan? lockTimeToLive = null
     )
     {
         if (connection == null)
@@ -41,6 +43,14 @@ public sealed class RedisEntityLock : IEntityLock
 
         _database = connection.GetDatabase();
         _prefix = string.IsNullOrWhiteSpace(keyPrefix) ? "devpack:mapper:lock:" : keyPrefix;
+        _lockTimeToLive = lockTimeToLive ?? TimeSpan.FromMinutes(5);
+        if (_lockTimeToLive <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(lockTimeToLive),
+                "Lock time to live must be positive."
+            );
+        }
     }
 
     public async Task<IEntityLockHandle> AcquireAsync(
@@ -66,10 +76,14 @@ public sealed class RedisEntityLock : IEntityLock
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            TimeSpan remaining = deadline - DateTime.UtcNow;
             if (
                 await _database
-                    .StringSetAsync(redisKey, token, remaining, StackExchange.Redis.When.NotExists)
+                    .StringSetAsync(
+                        redisKey,
+                        token,
+                        _lockTimeToLive,
+                        StackExchange.Redis.When.NotExists
+                    )
                     .ConfigureAwait(false)
             )
             {

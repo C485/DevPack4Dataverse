@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,36 +50,45 @@ internal static class AsyncParallel
     {
         if (maxDegreeOfParallelism == -1)
         {
-            maxDegreeOfParallelism = int.MaxValue;
+            maxDegreeOfParallelism = Environment.ProcessorCount;
         }
         if (maxDegreeOfParallelism <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism));
         }
 
-        using SemaphoreSlim throttler = new(maxDegreeOfParallelism);
+        int workerCount = Math.Min(maxDegreeOfParallelism, 1024);
+        using IEnumerator<T> enumerator = source.GetEnumerator();
+        object gate = new();
 
-        Task[] tasks = source
-            .Select(item =>
-                Task.Run(
-                    async () =>
+        Task Worker()
+        {
+            return Task.Run(
+                async () =>
+                {
+                    while (true)
                     {
-                        await throttler.WaitAsync(cancellationToken).ConfigureAwait(false);
-                        try
+                        T item;
+                        lock (gate)
                         {
-                            await body(item, cancellationToken).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            throttler.Release();
-                        }
-                    },
-                    cancellationToken
-                )
-            )
-            .ToArray();
+                            if (!enumerator.MoveNext())
+                            {
+                                return;
+                            }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+                            item = enumerator.Current;
+                        }
+
+                        cancellationToken.ThrowIfCancellationRequested();
+                        await body(item, cancellationToken).ConfigureAwait(false);
+                    }
+                },
+                cancellationToken
+            );
+        }
+
+        Task[] workers = Enumerable.Range(0, workerCount).Select(_ => Worker()).ToArray();
+        await Task.WhenAll(workers).ConfigureAwait(false);
     }
 #endif
 }

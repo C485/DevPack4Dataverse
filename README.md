@@ -64,7 +64,8 @@ Gives ability to quickly call dataverse endpoint with optimized packs of request
 Production notes:
 - Requests are split into chunks of `RequestSize`; it must be greater than zero.
 - `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads.
-- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault.
+- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and runs chunks sequentially.
+- Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
 - The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts.
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing.
@@ -178,6 +179,7 @@ Every lookup mapping has its own options:
 Mapper behaviour:
 - `PreSave` runs before change detection.
 - `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
+- Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
 - Only changed attributes are sent on update; unchanged records are skipped.
 - Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
 - POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.
@@ -210,7 +212,7 @@ MapperWrapper redisWrapper = new(
     new RedisEntityCache(redis),
     new RedisEntityLock(redis));
 ```
-Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached.
+Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) so the lock does not expire just because the acquisition wait was long. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached.
 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.

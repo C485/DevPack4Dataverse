@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -282,7 +282,27 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             return;
         }
 
-        _connectionCreator.StopAsync().GetAwaiter().GetResult();
+        try
+        {
+            _connectionCreator.StopAsync().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            foreach (IConnection connection in _connections)
+            {
+                try
+                {
+                    connection.PureServiceClient?.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(
+                        exception,
+                        "Could not dispose a Dataverse connection while stopping the proxy."
+                    );
+                }
+            }
+        }
     }
 
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)

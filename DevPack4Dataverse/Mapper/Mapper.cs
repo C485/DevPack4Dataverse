@@ -226,12 +226,13 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             .ConfigureAwait(false);
 
         string[] requiredColumns = GetRequiredColumns(entity, key);
+        bool useCacheForChangeDetection = _options.UseCacheForChangeDetection;
         Entity current = await _recordStore
             .GetAsync(
                 key,
                 requiredColumns,
-                false,
-                true,
+                useCacheForChangeDetection,
+                useCacheForChangeDetection ? state.ForceRefresh : true,
                 state.RequestSettings,
                 cancellationToken
             )

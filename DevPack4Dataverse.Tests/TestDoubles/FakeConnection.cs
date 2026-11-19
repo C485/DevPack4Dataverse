@@ -1,4 +1,4 @@
-﻿using Microsoft.PowerPlatform.Dataverse.Client;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
@@ -81,7 +81,7 @@ public sealed class FakeConnection : IConnection
 
     public Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
         where T : OrganizationResponse =>
-        Task.FromResult((T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException()));
+        Task.FromResult(Execute<T>(request, requestSettings));
 
     public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null) =>
         throw new NotImplementedException();
@@ -105,8 +105,11 @@ public sealed class FakeConnection : IConnection
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null) =>
-        Task.FromResult(Retrieve(entityName, id, columnSet));
+        RequestSettings requestSettings = null)
+    {
+        LastRequestSettings = requestSettings;
+        return Task.FromResult(Retrieve(entityName, id, columnSet, requestSettings));
+    }
 
     public Task<T> RetrieveAsync<T>(
         string entityName,

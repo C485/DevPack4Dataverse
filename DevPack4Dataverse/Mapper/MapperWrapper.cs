@@ -130,7 +130,7 @@ public sealed class MapperWrapper
         List<MappingError> errors = new(result.Errors);
         if (
             Options.ValidateAfterSave
-            && (Options.ValidateAfterMapperValidation || !result.ValidationWasRun)
+            && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
         )
         {
             errors.AddRange(
@@ -174,7 +174,7 @@ public sealed class MapperWrapper
             results.Add(result);
             errors.AddRange(result.Errors);
 
-            if (Options.ValidateAfterMapperValidation || !result.ValidationWasRun)
+            if (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
             {
                 referencesToValidate.AddRange(result.SavedReferences);
             }
@@ -246,4 +246,7 @@ public sealed class MapperWrapper
             )
             .ConfigureAwait(false);
     }
+
+    private static bool ValidationWasRun(IMappingResult result) =>
+        result is IValidationAwareMappingResult aware && aware.ValidationWasRun;
 }

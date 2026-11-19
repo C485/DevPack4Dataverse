@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,7 +81,8 @@ public sealed class Connection : IConnection
 
         ColumnSet columns = new(record.Attributes.Keys.ToArray());
 
-        return await RetrieveAsync(record.LogicalName, createdRecordId, columns).ConfigureAwait(false);
+        return await RetrieveAsync(record.LogicalName, createdRecordId, columns, requestSettings)
+            .ConfigureAwait(false);
     }
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
@@ -93,8 +94,6 @@ public sealed class Connection : IConnection
             nameof(record),
             p => p.Id == Guid.Empty && !string.IsNullOrEmpty(p.LogicalName)
         );
-
-        Guard.Against.Null(requestSettings);
 
         CreateRequest createRequest = new() { Target = record };
 
@@ -596,7 +595,13 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p =>
+                !string.IsNullOrWhiteSpace(p.LogicalName)
+                && (p.Id != Guid.Empty || (p.KeyAttributes != null && p.KeyAttributes.Count > 0))
+        );
 
         UpsertRequest request = new() { Target = record };
 
@@ -609,7 +614,13 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guard.Against.NullOrInvalidInput(record, nameof(record), p => string.IsNullOrEmpty(p.LogicalName));
+        Guard.Against.NullOrInvalidInput(
+            record,
+            nameof(record),
+            p =>
+                !string.IsNullOrWhiteSpace(p.LogicalName)
+                && (p.Id != Guid.Empty || (p.KeyAttributes != null && p.KeyAttributes.Count > 0))
+        );
 
         UpsertRequest request = new() { Target = record };
 

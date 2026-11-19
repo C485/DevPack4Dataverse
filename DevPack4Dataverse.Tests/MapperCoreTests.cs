@@ -412,6 +412,47 @@ public class MapperCoreTests
     }
 
     [Fact]
+    public async Task UseCacheForChangeDetection_CanUseCachedCurrentRecord()
+    {
+        Guid id = Guid.NewGuid();
+        var cache = new InMemoryEntityCache();
+        await cache.SetAsync(
+            EntityKey.ById("account", id),
+            new CachedEntity(new Entity("account", id) { ["name"] = "Cached" }, new[] { "name" }),
+            TimeSpan.FromMinutes(1)
+        );
+        int retrievals = 0;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ =>
+            {
+                retrievals++;
+                return new[] { new Entity("account", id) { ["name"] = "Database" } };
+            },
+            UpdateRecordHandler = _ => { }
+        };
+        var (proxy, wrapper) = Create(fake, null, cache);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+                .WithLogicalName("account")
+                .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+                .Map("name", context => context.Source.Name)
+                .WithOptions(options => options.UseCacheForChangeDetection = true)
+                .Build();
+
+            var result = await mapper.ExecuteAsync(
+                new AccountUpdate { Id = id, Name = "Cached" }
+            );
+
+            Assert.True(result.Records[0].Skipped);
+            Assert.Equal(0, retrievals);
+        }
+    }
+
+    [Fact]
     public async Task Update_InvalidatesAlternateKeyCacheEntries()
     {
         Guid id = Guid.NewGuid();

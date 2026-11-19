@@ -1,4 +1,4 @@
-﻿using Xunit;
+using Xunit;
 using DevPack4Dataverse.Creators;
 
 namespace DevPack4Dataverse.Tests;
@@ -40,6 +40,14 @@ public class ConnectionStringConnectionCreatorTests
         var exception = Record.Exception(() => new ConnectionStringConnectionCreator(""));
 
         Assert.NotNull(exception);
+    }
+
+    [Fact]
+    public void RejectsWhitespaceConnectionString()
+    {
+        var exception = Record.Exception(() => new ConnectionStringConnectionCreator("   "));
+
+        Assert.IsType<ArgumentException>(exception);
     }
 
     [Fact]

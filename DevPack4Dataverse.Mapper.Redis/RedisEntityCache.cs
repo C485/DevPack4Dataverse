@@ -25,7 +25,7 @@ namespace DevPack4Dataverse.Mapper.Redis;
 /// Redis-backed entity cache. Values are serialized to JSON and expire using the TTL
 /// supplied by the mapper wrapper.
 /// </summary>
-public sealed class RedisEntityCache : IEntityCache
+public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 {
     private readonly StackExchange.Redis.IDatabase _database;
     private readonly StackExchange.Redis.IConnectionMultiplexer _connection;
@@ -84,10 +84,25 @@ public sealed class RedisEntityCache : IEntityCache
         }
     }
 
-    public Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default)
+    public async Task RemoveAsync(EntityKey key, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _database.KeyDeleteAsync(Key(key));
+        StackExchange.Redis.RedisKey cacheKey = Key(key);
+        StackExchange.Redis.RedisValue value = await _database
+            .StringGetAsync(cacheKey)
+            .ConfigureAwait(false);
+        if (!value.IsNull)
+        {
+            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            if (dto != null && dto.Id != Guid.Empty)
+            {
+                await _database
+                    .SetRemoveAsync(IndexKey(dto.LogicalName, dto.Id), cacheKey.ToString())
+                    .ConfigureAwait(false);
+            }
+        }
+
+        await _database.KeyDeleteAsync(cacheKey).ConfigureAwait(false);
     }
 
     public async Task RemoveByRecordIdAsync(
