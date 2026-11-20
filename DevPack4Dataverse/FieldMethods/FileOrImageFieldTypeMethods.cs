@@ -219,8 +219,15 @@ public sealed class FileOrImageFieldTypeMethods
     {
         using EntryExitLogger logGuard = new(_logger);
 
-        Guid genGuid = Guid.NewGuid();
-        return Convert.ToBase64String(genGuid.ToByteArray());
+        // The block id is sent as a query value; a '+' is decoded as a space.
+        string blockId;
+        do
+        {
+            blockId = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        }
+        while (blockId.Contains('+'));
+
+        return blockId;
     }
 
     private static byte[] GetFileBytes(MemoryStream stream)

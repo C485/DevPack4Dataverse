@@ -271,6 +271,8 @@ string formatted = money.GetFormattedValue(account, "creditlimit");
 
 Choice label metadata is cached for five minutes per table and column. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata changes immediately.
 
+`FileOrImageFieldTypeMethods.Delete(record, field)` reads the file id stored on the record. Image columns do not return that id in a normal retrieve; for images, keep `UploadFileFieldResult.FileId` and call `Delete(fileId)`.
+
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint.
 ### CreateLinqExpressionBuilder
