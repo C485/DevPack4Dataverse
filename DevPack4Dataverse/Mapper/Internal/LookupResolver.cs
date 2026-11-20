@@ -91,8 +91,8 @@ internal sealed class LookupResolver
                 .GetAsync(
                     key,
                     options.Fields,
-                    true,
-                    false,
+                    options.UseCache,
+                    state.ForceRefresh,
                     state.RequestSettings,
                     cancellationToken
                 )
@@ -144,6 +144,7 @@ internal sealed class LookupResolver
             logicalName,
             options.Fields,
             options.AlternateKeyAttributes,
+            state.ForceRefresh,
             state.RequestSettings,
             cancellationToken
         );

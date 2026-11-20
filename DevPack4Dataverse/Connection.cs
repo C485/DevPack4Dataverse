@@ -30,8 +30,9 @@ namespace DevPack4Dataverse;
 
 public sealed class Connection : IConnection
 {
-    private readonly ILogger _logger;
     private readonly SemaphoreSlim _semaphoreSlim;
+    private readonly ILogger _logger;
+    private readonly SemaphoreSlim _callGate;
     private readonly Statistics _usageStatistics = new();
 
     public Connection(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
@@ -43,6 +44,9 @@ public sealed class Connection : IConnection
         _logger = Guard.Against.Null(logger);
 
         _semaphoreSlim = new SemaphoreSlim(maximumConcurrentlyUsage, maximumConcurrentlyUsage);
+        // shortcut: CallerId is client-wide, so calls on one client are serialized.
+        // Use more connections when parallel work is needed.
+        _callGate = new SemaphoreSlim(1, 1);
 
         PureServiceClient = Guard.Against.Null(connection);
 
@@ -134,6 +138,8 @@ public sealed class Connection : IConnection
     {
         using EntryExitLogger logGuard = new(_logger);
 
+        Guard.Against.Null(entityReference);
+
         await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings).ConfigureAwait(false);
     }
 
@@ -144,18 +150,26 @@ public sealed class Connection : IConnection
 
         Guard.Against.Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
-
-        requestSettings?.AddToOrganizationRequest(request, _logger);
-
-        Statistic statisticEntry = _usageStatistics.StartNew();
+        _callGate.Wait();
         try
         {
-            return PureServiceClient.Execute(request) as T;
+            using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
+
+            requestSettings?.AddToOrganizationRequest(request, _logger);
+
+            Statistic statisticEntry = _usageStatistics.StartNew();
+            try
+            {
+                return PureServiceClient.Execute(request) as T;
+            }
+            finally
+            {
+                _usageStatistics.Finish(statisticEntry);
+            }
         }
         finally
         {
-            _usageStatistics.Finish(statisticEntry);
+            _callGate.Release();
         }
     }
 
@@ -168,15 +182,7 @@ public sealed class Connection : IConnection
 
         Guard.Against.Null(executeMultipleRequestBuilder);
 
-        Statistic statisticEntry = _usageStatistics.StartNew();
-        try
-        {
-            return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
-        }
-        finally
-        {
-            _usageStatistics.Finish(statisticEntry);
-        }
+        return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
     }
 
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
@@ -186,17 +192,26 @@ public sealed class Connection : IConnection
 
         Guard.Against.Null(request);
 
-        using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
+        await _callGate.WaitAsync().ConfigureAwait(false);
 
-        requestSettings?.AddToOrganizationRequest(request, _logger);
-        Statistic statisticEntry = _usageStatistics.StartNew();
         try
         {
-            return (await PureServiceClient.ExecuteAsync(request).ConfigureAwait(false)) as T;
+            using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
+
+            requestSettings?.AddToOrganizationRequest(request, _logger);
+            Statistic statisticEntry = _usageStatistics.StartNew();
+            try
+            {
+                return (await PureServiceClient.ExecuteAsync(request).ConfigureAwait(false)) as T;
+            }
+            finally
+            {
+                _usageStatistics.Finish(statisticEntry);
+            }
         }
         finally
         {
-            _usageStatistics.Finish(statisticEntry);
+            _callGate.Release();
         }
     }
 

@@ -265,11 +265,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
         {
             foreach (KeyValuePair<string, object> pair in _alternateKey)
             {
-                builder
-                    .Append(pair.Key.ToLowerInvariant())
-                    .Append('=')
-                    .Append(NormalizeValue(pair.Value))
-                    .Append(';');
+                AppendAlternateKeyPart(builder, pair);
             }
         }
         else
@@ -281,15 +277,27 @@ public sealed class EntityKey : IEquatable<EntityKey>
                 )
             )
             {
-                builder
-                    .Append(pair.Key.ToLowerInvariant())
-                    .Append('=')
-                    .Append(NormalizeValue(pair.Value))
-                    .Append(';');
+                AppendAlternateKeyPart(builder, pair);
             }
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendAlternateKeyPart(
+        StringBuilder builder,
+        KeyValuePair<string, object> pair
+    )
+    {
+        string key = pair.Key.ToLowerInvariant();
+        string value = NormalizeValue(pair.Value);
+        builder
+            .Append(key.Length)
+            .Append(':')
+            .Append(key)
+            .Append(value.Length)
+            .Append(':')
+            .Append(value);
     }
 
     private static string NormalizeValue(object value)

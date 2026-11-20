@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.ExecuteTransaction;
+using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -76,5 +78,29 @@ public class SdkProxyTests
         var request = Assert.IsType<ExecuteTransactionRequest>(captured);
         Assert.Single(request.Requests);
         Assert.False(request.ReturnResponses);
+    }
+
+    [Fact]
+    public async Task GetConnection_WhenAllCreatorsFail_ThrowsInsteadOfHanging()
+    {
+        using var proxy = new SdkProxy(NullLogger.Instance, false, new FailingCreator());
+        Task<ConnectionLease> task = Task.Run(() => proxy.GetConnection());
+
+        Task completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(task, completed);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+    }
+
+    private sealed class FailingCreator : IConnectionCreator
+    {
+        public bool IsCreated { get; private set; }
+        public bool IsError { get; private set; }
+        public bool IsValid => IsCreated && !IsError;
+
+        public IConnection Create(ILogger logger)
+        {
+            IsError = true;
+            throw new InvalidOperationException("Connection creation failed.");
+        }
     }
 }

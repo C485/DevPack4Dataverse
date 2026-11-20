@@ -51,6 +51,8 @@ await dataverseDevPack.WaitForConnectionsAsync(4, cancellationToken);
 ```
 The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if fewer creators are configured than requested or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
 
+A connection handles one request at a time. The Dataverse caller id is a client-wide setting, so impersonated and ordinary requests cannot safely share a client; create more connections when you need parallel work. Dispose `DataverseDevPack` (or `SdkProxy`) to stop the background creator and close the clients.
+
 ### ExecuteMultiple
 Gives the ability to quickly call the Dataverse endpoint with optimized packs of requests. Multiple connections are used to increase throughput and avoid request-per-minute limits. In the example below you can build an unlimited number of requests that are later sent to Dataverse in packs.
 ```C#
@@ -76,8 +78,8 @@ Gives the ability to quickly call the Dataverse endpoint with optimized packs of
 ```
 
 Production notes:
-- Requests are split into chunks of `RequestSize`; it must be greater than zero.
-- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads.
+- Requests are split into chunks of `RequestSize`; it must be greater than zero and is capped at 1000. A Dataverse deployment can allow a smaller batch.
+- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads. A request that fails at the batch/transport level, or that returns no response, is absent from `Results`; use `ErrorReport` for failures. `RequestIndex` on an item is relative to its own chunk.
 - The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and runs chunks sequentially.
 - Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
@@ -209,6 +211,7 @@ Mapper behaviour:
 - `PreSave` runs before change detection.
 - `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
 - Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
+- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload.
 - Only changed attributes are sent on update; unchanged records are skipped.
 - Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
 - POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.
@@ -265,6 +268,8 @@ decimal transactionValue = money.ConvertFromBase(baseValue, exchangeRate);
 string formatted = money.GetFormattedValue(account, "creditlimit");
 ```
 `SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
+
+Choice label metadata is cached for five minutes per table and column. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata changes immediately.
 
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint.

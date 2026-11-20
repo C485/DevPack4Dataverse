@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,8 @@ namespace DevPack4Dataverse.FieldMethods;
 public sealed class OptionSetFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
+    private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
+    private readonly ConcurrentDictionary<string, MetadataCacheEntry> _metadataCache = new(StringComparer.Ordinal);
     private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
 
@@ -204,7 +207,7 @@ public sealed class OptionSetFieldTypeMethods
                     && string.Equals(
                         valueToMap,
                         label.Label,
-                        compareIgnoreCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase
+                        compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
                     )
                 )
                 {
@@ -226,6 +229,18 @@ public sealed class OptionSetFieldTypeMethods
     {
         using EntryExitLogger logGuard = new(_logger);
 
+        string cacheKey =
+            (logicalName ?? string.Empty).ToLowerInvariant()
+            + "|"
+            + (fieldName ?? string.Empty).ToLowerInvariant();
+        if (
+            _metadataCache.TryGetValue(cacheKey, out MetadataCacheEntry cached)
+            && cached.ExpiresUtc > DateTime.UtcNow
+        )
+        {
+            return cached.Metadata;
+        }
+
         RetrieveAttributeResponse metadataInfo = await _sdkProxy
             .ExecuteAsync<RetrieveAttributeResponse>(
                 new RetrieveAttributeRequest
@@ -236,39 +251,58 @@ public sealed class OptionSetFieldTypeMethods
                 }
             )
             .ConfigureAwait(false);
+        OptionMetadataCollection metadata;
         if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
         {
-            return new OptionMetadataCollection();
+            metadata = new OptionMetadataCollection();
         }
-        Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
-        Guard.Against.Expression(
-            attributeType =>
-            {
-                return attributeType
-                    is not (
-                        AttributeTypeCode.State
-                        or AttributeTypeCode.Status
-                        or AttributeTypeCode.Picklist
-                        or AttributeTypeCode.Boolean
-                    );
-            },
-            metadataInfo.AttributeMetadata.AttributeType.Value,
-            $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
-        );
-        return metadataInfo.AttributeMetadata switch
+        else
         {
-            StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,
-            StateAttributeMetadata stateAttributeMetadata => stateAttributeMetadata.OptionSet.Options,
-            PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
-            BooleanAttributeMetadata booleanAttributeMetadata
-                => new OptionMetadataCollection(
-                    [booleanAttributeMetadata.OptionSet.TrueOption, booleanAttributeMetadata.OptionSet.FalseOption]
-                ),
-            EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
-            _
-                => throw new InvalidCastException(
-                    $"Field[{fieldName}] in table {logicalName} is not a valid option set, enum, boolean or state/status field."
-                ),
-        };
+            Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
+            Guard.Against.Expression(
+                attributeType =>
+                {
+                    return attributeType
+                        is not (
+                            AttributeTypeCode.State
+                            or AttributeTypeCode.Status
+                            or AttributeTypeCode.Picklist
+                            or AttributeTypeCode.Boolean
+                        );
+                },
+                metadataInfo.AttributeMetadata.AttributeType.Value,
+                $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
+            );
+            metadata = metadataInfo.AttributeMetadata switch
+            {
+                StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,
+                StateAttributeMetadata stateAttributeMetadata => stateAttributeMetadata.OptionSet.Options,
+                PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
+                BooleanAttributeMetadata booleanAttributeMetadata
+                    => new OptionMetadataCollection(
+                        [booleanAttributeMetadata.OptionSet.TrueOption, booleanAttributeMetadata.OptionSet.FalseOption]
+                    ),
+                EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
+                _
+                    => throw new InvalidCastException(
+                        $"Field[{fieldName}] in table {logicalName} is not a valid option set, enum, boolean or state/status field."
+                    ),
+            };
+        }
+
+        _metadataCache[cacheKey] = new MetadataCacheEntry(
+            metadata,
+            DateTime.UtcNow.Add(MetadataCacheTtl)
+        );
+        return metadata;
+    }
+
+    private sealed class MetadataCacheEntry(
+        OptionMetadataCollection metadata,
+        DateTime expiresUtc
+    )
+    {
+        public OptionMetadataCollection Metadata { get; } = metadata;
+        public DateTime ExpiresUtc { get; } = expiresUtc;
     }
 }

@@ -51,7 +51,7 @@ public sealed class FileOrImageFieldTypeMethods
         Entity fileFieldData = await _sdkProxy
             .RetrieveAsync(recordId.LogicalName, recordId.Id, new ColumnSet(fieldName))
             .ConfigureAwait(false);
-        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
+        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) || fileId == Guid.Empty)
         {
             return false;
         }

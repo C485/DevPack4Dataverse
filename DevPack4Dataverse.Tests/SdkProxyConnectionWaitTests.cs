@@ -160,6 +160,21 @@ public class SdkProxyConnectionWaitTests
         }
     }
 
+    [Fact]
+    public void DataverseDevPack_Dispose_StopsTheProxy()
+    {
+        var devPack = new DataverseDevPack(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(new FakeConnection())
+        );
+        devPack.WaitForConnections(1);
+
+        devPack.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => devPack.SdkProxy.WaitForConnections(1));
+    }
+
     private sealed class FailingConnectionCreator : IConnectionCreator
     {
         public bool IsCreated { get; private set; }

@@ -54,6 +54,18 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// </summary>
     public bool SuppressDuplicateDetection { private get; set; }
 
+    internal RequestSettings Clone() =>
+        new()
+        {
+            ConcurrencyBehavior = ConcurrencyBehavior,
+            PartitionId = PartitionId,
+            SharedVariable = SharedVariable,
+            SkipPluginExecution = SkipPluginExecution,
+            SuppressDuplicateDetection = SuppressDuplicateDetection,
+            ImpersonateAsUserByAADId = ImpersonateAsUserByAADId,
+            ImpersonateAsUserByDataverseId = ImpersonateAsUserByDataverseId
+        };
+
     public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
         using EntryExitLogger logGuard = new(logger);

@@ -16,7 +16,6 @@ limitations under the License.
 
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Net;
 using System.Security;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
@@ -56,11 +55,6 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     )
     {
         using EntryExitLogger logGuard = new(logger);
-
-        if (applyConnectionOptimalization)
-        {
-            OptimalizeConnections();
-        }
 
         _logger = Guard.Against.Null(logger);
         _applyConnectionOptimalization = applyConnectionOptimalization;
@@ -415,6 +409,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
+            ThrowIfDisposed();
             int connectionCount = _connections.Count;
             WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
                 Math.Max(1, connectionCount)
@@ -448,6 +443,11 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 ArrayPool<WeightedConnection>.Shared.Return(buffer);
             }
 
+            if (_connections.IsEmpty)
+            {
+                EnsureConnectionsCanBeCreated(1);
+            }
+
             Thread.Sleep(_sleepTimeForConnectionGetter);
         }
     }
@@ -465,6 +465,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
+            ThrowIfDisposed();
             int connectionCount = _connections.Count;
             WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
                 Math.Max(1, connectionCount)
@@ -496,6 +497,11 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             {
                 Array.Clear(buffer, 0, filled);
                 ArrayPool<WeightedConnection>.Shared.Return(buffer);
+            }
+
+            if (_connections.IsEmpty)
+            {
+                EnsureConnectionsCanBeCreated(1);
             }
 
             await Task.Delay(_sleepTimeForConnectionGetter).ConfigureAwait(false);
@@ -683,13 +689,5 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         public int Compare(WeightedConnection x, WeightedConnection y) =>
             x.Weight.CompareTo(y.Weight);
-    }
-
-    private static void OptimalizeConnections()
-    {
-        ServicePointManager.DefaultConnectionLimit = 65000;
-        ThreadPool.SetMinThreads(100, 100);
-        ServicePointManager.Expect100Continue = false;
-        ServicePointManager.UseNagleAlgorithm = false;
     }
 }

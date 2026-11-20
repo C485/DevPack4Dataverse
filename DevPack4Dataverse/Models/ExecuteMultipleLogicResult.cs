@@ -33,6 +33,8 @@ public sealed class ExecuteMultipleLogicResult
 
     /// <summary>
     /// Responses ordered by the original request order, across all ExecuteMultiple chunks.
+    /// A request that failed at the batch/transport level, or that produced no response, is absent;
+    /// use <c>ErrorReport</c> for failures. <c>RequestIndex</c> is relative to its own chunk.
     /// </summary>
     public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } = [];
 

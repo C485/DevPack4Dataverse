@@ -22,6 +22,22 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public void AlternateKey_WithSeparatorInValue_DoesNotCollide()
+    {
+        EntityKey first = EntityKey.ByAlternateKey(
+            "account",
+            new Dictionary<string, object> { ["a"] = "1;b=2", ["b"] = "3" }
+        );
+        EntityKey second = EntityKey.ByAlternateKey(
+            "account",
+            new Dictionary<string, object> { ["a"] = "1", ["b"] = "2;b=3" }
+        );
+
+        Assert.NotEqual(first.ToString(), second.ToString());
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
     public async Task BasicKey_ResolvesLookupAndRequestsOnlyConfiguredColumns()
     {
         Guid id = Guid.NewGuid();
@@ -318,6 +334,44 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public async Task RetrieveAllRecords_ReusesPreloadAcrossRuns()
+    {
+        Guid accountId = Guid.NewGuid();
+        int retrievals = 0;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ =>
+            {
+                retrievals++;
+                return new[] { new Entity("account", accountId) { ["name"] = "First" } };
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+        var options = new LookupMappingOptions
+        {
+            RetrievalMode = LookupRetrievalMode.RetrieveAllRecords
+        };
+        options.Fields.Add("name");
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    options
+                )
+                .Build();
+
+            await mapper.ExecuteAsync(new LookupSource { AccountId = accountId });
+            await mapper.ExecuteAsync(new LookupSource { AccountId = accountId });
+
+            Assert.Equal(1, retrievals);
+        }
+    }
+
+    [Fact]
     public async Task CreateIfNotExists_CreatesBasicKeyRecord()
     {
         Guid id = Guid.NewGuid();
@@ -552,6 +606,63 @@ public class MapperLookupTests
 
             Assert.False(result.HasErrors);
             Assert.Equal(id, result.Records[0].Target.Account.Id);
+        }
+    }
+
+    [Fact]
+    public async Task UseCacheFalse_CreatesInsteadOfReturningStaleCacheEntry()
+    {
+        Guid staleId = Guid.NewGuid();
+        int creates = 0;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>(),
+            ExecuteHandler = request =>
+            {
+                if (request is CreateRequest)
+                {
+                    creates++;
+                    return new CreateResponse();
+                }
+
+                throw new InvalidOperationException($"Unexpected request {request.RequestName}.");
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+        var options = new LookupMappingOptions
+        {
+            UseCache = false,
+            CreateIfNotExists = true
+        };
+        options.Fields.Add("name");
+
+        using (proxy)
+        {
+            await wrapper.Cache.SetAsync(
+                EntityKey.ById("account", staleId),
+                new CachedEntity(
+                    new Entity("account", staleId) { ["name"] = "Stale" },
+                    new[] { "name" }
+                ),
+                TimeSpan.FromMinutes(10)
+            );
+
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    options,
+                    context => new Entity("account") { ["name"] = "Created" }
+                )
+                .Build();
+
+            var result = await mapper.ExecuteAsync(
+                new LookupSource { AccountId = staleId }
+            );
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(1, creates);
         }
     }
 

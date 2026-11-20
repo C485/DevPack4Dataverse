@@ -76,9 +76,13 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
             return;
         }
 
-        ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
-        ServiceClient.CallerAADObjectId = oldAADCallerId;
-        ServiceClient = null;
+        if (ServiceClient != null)
+        {
+            ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
+            ServiceClient.CallerAADObjectId = oldAADCallerId;
+            ServiceClient = null;
+        }
+
         _disposedValue = true;
     }
 }

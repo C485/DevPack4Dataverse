@@ -288,11 +288,22 @@ public sealed class MapperBuilder<TSource, TTarget>
             ? $"{typeof(TSource).Name}->{typeof(TTarget).Name}"
             : _name;
 
+        MapperOptions<TSource, TTarget> builtOptions = new()
+        {
+            RequestSettings = _options.RequestSettings?.Clone(),
+            ValidateAfterSave = _options.ValidateAfterSave,
+            PreSave = _options.PreSave,
+            UseCacheForChangeDetection = _options.UseCacheForChangeDetection,
+            Validator = _options.Validator
+        };
+        builtOptions.SkipFieldsToChanged.UnionWith(_options.SkipFieldsToChanged);
+        builtOptions.ValidationFields.UnionWith(_options.ValidationFields);
+
         return new Mapper<TSource, TTarget>(
             name,
             _sdkProxy,
             _steps.ToArray(),
-            _options,
+            builtOptions,
             _converter,
             _entityKeyFactory,
             _logicalName,

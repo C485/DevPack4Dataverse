@@ -179,7 +179,9 @@ public sealed class FieldDrill
     {
         Guard.Against.NullOrWhiteSpace(path, parameterName: nameof(path));
         Guard.Against.NullOrEmpty(delimiter, parameterName: nameof(delimiter));
-        return path.Split([delimiter], StringSplitOptions.None);
+        return path.Split([delimiter], StringSplitOptions.None)
+            .Select(part => part.Trim())
+            .ToArray();
     }
 
     private static void ValidateArguments(EntityReference obj, string[] pathParts)

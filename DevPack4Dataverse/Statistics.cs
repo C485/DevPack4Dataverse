@@ -22,11 +22,23 @@ namespace DevPack4Dataverse;
 
 internal sealed class Statistics : IStatistics
 {
-    private const int MaxStatisticsRetained = 100_000;
+    // shortcut: weights are retained for 10 minutes; raise MaxBucketMinutes for longer windows.
+    private const int MaxBucketMinutes = 10;
+    private const int BucketsPerMinute = 60;
+    private const int BucketCount = MaxBucketMinutes * BucketsPerMinute;
     private readonly object _lock = new();
-    private readonly List<Statistic> _statistics = new();
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private readonly long[] _secondByBucket = new long[BucketCount];
+    private readonly ulong[] _weightBySecond = new ulong[BucketCount];
     private ulong _totalSeconds;
+
+    public Statistics()
+    {
+        for (int index = 0; index < _secondByBucket.Length; index++)
+        {
+            _secondByBucket[index] = -1;
+        }
+    }
 
     public void Finish(Statistic statistic)
     {
@@ -34,23 +46,11 @@ internal sealed class Statistics : IStatistics
         lock (_lock)
         {
             _totalSeconds += statistic.ElapsedSeconds;
+            AddWeight(statistic.ElapsedMilliseconds / 10ul);
         }
     }
 
-    public Statistic StartNew()
-    {
-        lock (_lock)
-        {
-            if (_statistics.Count >= MaxStatisticsRetained)
-            {
-                _statistics.RemoveRange(0, MaxStatisticsRetained / 2);
-            }
-
-            Statistic statsEntry = new(_stopwatch.Elapsed);
-            _statistics.Add(statsEntry);
-            return statsEntry;
-        }
-    }
+    public Statistic StartNew() => new(_stopwatch.Elapsed);
 
     public ulong TotalUsageInSeconds()
     {
@@ -62,30 +62,45 @@ internal sealed class Statistics : IStatistics
 
     public ulong UsageWeightFromLastMinutes(uint minutes)
     {
+        if (minutes == 0)
+        {
+            return 0;
+        }
+
         lock (_lock)
         {
-            if (minutes == 0)
+            long currentSecond = (long)_stopwatch.Elapsed.TotalSeconds;
+            long oldestSecond =
+                currentSecond - (long)Math.Min(minutes, (uint)MaxBucketMinutes) * BucketsPerMinute;
+            ulong total = 0;
+            for (int bucket = 0; bucket < BucketCount; bucket++)
             {
-                return 0;
-            }
-            ulong totalSeconds = 0;
-            uint skippedStatistics = 0;
-            for (int i = _statistics.Count - 1; i >= 0; i--)
-            {
-                if (skippedStatistics >= 100)
+                long second = _secondByBucket[bucket];
+                if (second >= oldestSecond && second <= currentSecond)
                 {
-                    break;
+                    total += _weightBySecond[bucket];
                 }
+            }
 
-                Statistic statistic = _statistics[i];
-                if (!statistic.IsFromLastNMinutes(_stopwatch.Elapsed, minutes))
-                {
-                    skippedStatistics++;
-                    continue;
-                }
-                totalSeconds += (statistic.ElapsedMilliseconds / 10ul);
-            }
-            return totalSeconds;
+            return total;
         }
+    }
+
+    private void AddWeight(ulong weight)
+    {
+        if (weight == 0)
+        {
+            return;
+        }
+
+        long second = (long)_stopwatch.Elapsed.TotalSeconds;
+        int bucket = (int)(second % BucketCount);
+        if (_secondByBucket[bucket] != second)
+        {
+            _secondByBucket[bucket] = second;
+            _weightBySecond[bucket] = 0;
+        }
+
+        _weightBySecond[bucket] += weight;
     }
 }

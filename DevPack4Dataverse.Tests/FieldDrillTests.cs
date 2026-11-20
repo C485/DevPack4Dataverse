@@ -106,6 +106,35 @@ public class FieldDrillTests
     }
 
     [Fact]
+    public void Retreive_TrimsWhitespaceAroundPathSegments()
+    {
+        var accountId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var accountReference = new EntityReference("account", accountId);
+        var records = new Dictionary<(string, Guid), Entity>
+        {
+            [("account", accountId)] = Record(
+                "account",
+                accountId,
+                ("ownerid", new EntityReference("systemuser", ownerId))
+            ),
+            [("systemuser", ownerId)] = Record("systemuser", ownerId, ("fullname", "Owner Name")),
+        };
+        var (proxy, drill, calls) = Create((entityName, id, _) => records[(entityName, id)]);
+
+        using (proxy)
+        {
+            Assert.Equal(
+                "Owner Name",
+                drill.Retreive<string>(accountReference, "ownerid. fullname")
+            );
+        }
+
+        Assert.Equal(new[] { "ownerid" }, calls[0].Columns);
+        Assert.Equal(new[] { "fullname" }, calls[1].Columns);
+    }
+
+    [Fact]
     public void Retreive_SupportsCustomDelimiterAndExplicitPathParts()
     {
         var accountId = Guid.NewGuid();

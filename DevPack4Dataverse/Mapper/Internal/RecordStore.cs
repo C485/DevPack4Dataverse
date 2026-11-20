@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -24,8 +26,11 @@ namespace DevPack4Dataverse.Mapper.Internal;
 
 internal sealed class RecordStore
 {
+    private const int CacheWriteParallelism = 32;
     private readonly IEntityCache _cache;
     private readonly ILogger _logger;
+    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
     private readonly MapperWrapperOptions _wrapperOptions;
 
@@ -132,10 +137,21 @@ internal sealed class RecordStore
         string logicalName,
         IEnumerable<string> requiredColumns,
         IEnumerable<string> alternateKeyAttributes,
+        bool forceRefresh,
         RequestSettings requestSettings,
         CancellationToken cancellationToken
     )
     {
+        DateTime now = DateTime.UtcNow;
+        if (
+            !forceRefresh
+            && _preloadedAt.TryGetValue(logicalName, out DateTime loadedAt)
+            && now - loadedAt < _wrapperOptions.GetCacheTtl(logicalName)
+        )
+        {
+            return;
+        }
+
         HashSet<string> columns = new(
             requiredColumns ?? Enumerable.Empty<string>(),
             StringComparer.OrdinalIgnoreCase
@@ -161,26 +177,39 @@ internal sealed class RecordStore
             .ConfigureAwait(false);
 
         IEnumerable<string> attributes = alternateKeyAttributes ?? Enumerable.Empty<string>();
-        foreach (Entity record in records)
-        {
-            if (record.Id != Guid.Empty)
-            {
-                await CacheRecordAsync(
-                        record,
-                        EntityKey.ById(logicalName, record.Id),
-                        columns,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-            }
+        await AsyncParallel
+            .ForEachAsync(
+                records,
+                CacheWriteParallelism,
+                cancellationToken,
+                async (record, token) =>
+                {
+                    if (record.Id != Guid.Empty)
+                    {
+                        await CacheRecordAsync(
+                                record,
+                                EntityKey.ById(logicalName, record.Id),
+                                columns,
+                                token
+                            )
+                            .ConfigureAwait(false);
+                    }
 
-            EntityKey alternateKey = TryCreateAlternateKey(logicalName, record, attributes);
-            if (alternateKey != null)
-            {
-                await CacheRecordAsync(record, alternateKey, columns, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
+                    EntityKey alternateKey = TryCreateAlternateKey(
+                        logicalName,
+                        record,
+                        attributes
+                    );
+                    if (alternateKey != null)
+                    {
+                        await CacheRecordAsync(record, alternateKey, columns, token)
+                            .ConfigureAwait(false);
+                    }
+                }
+            )
+            .ConfigureAwait(false);
+
+        _preloadedAt[logicalName] = DateTime.UtcNow;
     }
 
     public async Task CacheSavedAsync(Entity entity, CancellationToken cancellationToken)
