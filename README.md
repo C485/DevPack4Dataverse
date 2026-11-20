@@ -300,6 +300,41 @@ Production notes:
 - The Dataverse LINQ provider supports a limited set of expression shapes. The builder combines expression trees but does not validate them; unsupported expressions fail during query translation.
 - Adding an empty builder, a builder to itself, or a builder whose `Result` is null throws an exception.
 
+## Audit and live-test fixes
+
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 262 tests, all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+
+### Security and correctness
+- A failed connection pool fails fast instead of looping forever when every connection creator has errored.
+- Caller-id impersonation is serialized per connection, so a shared `ServiceClient` cannot run a request as the wrong user or leave the impersonation behind. Set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available; on some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
+- Deleting a missing file/image returns `false` instead of throwing. For image columns, keep the `FileId` returned by `Upload` and call `Delete(fileId)`; image values are not returned by a normal retrieve.
+- Finalizers tolerate a failed constructor, so a null-argument guard cannot crash the process later.
+- The transitive `System.Security.Cryptography.Pkcs` and `System.Security.Cryptography.Xml` packages are pinned to patched versions.
+- Mapper reads and validation use `<logicalname>id` instead of the invalid `entityid`, and no longer combine `TopCount` with paging. This was found on a custom table.
+- File upload block ids avoid `+`, which Dataverse decodes as a space in the blockid query value.
+- Lookups honor `UseCache=false` in the create-race recheck.
+- Alternate-key cache and lock keys are length-prefixed, so values containing `;` or `=` cannot collide.
+- Language-specific option-set label lookup is case-insensitive by default again.
+- `Mapper` clones its options at `Build`; later builder changes do not mutate a live mapper.
+- `RequestSize` is capped at 1,000. `ExecuteMultiple` results document that transport-failed or no-response requests are absent and that `RequestIndex` is chunk-local.
+- `Connection.DeleteRecordAsync(EntityReference)` has the same null guard as the sync overload; `FieldDrill` trims path segments.
+- `DataverseDevPack` implements `IDisposable` and exposes `DisposeAsync`.
+
+### Caching and performance
+- `Statistics` keeps a bounded 10-minute bucket ring instead of scanning up to 100,000 entries per connection choice.
+- Option-set metadata is cached for five minutes per table and column.
+- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the cache TTL expires; `ForceRefresh` still reloads.
+- Redis preload writes run with bounded parallelism instead of one awaited round trip per record and key.
+- `SdkProxy` no longer changes process-wide `ThreadPool` and `ServicePointManager` settings.
+- Removed the double statistics entry for sync `ExecuteMultiple` and two dead project lines.
+
+### Live validation
+Validated on a live Dataverse environment with fake data on a test table that has choice, boolean, money, file, image and self-lookup columns:
+- CRUD, `ExecuteMultiple`, sequential, transaction, mapper create/update/validation/lookups, `FieldDrill`, choice, boolean, money, file, image, LINQ and impersonation all passed.
+- 5,000 records with regular `ExecuteMultiple`, one connection: **1:55.6** (about 43 records/sec).
+- 5,000 records with adaptive `ExecuteMultiple`, four connections, 3-second target: **50.0s**, **100 records/sec**, 0 errors, final batch 54 × 4 threads.
+- 5,000-record download: **0.665s**.
+- All test records were removed after validation.
 
 ## Roadmap
 
