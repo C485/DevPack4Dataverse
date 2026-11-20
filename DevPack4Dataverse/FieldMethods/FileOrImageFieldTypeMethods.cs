@@ -250,8 +250,8 @@ public sealed class FileOrImageFieldTypeMethods
 
     public sealed class FileData
     {
-        public byte[] Data { get; set; } = null!;
-        public string Name { get; set; } = null!;
+        public byte[] Data { get; set; } = Array.Empty<byte>();
+        public string Name { get; set; } = string.Empty;
         public long Size { get; set; }
     }
 
