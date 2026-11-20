@@ -3,6 +3,7 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.ExecuteTransaction;
+using DevPack4Dataverse.Models;
 
 namespace DevPack4Dataverse.Tests;
 
@@ -142,6 +143,35 @@ public class ExecuteTransactionRequestBuilderTests
     {
         var builder = Create();
 
-        Assert.NotNull(Record.Exception(() => builder.AddRequest(null)));
+        Assert.NotNull(Record.Exception(() => builder.AddRequest(null!)));
+    }
+
+    [Fact]
+    public void AddRequest_RejectsPerRequestImpersonation()
+    {
+        var builder = Create();
+        RequestSettings settings = new()
+        {
+            ImpersonateAsUserByDataverseId = Guid.NewGuid()
+        };
+
+        Assert.Throws<ArgumentException>(
+            () => builder.AddRequest(new OrganizationRequest("req"), settings)
+        );
+        Assert.Equal(0, builder.Count);
+    }
+
+    [Fact]
+    public void AddRequest_RejectsMoreThanOneThousandRequests()
+    {
+        var builder = Create();
+        for (int index = 0; index < 1000; index++)
+        {
+            builder.AddRequest(new OrganizationRequest("req" + index));
+        }
+
+        Assert.Throws<InvalidOperationException>(
+            () => builder.AddRequest(new OrganizationRequest("too-many"))
+        );
     }
 }

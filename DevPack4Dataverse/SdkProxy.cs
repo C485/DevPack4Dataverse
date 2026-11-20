@@ -55,7 +55,6 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         params IConnectionCreator[] connectionCreators
     )
     {
-        using EntryExitLogger logGuard = new(logger);
 
         _logger = Guard.Against.Null(logger);
         _applyConnectionOptimalization = applyConnectionOptimalization;
@@ -64,15 +63,18 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             _sleepTimeForConnectionCreator,
             () =>
             {
-                IConnectionCreator connectionToCreate = _connectionCreators.FirstOrDefault(
+                IConnectionCreator? connectionToCreate = _connectionCreators.FirstOrDefault(
                     p => !p.IsCreated && !p.IsError
                 );
                 if (connectionToCreate == null)
                 {
                     return;
                 }
-                IConnection createdConnection = connectionToCreate.Create(_logger);
-                _connections.Add(createdConnection);
+                IReadOnlyList<IConnection> createdConnections = connectionToCreate.Create(_logger);
+                foreach (IConnection createdConnection in createdConnections)
+                {
+                    _connections.Add(createdConnection);
+                }
             },
             _logger
         );
@@ -85,9 +87,11 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// </summary>
     public static void ApplyProcessWideOptimizations()
     {
+#if NETFRAMEWORK
         ServicePointManager.DefaultConnectionLimit = 65000;
         ServicePointManager.Expect100Continue = false;
         ServicePointManager.UseNagleAlgorithm = false;
+#endif
         ThreadPool.SetMinThreads(100, 100);
     }
 
@@ -108,8 +112,8 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// <param name="count">Number of connections to wait for. Must be non-negative.</param>
     /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
-    /// creators have failed.
+    /// Fewer than <paramref name="count"/> connections can be produced by the configured
+    /// creators, or the remaining creators have failed.
     /// </exception>
     /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
     /// <remarks>
@@ -146,8 +150,8 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// <param name="cancellationToken">Token used to stop waiting.</param>
     /// <exception cref="ArgumentException"><paramref name="count"/> is negative.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Fewer than <paramref name="count"/> connection creators are configured, or the remaining
-    /// creators have failed.
+    /// Fewer than <paramref name="count"/> connections can be produced by the configured
+    /// creators, or the remaining creators have failed.
     /// </exception>
     /// <exception cref="ObjectDisposedException">The proxy has been disposed.</exception>
     /// <exception cref="OperationCanceledException">The cancellation token was requested.</exception>
@@ -180,7 +184,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
-    public static SecureString StringToSecureString(string plainString)
+    public static SecureString? StringToSecureString(string? plainString)
     {
         if (plainString == null)
         {
@@ -210,11 +214,13 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     private void EnsureConnectionsCanBeCreated(int count)
     {
-        int possibleConnections = _connectionCreators.Count(creator => !creator.IsError);
+        int possibleConnections = _connectionCreators
+            .Where(creator => !creator.IsError)
+            .Sum(creator => creator.ConnectionCount);
         if (possibleConnections < count)
         {
             throw new InvalidOperationException(
-                $"Cannot wait for {count} connection(s): only {possibleConnections} connection creator(s) are available and not failed."
+                $"Cannot wait for {count} connection(s): the configured creators can produce only {possibleConnections} and some may have failed."
             );
         }
     }
@@ -227,42 +233,42 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
-    public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
+    public Guid CreateRecord(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.CreateRecord(record, requestSettings);
     }
 
-    public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         return await connectionLease.Connection.CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
-    public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         connectionLease.Connection.DeleteRecord(logicalName, id, requestSettings);
     }
 
-    public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void DeleteRecord(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         connectionLease.Connection.DeleteRecord(entityReference, requestSettings);
     }
 
-    public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         await connectionLease.Connection.DeleteRecordAsync(logicalName, id, requestSettings).ConfigureAwait(false);
     }
 
-    public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
+    public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
@@ -299,6 +305,23 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             {
                 try
                 {
+                    if (connection is Connection concreteConnection)
+                    {
+                        using CancellationTokenSource waitTimeout = new(TimeSpan.FromSeconds(30));
+                        try
+                        {
+                            await concreteConnection
+                                .WaitForIdleAsync(waitTimeout.Token)
+                                .ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            _logger.LogWarning(
+                                "Timed out waiting for a Dataverse connection to become idle before disposal."
+                            );
+                        }
+                    }
+
                     connection.PureServiceClient?.Dispose();
                 }
                 catch (Exception exception)
@@ -312,7 +335,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
-    public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+    public T? Execute<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
         where T : OrganizationResponse
     {
         using ConnectionLease connectionLease = GetConnection();
@@ -322,7 +345,17 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public ExecuteMultipleResponse Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
+    ) =>
+        OperationLogger.RunLogged(
+            _logger,
+            "ExecuteMultiple",
+            () => ExecuteMultipleCore(executeMultipleRequestBuilder, requestSettings)
+        );
+
+    private ExecuteMultipleResponse ExecuteMultipleCore(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings? requestSettings
     )
     {
         using ConnectionLease connectionLease = GetConnection();
@@ -330,14 +363,32 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return connectionLease.Connection.Execute(executeMultipleRequestBuilder, requestSettings);
     }
 
-    public async Task<ExecuteMultipleResponse> ExecuteAsync(
+    public Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            "ExecuteMultiple",
+            () => ExecuteMultipleCoreAsync(executeMultipleRequestBuilder, requestSettings, cancellationToken)
+        );
+
+    private async Task<ExecuteMultipleResponse> ExecuteMultipleCoreAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        RequestSettings? requestSettings,
+        CancellationToken cancellationToken
     )
     {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        return await connectionLease.Connection.ExecuteAsync(executeMultipleRequestBuilder, requestSettings).ConfigureAwait(false);
+        return await connectionLease
+            .Connection.ExecuteAsync(
+                executeMultipleRequestBuilder,
+                requestSettings,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -349,7 +400,17 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// <remarks>If any request fails, all changes are rolled back by the service.</remarks>
     public ExecuteTransactionResponse Execute(
         ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
+    ) =>
+        OperationLogger.RunLogged(
+            _logger,
+            "ExecuteTransaction",
+            () => ExecuteTransactionCore(executeTransactionRequestBuilder, requestSettings)
+        );
+
+    private ExecuteTransactionResponse ExecuteTransactionCore(
+        ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
+        RequestSettings? requestSettings
     )
     {
         Guard.Against.Null(executeTransactionRequestBuilder);
@@ -358,7 +419,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return connectionLease.Connection.Execute<ExecuteTransactionResponse>(
             executeTransactionRequestBuilder.Request,
             requestSettings
-        );
+        )!;
     }
 
     /// <summary>
@@ -369,31 +430,46 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// <param name="requestSettings">Optional settings applied to the transaction request.</param>
     /// <returns>Responses in request order when the builder returns responses.</returns>
     /// <remarks>If any request fails, all changes are rolled back by the service.</remarks>
-    public async Task<ExecuteTransactionResponse> ExecuteAsync(
+    public Task<ExecuteTransactionResponse> ExecuteAsync(
         ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            "ExecuteTransaction",
+            () => ExecuteTransactionCoreAsync(executeTransactionRequestBuilder, requestSettings)
+        );
+
+    private async Task<ExecuteTransactionResponse> ExecuteTransactionCoreAsync(
+        ExecuteTransactionRequestBuilder executeTransactionRequestBuilder,
+        RequestSettings? requestSettings
     )
     {
         Guard.Against.Null(executeTransactionRequestBuilder);
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
-        return await connectionLease
+        return (await connectionLease
             .Connection.ExecuteAsync<ExecuteTransactionResponse>(
                 executeTransactionRequestBuilder.Request,
                 requestSettings
             )
+            .ConfigureAwait(false))!;
+    }
+
+    public async Task<T?> ExecuteAsync<T>(
+        OrganizationRequest request,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    ) where T : OrganizationResponse
+    {
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        return await connectionLease
+            .Connection.ExecuteAsync<T>(request, requestSettings, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse
-    {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
-
-        return await connectionLease.Connection.ExecuteAsync<T>(request, requestSettings).ConfigureAwait(false);
-    }
-
-    public ConnectionLease GetConnection()
+    public ConnectionLease GetConnection(CancellationToken cancellationToken = default)
     {
 
         Guard.Against.InvalidInput(
@@ -405,6 +481,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             int connectionCount = _connections.Count;
             WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
@@ -424,6 +501,12 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                     IConnection connection = buffer[index].Connection;
                     if (connection.TryLock())
                     {
+                        if (Volatile.Read(ref _disposed) != 0)
+                        {
+                            connection.ReleaseLock();
+                            ThrowIfDisposed();
+                        }
+
                         if (_applyConnectionOptimalization)
                         {
                             connection.ApplyConnectionOptimalization();
@@ -444,11 +527,16 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 EnsureConnectionsCanBeCreated(1);
             }
 
-            Thread.Sleep(_sleepTimeForConnectionGetter);
+            if (cancellationToken.WaitHandle.WaitOne(_sleepTimeForConnectionGetter))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
         }
     }
 
-    public async Task<ConnectionLease> GetConnectionAsync()
+    public async Task<ConnectionLease> GetConnectionAsync(
+        CancellationToken cancellationToken = default
+    )
     {
 
         Guard.Against.InvalidInput(
@@ -460,6 +548,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             int connectionCount = _connections.Count;
             WeightedConnection[] buffer = ArrayPool<WeightedConnection>.Shared.Rent(
@@ -479,6 +568,12 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                     IConnection connection = buffer[index].Connection;
                     if (await connection.TryLockAsync().ConfigureAwait(false))
                     {
+                        if (Volatile.Read(ref _disposed) != 0)
+                        {
+                            connection.ReleaseLock();
+                            ThrowIfDisposed();
+                        }
+
                         if (_applyConnectionOptimalization)
                         {
                             connection.ApplyConnectionOptimalization();
@@ -499,46 +594,46 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
                 EnsureConnectionsCanBeCreated(1);
             }
 
-            await Task.Delay(_sleepTimeForConnectionGetter).ConfigureAwait(false);
+            await Task.Delay(_sleepTimeForConnectionGetter, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
+    public Entity RefreshRecord(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.RefreshRecord(record, requestSettings);
     }
 
-    public T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    public T RefreshRecord<T>(T record, RequestSettings? requestSettings = null) where T : Entity
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.RefreshRecord(record, requestSettings);
     }
 
-    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
-    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings? requestSettings = null) where T : Entity
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         return await connectionLease.Connection.RefreshRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
-    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.Retrieve(entityName, id, columnSet, requestSettings);
     }
 
-    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
         where T : Entity
     {
         using ConnectionLease connectionLease = GetConnection();
@@ -550,7 +645,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
@@ -562,7 +657,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     ) where T : Entity
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
@@ -570,14 +665,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return await connectionLease.Connection.RetrieveAsync<T>(entityName, id, columnSet, requestSettings).ConfigureAwait(false);
     }
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.RetrieveMultiple(queryExpression, requestSettings);
     }
 
-    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings? requestSettings = null)
         where T : Entity
     {
         using ConnectionLease connectionLease = GetConnection();
@@ -587,7 +682,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task<Entity[]> RetrieveMultipleAsync(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
@@ -597,7 +692,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task<T[]> RetrieveMultipleAsync<T>(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     ) where T : Entity
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
@@ -605,28 +700,28 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return await connectionLease.Connection.RetrieveMultipleAsync<T>(queryExpression, requestSettings).ConfigureAwait(false);
     }
 
-    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    public void UpdateRecord(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         connectionLease.Connection.UpdateRecord(record, requestSettings);
     }
 
-    public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task UpdateRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 
         await connectionLease.Connection.UpdateRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
-    public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
+    public EntityReference UpsertRecord(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();
 
         return connectionLease.Connection.UpsertRecord(record, requestSettings);
     }
 
-    public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
 

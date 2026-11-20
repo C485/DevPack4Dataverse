@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
@@ -6,6 +6,9 @@ using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
 using DevPack4Dataverse.ExpressionBuilder;
+
+// Late-bound attribute access returns object; these tests intentionally compare it with string constants.
+#pragma warning disable CS0252
 
 namespace DevPack4Dataverse.Tests;
 
@@ -155,7 +158,7 @@ public class DataverseLinqProviderBehaviorTests
                 exception is NotSupportedException,
                 $"{label}: expected NotSupportedException, got {exception?.GetType().Name ?? "no exception"}."
             );
-            Assert.Contains("Invalid 'where' condition", exception.Message);
+            Assert.Contains("Invalid 'where' condition", exception!.Message);
         }
     }
 
@@ -207,7 +210,7 @@ public class DataverseLinqProviderBehaviorTests
 
     private sealed class CapturingOrganizationService : IOrganizationService
     {
-        public QueryExpression LastQuery { get; private set; }
+        public QueryExpression? LastQuery { get; private set; }
 
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
@@ -251,3 +254,5 @@ public class DataverseLinqProviderBehaviorTests
         ) => throw new NotSupportedException();
     }
 }
+
+#pragma warning restore CS0252

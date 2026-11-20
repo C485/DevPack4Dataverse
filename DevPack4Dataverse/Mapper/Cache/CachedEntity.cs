@@ -23,7 +23,7 @@ namespace DevPack4Dataverse.Mapper.Cache;
 /// </summary>
 public sealed class CachedEntity
 {
-    public CachedEntity(Entity record, IEnumerable<string> loadedColumns = null)
+    public CachedEntity(Entity record, IEnumerable<string>? loadedColumns = null)
     {
         Record = record ?? throw new ArgumentNullException(nameof(record));
         LoadedColumns = new HashSet<string>(

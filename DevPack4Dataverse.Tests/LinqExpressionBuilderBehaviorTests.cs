@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Xunit;
@@ -40,7 +40,7 @@ public class LinqExpressionBuilderBehaviorTests
     [Fact]
     public void Create_Throws_WhenLoggerIsNull()
     {
-        Assert.Throws<ArgumentNullException>(() => LinqExpressionBuilder.Create<Entity>(null));
+        Assert.Throws<ArgumentNullException>(() => LinqExpressionBuilder.Create<Entity>(null!));
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public class LinqExpressionBuilderBehaviorTests
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
         Assert.Throws<ArgumentNullException>(
-            () => builder.AddAnd((Expression<Func<Entity, bool>>)null)
+            () => builder.AddAnd((Expression<Func<Entity, bool>>)null!)
         );
     }
 
@@ -234,7 +234,7 @@ public class LinqExpressionBuilderBehaviorTests
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
         Assert.Throws<ArgumentNullException>(
-            () => builder.AddOr((Expression<Func<Entity, bool>>)null)
+            () => builder.AddOr((Expression<Func<Entity, bool>>)null!)
         );
     }
 
@@ -244,7 +244,7 @@ public class LinqExpressionBuilderBehaviorTests
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
         Assert.Throws<ArgumentNullException>(
-            () => builder.AddAnd((ILinqExpressionBuilder<Entity>)null)
+            () => builder.AddAnd((ILinqExpressionBuilder<Entity>)null!)
         );
     }
 
@@ -254,7 +254,7 @@ public class LinqExpressionBuilderBehaviorTests
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
 
         Assert.Throws<ArgumentNullException>(
-            () => builder.AddOr((ILinqExpressionBuilder<Entity>)null)
+            () => builder.AddOr((ILinqExpressionBuilder<Entity>)null!)
         );
     }
 
@@ -528,7 +528,7 @@ public class LinqExpressionBuilderBehaviorTests
     {
         var builder = LinqExpressionBuilder.Create<Entity>(NullLogger.Instance);
         builder.AddAnd(Flag("a"));
-        var invalid = new FixedExpressionBuilder(1, null);
+        var invalid = new FixedExpressionBuilder(1, null!);
 
         Assert.Throws<ArgumentNullException>(() => builder.AddAnd(invalid));
         Assert.Equal(1u, builder.ExpressionsAdded);

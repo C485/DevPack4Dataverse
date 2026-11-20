@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -33,7 +33,7 @@ public class SdkProxyTests
     [Fact]
     public void ExecuteTransaction_BuilderSendsRequest()
     {
-        OrganizationRequest captured = null;
+        OrganizationRequest? captured = null;
         var fake = new FakeConnection
         {
             ExecuteHandler = request =>
@@ -58,7 +58,7 @@ public class SdkProxyTests
     [Fact]
     public async Task ExecuteTransactionAsync_BuilderSendsRequest()
     {
-        OrganizationRequest captured = null;
+        OrganizationRequest? captured = null;
         var fake = new FakeConnection
         {
             ExecuteHandler = request =>
@@ -96,8 +96,9 @@ public class SdkProxyTests
         public bool IsCreated { get; private set; }
         public bool IsError { get; private set; }
         public bool IsValid => IsCreated && !IsError;
+        public int ConnectionCount => 1;
 
-        public IConnection Create(ILogger logger)
+        public IReadOnlyList<IConnection> Create(ILogger logger)
         {
             IsError = true;
             throw new InvalidOperationException("Connection creation failed.");

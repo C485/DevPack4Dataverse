@@ -22,11 +22,11 @@ namespace DevPack4Dataverse.Mapper;
 public sealed class MappingError
 {
     public MappingError(
-        object source,
-        object target,
-        string field,
+        object? source,
+        object? target,
+        string? field,
         string message,
-        Exception exception = null
+        Exception? exception = null
     )
     {
         Source = source;
@@ -36,13 +36,13 @@ public sealed class MappingError
         Exception = exception;
     }
 
-    public object Source { get; }
+    public object? Source { get; }
 
-    public object Target { get; }
+    public object? Target { get; }
 
-    public string Field { get; }
+    public string? Field { get; }
 
     public string Message { get; }
 
-    public Exception Exception { get; }
+    public Exception? Exception { get; }
 }

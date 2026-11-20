@@ -20,7 +20,7 @@ namespace DevPack4Dataverse.Mapper.Internal;
 
 internal static class EntityCopy
 {
-    public static Entity Clone(Entity entity)
+    public static Entity? Clone(Entity entity)
     {
         if (entity == null)
         {

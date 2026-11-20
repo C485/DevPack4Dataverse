@@ -33,7 +33,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
     private EntityKey(
         string logicalName,
         Guid? id,
-        IEnumerable<KeyValuePair<string, object>> alternateKey
+        IEnumerable<KeyValuePair<string, object>>? alternateKey
     )
     {
         if (string.IsNullOrWhiteSpace(logicalName))
@@ -72,7 +72,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
     private EntityKey(
         string logicalName,
         Guid? id,
-        IReadOnlyDictionary<string, object> alternateKey
+        IReadOnlyDictionary<string, object>? alternateKey
     )
     {
         if (string.IsNullOrWhiteSpace(logicalName))
@@ -230,7 +230,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
         return new EntityKey(logicalName, null, values);
     }
 
-    public static EntityKey FromEntityReference(EntityReference reference)
+    public static EntityKey? FromEntityReference(EntityReference? reference)
     {
         if (reference == null)
         {
@@ -245,7 +245,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
         return reference.Id == Guid.Empty ? null : ById(reference.LogicalName, reference.Id);
     }
 
-    public static EntityKey FromEntity(Entity entity)
+    public static EntityKey? FromEntity(Entity? entity)
     {
         if (entity == null)
         {
@@ -281,13 +281,13 @@ public sealed class EntityKey : IEquatable<EntityKey>
             return reference;
         }
 
-        return new EntityReference(LogicalName, Id.Value);
+        return new EntityReference(LogicalName, Id!.Value);
     }
 
-    public bool Equals(EntityKey other) =>
+    public bool Equals(EntityKey? other) =>
         other != null && string.Equals(_normalized, other._normalized, StringComparison.Ordinal);
 
-    public override bool Equals(object obj) => Equals(obj as EntityKey);
+    public override bool Equals(object? obj) => Equals(obj as EntityKey);
 
     public override int GetHashCode() => _normalized.GetHashCode();
 
@@ -358,11 +358,42 @@ public sealed class EntityKey : IEquatable<EntityKey>
             case byte[] bytes:
                 return "b64:" + Convert.ToBase64String(bytes);
             case EntityReference reference:
-                return "er:" + reference.LogicalName.ToLowerInvariant() + ":" + reference.Id.ToString("N");
+                if (reference.Id != Guid.Empty)
+                {
+                    return "er:"
+                        + reference.LogicalName.ToLowerInvariant()
+                        + ":"
+                        + reference.Id.ToString("N");
+                }
+
+                if (reference.KeyAttributes == null || reference.KeyAttributes.Count == 0)
+                {
+                    return "er:" + reference.LogicalName.ToLowerInvariant() + ":empty";
+                }
+
+                KeyValuePair<string, object>[] referenceKeys = reference.KeyAttributes.ToArray();
+                Array.Sort(
+                    referenceKeys,
+                    static (left, right) =>
+                        StringComparer.OrdinalIgnoreCase.Compare(left.Key, right.Key)
+                );
+                StringBuilder referenceBuilder = new();
+                foreach (KeyValuePair<string, object> pair in referenceKeys)
+                {
+                    AppendAlternateKeyPart(referenceBuilder, pair);
+                }
+
+                return "er:"
+                    + reference.LogicalName.ToLowerInvariant()
+                    + "{"
+                    + referenceBuilder
+                    + "}";
             case OptionSetValue optionSetValue:
                 return "os:" + optionSetValue.Value.ToString(CultureInfo.InvariantCulture);
             case Money money:
                 return "m:" + money.Value.ToString(CultureInfo.InvariantCulture);
+            case string text:
+                return "s:" + text.ToLowerInvariant();
             case IFormattable formattable:
                 return "v:" + formattable.ToString(null, CultureInfo.InvariantCulture);
             default:

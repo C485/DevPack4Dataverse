@@ -44,7 +44,7 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
     public ReplaceAndRestoreCallerId(
         ServiceClient serviceClient,
         ILogger logger,
-        RequestImpersonateSettings requestSettings = null
+        RequestImpersonateSettings? requestSettings = null
     )
     {
         ServiceClient = Guard.Against.Null(serviceClient);
@@ -59,7 +59,7 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         InnerDispose();
     }
 
-    private ServiceClient ServiceClient { get; set; }
+    private ServiceClient? ServiceClient { get; set; }
 
     public void Dispose()
     {

@@ -30,7 +30,7 @@ internal sealed class Statistics : IStatistics
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private readonly long[] _secondByBucket = new long[BucketCount];
     private readonly ulong[] _weightBySecond = new ulong[BucketCount];
-    private ulong _totalSeconds;
+    private ulong _totalMilliseconds;
 
     public Statistics()
     {
@@ -45,7 +45,7 @@ internal sealed class Statistics : IStatistics
         statistic.SetEnd(_stopwatch.Elapsed);
         lock (_lock)
         {
-            _totalSeconds += statistic.ElapsedSeconds;
+            _totalMilliseconds += statistic.ElapsedMilliseconds;
             AddWeight(statistic.ElapsedMilliseconds / 10ul);
         }
     }
@@ -56,7 +56,7 @@ internal sealed class Statistics : IStatistics
     {
         lock (_lock)
         {
-            return _totalSeconds;
+            return _totalMilliseconds / 1000;
         }
     }
 

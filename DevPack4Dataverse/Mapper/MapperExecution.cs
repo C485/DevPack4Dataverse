@@ -36,5 +36,5 @@ public sealed class MapperExecution
 
     public object Source { get; }
 
-    public MappingRunOptions RunOptions { get; set; }
+    public MappingRunOptions? RunOptions { get; set; }
 }

@@ -50,4 +50,28 @@ public sealed class LookupMappingOptions
             );
         }
     }
+
+    internal LookupMappingOptions Clone()
+    {
+        LookupMappingOptions clone = new()
+        {
+            UseCache = UseCache,
+            RetrievalMode = RetrievalMode,
+            CreateIfNotExists = CreateIfNotExists,
+            ThrowIfEmpty = ThrowIfEmpty,
+            ThrowIfNotFound = ThrowIfNotFound
+        };
+
+        foreach (string field in Fields)
+        {
+            clone.Fields.Add(field);
+        }
+
+        foreach (string attribute in AlternateKeyAttributes)
+        {
+            clone.AlternateKeyAttributes.Add(attribute);
+        }
+
+        return clone;
+    }
 }

@@ -46,6 +46,22 @@ public class SdkProxyConnectionWaitTests
     }
 
     [Fact]
+    public void WaitForConnections_OneCreatorWithThreeConnections_CreatesAll()
+    {
+        using var proxy = Create(
+            new FakeConnectionCreator(
+                new FakeConnection(),
+                new FakeConnection(),
+                new FakeConnection()
+            )
+        );
+
+        proxy.WaitForConnections(3);
+
+        Assert.Equal(3, proxy.ConnectionCount);
+    }
+
+    [Fact]
     public void WaitForConnections_MoreThanConfiguredCreators_Throws()
     {
         using var proxy = Create(new FakeConnectionCreator(new FakeConnection()));
@@ -175,13 +191,27 @@ public class SdkProxyConnectionWaitTests
         Assert.Throws<ObjectDisposedException>(() => devPack.SdkProxy.WaitForConnections(1));
     }
 
+    [Fact]
+    public async Task GetConnectionAsync_CanBeCanceledWhileConnectionsAreBusy()
+    {
+        var fake = new FakeConnection { TryLockResult = false };
+        using var proxy = Create(new FakeConnectionCreator(fake));
+        proxy.WaitForConnections(1);
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => proxy.GetConnectionAsync(cancellationTokenSource.Token)
+        );
+    }
+
     private sealed class FailingConnectionCreator : IConnectionCreator
     {
         public bool IsCreated { get; private set; }
         public bool IsError { get; private set; }
         public bool IsValid => IsCreated && !IsError;
+        public int ConnectionCount => 1;
 
-        public IConnection Create(ILogger logger)
+        public IReadOnlyList<IConnection> Create(ILogger logger)
         {
             IsError = true;
             throw new InvalidOperationException("Connection creation failed.");
@@ -193,12 +223,13 @@ public class SdkProxyConnectionWaitTests
         public bool IsCreated { get; private set; }
         public bool IsError { get; private set; }
         public bool IsValid => IsCreated && !IsError;
+        public int ConnectionCount => 1;
 
-        public IConnection Create(ILogger logger)
+        public IReadOnlyList<IConnection> Create(ILogger logger)
         {
             release.Wait();
             IsCreated = true;
-            return new FakeConnection();
+            return new IConnection[] { new FakeConnection() };
         }
     }
 }

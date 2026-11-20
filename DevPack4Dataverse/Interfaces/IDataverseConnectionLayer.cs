@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,65 +24,69 @@ namespace DevPack4Dataverse.Interfaces;
 
 public interface IDataverseConnectionLayer
 {
-    Guid CreateRecord(Entity record, RequestSettings requestSettings = null);
+    Guid CreateRecord(Entity record, RequestSettings? requestSettings = null);
 
-    Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null);
+    Task<Guid> CreateRecordAsync(Entity record, RequestSettings? requestSettings = null);
 
-    void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null);
+    void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null);
 
-    void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null);
+    void DeleteRecord(EntityReference entityReference, RequestSettings? requestSettings = null);
 
-    Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null);
+    Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings? requestSettings = null);
 
-    Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null);
+    Task DeleteRecordAsync(EntityReference entityReference, RequestSettings? requestSettings = null);
 
-    T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null) where T : OrganizationResponse;
+    T? Execute<T>(OrganizationRequest request, RequestSettings? requestSettings = null) where T : OrganizationResponse;
 
     ExecuteMultipleResponse Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     );
 
     Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
-    Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
-        where T : OrganizationResponse;
+    Task<T?> ExecuteAsync<T>(
+        OrganizationRequest request,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    ) where T : OrganizationResponse;
 
-    Entity RefreshRecord(Entity record, RequestSettings requestSettings = null);
+    Entity RefreshRecord(Entity record, RequestSettings? requestSettings = null);
 
-    T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity;
+    T RefreshRecord<T>(T record, RequestSettings? requestSettings = null) where T : Entity;
 
-    Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null);
+    Task<Entity> RefreshRecordAsync(Entity record, RequestSettings? requestSettings = null);
 
-    Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity;
+    Task<T> RefreshRecordAsync<T>(T record, RequestSettings? requestSettings = null) where T : Entity;
 
-    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
+    Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null);
 
-    T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
         where T : Entity;
 
-    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null);
+    Task<Entity> RetrieveAsync(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null);
 
-    Task<T> RetrieveAsync<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    Task<T> RetrieveAsync<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
         where T : Entity;
 
-    Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null);
+    Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings? requestSettings = null);
 
-    T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null) where T : Entity;
+    T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings? requestSettings = null) where T : Entity;
 
-    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings requestSettings = null);
+    Task<Entity[]> RetrieveMultipleAsync(QueryExpression queryExpression, RequestSettings? requestSettings = null);
 
-    Task<T[]> RetrieveMultipleAsync<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    Task<T[]> RetrieveMultipleAsync<T>(QueryExpression queryExpression, RequestSettings? requestSettings = null)
         where T : Entity;
 
-    void UpdateRecord(Entity record, RequestSettings requestSettings = null);
+    void UpdateRecord(Entity record, RequestSettings? requestSettings = null);
 
-    Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null);
+    Task UpdateRecordAsync(Entity record, RequestSettings? requestSettings = null);
 
-    EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null);
+    EntityReference UpsertRecord(Entity record, RequestSettings? requestSettings = null);
 
-    Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null);
+    Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings? requestSettings = null);
 }

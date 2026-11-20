@@ -44,7 +44,6 @@ public sealed class ExecuteMultipleRequestBuilder
     /// <param name="continueOnError">Value used by <see cref="RequestWithResults"/> settings.</param>
     public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
     {
-        using EntryExitLogger logGuard = new(logger);
         _requests = new();
         _logger = Guard.Against.Null(logger);
         _continueOnError = continueOnError;
@@ -66,7 +65,7 @@ public sealed class ExecuteMultipleRequestBuilder
             Requests = GetOrganizationRequests()
         };
 
-    public void AddCreate(Entity record, RequestSettings requestSettings = null)
+    public void AddCreate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -80,7 +79,7 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void AddDelete(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -94,23 +93,39 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void AddDelete(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
 
         AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
     }
 
-    public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
+    public void AddRequest(OrganizationRequest request, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(request);
+
+        if (request is ExecuteMultipleRequest or ExecuteTransactionRequest)
+        {
+            throw new ArgumentException(
+                "An ExecuteMultipleRequest cannot contain ExecuteMultipleRequest or ExecuteTransactionRequest.",
+                nameof(request)
+            );
+        }
+
+        if (requestSettings?.HasImpersonation == true)
+        {
+            throw new ArgumentException(
+                "Per-request impersonation is not supported in a batch. Set it on the ExecuteAsync request settings.",
+                nameof(requestSettings)
+            );
+        }
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 
         _requests.Enqueue(request);
     }
 
-    public void AddUpdate(Entity record, RequestSettings requestSettings = null)
+    public void AddUpdate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -124,7 +139,7 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddUpsert(Entity record, RequestSettings requestSettings = null)
+    public void AddUpsert(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));

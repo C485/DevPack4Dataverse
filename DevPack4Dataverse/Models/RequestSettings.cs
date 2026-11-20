@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
@@ -33,13 +32,13 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// <summary>
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#passing-optional-parameters-with-a-request
     /// </summary>
-    public string PartitionId { private get; set; }
+    public string? PartitionId { private get; set; }
 
     /// <summary>
     /// Known as 'tag'.
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#add-a-shared-variable-from-the-organization-service
     /// </summary>
-    public string SharedVariable { private get; set; }
+    public string? SharedVariable { private get; set; }
 
     /// <summary>
     /// Bypasses custom plug-ins when included in a request sent by someone with the prvBypassCustomPlugins privilege.
@@ -66,29 +65,49 @@ public sealed class RequestSettings : RequestImpersonateSettings
             ImpersonateAsUserByDataverseId = ImpersonateAsUserByDataverseId
         };
 
+    internal bool HasImpersonation =>
+        ImpersonateAsUserByAADId.HasValue || ImpersonateAsUserByDataverseId.HasValue;
+
     public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
         Guard.Against.Null(organizationRequest, parameterName: nameof(organizationRequest));
-        if (!string.IsNullOrEmpty(SharedVariable))
+
+        SetOrRemove(
+            organizationRequest,
+            RequestHeaders.TagName,
+            string.IsNullOrEmpty(SharedVariable) ? null : SharedVariable
+        );
+        SetOrRemove(
+            organizationRequest,
+            RequestHeaders.PartitionIdName,
+            string.IsNullOrEmpty(PartitionId) ? null : PartitionId
+        );
+        SetOrRemove(
+            organizationRequest,
+            RequestHeaders.SuppressDuplicateDetectioname,
+            SuppressDuplicateDetection ? true : null
+        );
+        SetOrRemove(
+            organizationRequest,
+            RequestHeaders.BypassCustomPluginExecutionName,
+            SkipPluginExecution ? true : null
+        );
+        SetOrRemove(
+            organizationRequest,
+            RequestHeaders.ConcurrencyBehaviorName,
+            ConcurrencyBehavior
+        );
+    }
+
+    private static void SetOrRemove(OrganizationRequest organizationRequest, string name, object? value)
+    {
+        if (value == null)
         {
-            organizationRequest[RequestHeaders.TagName] = SharedVariable;
+            organizationRequest.Parameters.Remove(name);
+            return;
         }
-        if (!string.IsNullOrEmpty(PartitionId))
-        {
-            organizationRequest[RequestHeaders.PartitionIdName] = PartitionId;
-        }
-        if (SuppressDuplicateDetection)
-        {
-            organizationRequest[RequestHeaders.SuppressDuplicateDetectioname] = true;
-        }
-        if (SkipPluginExecution)
-        {
-            organizationRequest[RequestHeaders.BypassCustomPluginExecutionName] = true;
-        }
-        if (ConcurrencyBehavior.HasValue)
-        {
-            organizationRequest[RequestHeaders.ConcurrencyBehaviorName] = ConcurrencyBehavior.Value;
-        }
+
+        organizationRequest[name] = value;
     }
 
     internal static class RequestHeaders

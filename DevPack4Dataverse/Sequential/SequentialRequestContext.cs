@@ -69,7 +69,7 @@ public sealed class SequentialRequestContext
     /// <exception cref="InvalidOperationException">The step did not retrieve a record.</exception>
     public Entity RetrievedEntity(int stepIndex)
     {
-        Entity entity = this[stepIndex].RetrievedEntity;
+        Entity? entity = this[stepIndex].RetrievedEntity;
         return entity
             ?? throw new InvalidOperationException($"Step {stepIndex} did not retrieve a record.");
     }

@@ -21,7 +21,7 @@ namespace DevPack4Dataverse.Mapper;
 /// </summary>
 public sealed class MappingContext<TSource, TTarget>
 {
-    private List<MappingError> _errors;
+    private List<MappingError>? _errors;
 
     internal MappingContext(TSource source, TTarget target)
     {

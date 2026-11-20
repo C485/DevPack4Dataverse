@@ -29,7 +29,7 @@ public interface IMapper
 
     Task<IMappingResult> ExecuteAsync(
         object source,
-        MappingRunOptions runOptions = null,
+        MappingRunOptions? runOptions = null,
         CancellationToken cancellationToken = default
     );
 }

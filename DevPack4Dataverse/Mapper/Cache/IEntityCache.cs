@@ -22,7 +22,7 @@ namespace DevPack4Dataverse.Mapper.Cache;
 /// </summary>
 public interface IEntityCache
 {
-    Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default);
+    Task<CachedEntity?> GetAsync(EntityKey key, CancellationToken cancellationToken = default);
 
     Task SetAsync(
         EntityKey key,

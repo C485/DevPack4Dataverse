@@ -35,7 +35,6 @@ public sealed class FileOrImageFieldTypeMethods
 
     public FileOrImageFieldTypeMethods(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
 
         _logger = Guard.Against.Null(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
@@ -78,9 +77,9 @@ public sealed class FileOrImageFieldTypeMethods
         InitializeFileBlocksDownloadRequest fileBlocksRequest =
             new() { Target = Guard.Against.Null(recordId), FileAttributeName = Guard.Against.NullOrEmpty(fieldName) };
 
-        InitializeFileBlocksDownloadResponse fileBlockResponse = await _sdkProxy
+        InitializeFileBlocksDownloadResponse fileBlockResponse = (await _sdkProxy
             .ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
 
         Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
         Guard.Against.OutOfRange(
@@ -96,11 +95,14 @@ public sealed class FileOrImageFieldTypeMethods
         using MemoryStream fileContentStream = new(sizeOfFileToDownload);
 
         ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        int chunkSize = fileBlockResponse.IsChunkingSupported
+            ? MaxBlockSizeInBytes
+            : sizeOfFileToDownload;
         int offset = 0;
         while (sizeOfFileToDownload > 0)
         {
             int currentChunkSize =
-                sizeOfFileToDownload < MaxBlockSizeInBytes ? sizeOfFileToDownload : MaxBlockSizeInBytes;
+                sizeOfFileToDownload < chunkSize ? sizeOfFileToDownload : chunkSize;
             DownloadBlockRequest downloadBlockRequest =
                 new()
                 {
@@ -119,8 +121,13 @@ public sealed class FileOrImageFieldTypeMethods
         // ExecuteMultipleLogic returns responses in the original request order across all chunks.
         foreach (ExecuteMultipleResponseItem responseItem in executeMultipleLogicResult.Results)
         {
-            DownloadBlockResponse downloadBlockResponse =
-                (DownloadBlockResponse)responseItem.Response;
+            if (responseItem.Response is not DownloadBlockResponse downloadBlockResponse)
+            {
+                throw new InvalidOperationException(
+                    $"Download of '{fieldName}' returned no data for one block."
+                );
+            }
+
             await fileContentStream
                 .WriteAsync(
                     downloadBlockResponse.Data,
@@ -128,6 +135,13 @@ public sealed class FileOrImageFieldTypeMethods
                     downloadBlockResponse.Data.Length
                 )
                 .ConfigureAwait(false);
+        }
+
+        if (fileContentStream.Length != fileBlockResponse.FileSizeInBytes)
+        {
+            throw new InvalidOperationException(
+                $"Download of '{fieldName}' returned {fileContentStream.Length} of {fileBlockResponse.FileSizeInBytes} bytes."
+            );
         }
 
         return new FileData
@@ -164,12 +178,14 @@ public sealed class FileOrImageFieldTypeMethods
                 Target = Guard.Against.Null(recordId),
                 FileAttributeName = Guard.Against.NullOrEmpty(fieldName),
             };
-        InitializeFileBlocksUploadResponse fileBlockResponse = await _sdkProxy
+        InitializeFileBlocksUploadResponse fileBlockResponse = (await _sdkProxy
             .ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
 
-        ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
+        const int BlocksPerBatch = 8;
+        List<string> blockIds = new();
         BinaryReader dataBinaryReader = new(Guard.Against.Null(dataStream));
+        ExecuteMultipleRequestBuilder? requestBuilder = null;
         while (true)
         {
             byte[] chunkData = dataBinaryReader.ReadBytes(MaxBlockSizeInBytes);
@@ -185,11 +201,23 @@ public sealed class FileOrImageFieldTypeMethods
                     FileContinuationToken = fileBlockResponse.FileContinuationToken,
                     BlockId = randomBase64
                 };
+            requestBuilder ??= _executeMultipleLogic.CreateRequestBuilder();
             requestBuilder.AddRequest(uploadBlockRequest);
+            blockIds.Add(randomBase64);
+            if (requestBuilder.Count >= BlocksPerBatch)
+            {
+                await _executeMultipleLogic
+                    .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
+                    .ConfigureAwait(false);
+                requestBuilder = null;
+            }
         }
-        await _executeMultipleLogic
-            .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
-            .ConfigureAwait(false);
+        if (requestBuilder is { Count: > 0 })
+        {
+            await _executeMultipleLogic
+                .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
+                .ConfigureAwait(false);
+        }
 
         CommitFileBlocksUploadRequest commitFileBlocksUploadRequest =
             new()
@@ -197,11 +225,11 @@ public sealed class FileOrImageFieldTypeMethods
                 FileContinuationToken = fileBlockResponse.FileContinuationToken,
                 FileName = fileName,
                 MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
-                BlockList = GetBlockIds(requestBuilder)
+                BlockList = blockIds.ToArray()
             };
-        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse = await _sdkProxy
+        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse = (await _sdkProxy
             .ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
         return new UploadFileFieldResult
         {
             SavedBytes = commitFileBlocksUploadResponse.FileSizeInBytes,
@@ -237,21 +265,10 @@ public sealed class FileOrImageFieldTypeMethods
         return stream.ToArray();
     }
 
-    private static string[] GetBlockIds(ExecuteMultipleRequestBuilder requestBuilder)
-    {
-        List<string> blockIds = new(requestBuilder.Count);
-        foreach (OrganizationRequest request in requestBuilder.RequestWithResults.Requests)
-        {
-            blockIds.Add(((UploadBlockRequest)request).BlockId);
-        }
-
-        return blockIds.ToArray();
-    }
-
     public sealed class FileData
     {
-        public byte[] Data { get; set; }
-        public string Name { get; set; }
+        public byte[] Data { get; set; } = Array.Empty<byte>();
+        public string Name { get; set; } = string.Empty;
         public long Size { get; set; }
     }
 

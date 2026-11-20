@@ -35,17 +35,17 @@ public sealed class MapperBuilder<TSource, TTarget>
     private readonly ILogger _logger;
     private readonly LookupResolver _lookupResolver;
     private readonly HashSet<string> _members = new(StringComparer.OrdinalIgnoreCase);
-    private readonly string _name;
+    private readonly string? _name;
     private readonly MapperOptions<TSource, TTarget> _options = new();
     private readonly RecordStore _recordStore;
     private readonly SdkProxy _sdkProxy;
     private readonly List<IMappingStep<TSource, TTarget>> _steps = new();
     private readonly ValidationReader _validationReader;
     private readonly MapperWrapperOptions _wrapperOptions;
-    private IModelEntityConverter<TTarget> _converter;
-    private Func<MappingContext<TSource, TTarget>, EntityKey> _entityKeyFactory;
+    private IModelEntityConverter<TTarget>? _converter;
+    private Func<MappingContext<TSource, TTarget>, EntityKey>? _entityKeyFactory;
     private int _currentStage = 1;
-    private string _logicalName;
+    private string? _logicalName;
 
     internal MapperBuilder(
         SdkProxy sdkProxy,
@@ -53,7 +53,7 @@ public sealed class MapperBuilder<TSource, TTarget>
         MapperWrapperOptions wrapperOptions,
         IEntityCache cache,
         IEntityLock entityLock,
-        string name
+        string? name
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
@@ -62,13 +62,20 @@ public sealed class MapperBuilder<TSource, TTarget>
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _entityLock = entityLock ?? throw new ArgumentNullException(nameof(entityLock));
         _name = name;
-        _recordStore = new RecordStore(_sdkProxy, _logger, _cache, _wrapperOptions);
+        PrimaryKeyAttributeProvider primaryKeys = new(_sdkProxy);
+        _recordStore = new RecordStore(
+            _sdkProxy,
+            _logger,
+            _cache,
+            _wrapperOptions,
+            primaryKeys
+        );
         _lookupResolver = new LookupResolver(
             _sdkProxy,
             _entityLock,
             _recordStore
         );
-        _validationReader = new ValidationReader(_sdkProxy);
+        _validationReader = new ValidationReader(_sdkProxy, primaryKeys);
     }
 
     /// <summary>
@@ -131,7 +138,7 @@ public sealed class MapperBuilder<TSource, TTarget>
         string targetAttribute,
         Func<MappingContext<TSource, TTarget>, EntityKey> key,
         LookupMappingOptions options,
-        Func<MappingContext<TSource, TTarget>, Entity> createFactory = null
+        Func<MappingContext<TSource, TTarget>, Entity>? createFactory = null
     )
     {
         EnsureEntityTarget();
@@ -150,7 +157,7 @@ public sealed class MapperBuilder<TSource, TTarget>
                 (target, reference) => ((Entity)(object)target)[targetAttribute] = reference,
                 key,
                 createFactory,
-                options,
+                options.Clone(),
                 _lookupResolver
             )
         );
@@ -165,7 +172,7 @@ public sealed class MapperBuilder<TSource, TTarget>
         Expression<Func<TTarget, EntityReference>> target,
         Func<MappingContext<TSource, TTarget>, EntityKey> key,
         LookupMappingOptions options,
-        Func<MappingContext<TSource, TTarget>, Entity> createFactory = null
+        Func<MappingContext<TSource, TTarget>, Entity>? createFactory = null
     )
     {
         MemberDescriptor member = ParseMember(target);
@@ -183,7 +190,7 @@ public sealed class MapperBuilder<TSource, TTarget>
                 (target, reference) => member.Setter(target, reference),
                 key,
                 createFactory,
-                options,
+                options.Clone(),
                 _lookupResolver
             )
         );
@@ -286,11 +293,11 @@ public sealed class MapperBuilder<TSource, TTarget>
 
         string name = string.IsNullOrWhiteSpace(_name)
             ? $"{typeof(TSource).Name}->{typeof(TTarget).Name}"
-            : _name;
+            : _name!;
 
         MapperOptions<TSource, TTarget> builtOptions = new()
         {
-            RequestSettings = _options.RequestSettings?.Clone(),
+            RequestSettings = _options.RequestSettings?.Clone()!,
             ValidateAfterSave = _options.ValidateAfterSave,
             PreSave = _options.PreSave,
             UseCacheForChangeDetection = _options.UseCacheForChangeDetection,
@@ -316,7 +323,7 @@ public sealed class MapperBuilder<TSource, TTarget>
 
     private static MemberDescriptor ParseMember(LambdaExpression expression)
     {
-        Expression body = expression?.Body;
+        Expression? body = expression?.Body;
         while (body is UnaryExpression unary && unary.NodeType == ExpressionType.Convert)
         {
             body = unary.Operand;
@@ -344,7 +351,7 @@ public sealed class MapperBuilder<TSource, TTarget>
         );
     }
 
-    private static Action<TTarget, object> CreatePropertySetter(PropertyInfo property)
+    private static Action<TTarget, object?> CreatePropertySetter(PropertyInfo property)
     {
         ParameterExpression target = Expression.Parameter(typeof(TTarget), "target");
         ParameterExpression value = Expression.Parameter(typeof(object), "value");
@@ -353,10 +360,10 @@ public sealed class MapperBuilder<TSource, TTarget>
             propertyAccess,
             Expression.Convert(value, property.PropertyType)
         );
-        return Expression.Lambda<Action<TTarget, object>>(assign, target, value).Compile();
+        return Expression.Lambda<Action<TTarget, object?>>(assign, target, value).Compile();
     }
 
-    private static Action<TTarget, object> CreateFieldSetter(FieldInfo field)
+    private static Action<TTarget, object?> CreateFieldSetter(FieldInfo field)
     {
         ParameterExpression target = Expression.Parameter(typeof(TTarget), "target");
         ParameterExpression value = Expression.Parameter(typeof(object), "value");
@@ -365,7 +372,7 @@ public sealed class MapperBuilder<TSource, TTarget>
             fieldAccess,
             Expression.Convert(value, field.FieldType)
         );
-        return Expression.Lambda<Action<TTarget, object>>(assign, target, value).Compile();
+        return Expression.Lambda<Action<TTarget, object?>>(assign, target, value).Compile();
     }
 
     private void EnsureEntityTarget()
@@ -399,7 +406,7 @@ public sealed class MapperBuilder<TSource, TTarget>
     private static void ValidateLookupOptions(
         string targetMember,
         LookupMappingOptions options,
-        Func<MappingContext<TSource, TTarget>, Entity> createFactory
+        Func<MappingContext<TSource, TTarget>, Entity>? createFactory
     )
     {
         if (options == null)
@@ -416,9 +423,9 @@ public sealed class MapperBuilder<TSource, TTarget>
         }
     }
 
-    private sealed class MemberDescriptor(string name, Action<TTarget, object> setter)
+    private sealed class MemberDescriptor(string name, Action<TTarget, object?> setter)
     {
         public string Name { get; } = name;
-        public Action<TTarget, object> Setter { get; } = setter;
+        public Action<TTarget, object?> Setter { get; } = setter;
     }
 }

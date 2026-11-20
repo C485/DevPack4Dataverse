@@ -24,7 +24,7 @@ namespace DevPack4Dataverse.Mapper.Cache;
 public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
 {
     private const int MaxEntries = 100_000;
-    private static readonly Task<CachedEntity> NullTask = Task.FromResult<CachedEntity>(
+    private static readonly Task<CachedEntity?> NullTask = Task.FromResult<CachedEntity?>(
         null
     );
     private readonly ConcurrentDictionary<string, CacheEntry> _entries =
@@ -35,19 +35,19 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         ConcurrentDictionary<string, byte>
     > _keysByRecord = new(StringComparer.Ordinal);
 
-    public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default)
+    public Task<CachedEntity?> GetAsync(EntityKey key, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         string cacheKey = key.ToString();
-        if (_entries.TryGetValue(cacheKey, out CacheEntry entry))
+        if (_entries.TryGetValue(cacheKey, out CacheEntry? entry))
         {
             if (entry.ExpiresUtc > DateTime.UtcNow)
             {
                 return entry.ReadTask;
             }
 
-            if (_entries.TryRemove(cacheKey, out CacheEntry expired))
+            if (_entries.TryRemove(cacheKey, out CacheEntry? expired))
             {
                 UnindexEntry(cacheKey, expired.Value);
             }
@@ -70,10 +70,15 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
             throw new ArgumentNullException(nameof(entry));
         }
 
-        DateTime expiresUtc =
-            timeToLive > TimeSpan.Zero ? DateTime.UtcNow.Add(timeToLive) : DateTime.MaxValue;
+        if (timeToLive <= TimeSpan.Zero)
+        {
+            // A non-positive TTL means the entry must not be cached.
+            return Task.CompletedTask;
+        }
+
+        DateTime expiresUtc = DateTime.UtcNow.Add(timeToLive);
         string cacheKey = key.ToString();
-        if (_entries.TryGetValue(cacheKey, out CacheEntry previous))
+        if (_entries.TryGetValue(cacheKey, out CacheEntry? previous))
         {
             UnindexEntry(cacheKey, previous.Value);
         }
@@ -83,7 +88,16 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         IndexEntry(cacheKey, entry);
         _evictionQueue.Enqueue(cacheKey);
         TrimCacheIfNeeded();
-        while (_evictionQueue.Count > MaxEntries && _evictionQueue.TryDequeue(out _)) { }
+        while (
+            _evictionQueue.Count > MaxEntries
+            && _evictionQueue.TryDequeue(out string? staleKey)
+        )
+        {
+            if (_entries.TryRemove(staleKey, out CacheEntry? staleEntry))
+            {
+                UnindexEntry(staleKey, staleEntry.Value);
+            }
+        }
 
         return Task.CompletedTask;
     }
@@ -92,7 +106,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
     {
         cancellationToken.ThrowIfCancellationRequested();
         string cacheKey = key.ToString();
-        if (_entries.TryRemove(cacheKey, out CacheEntry entry))
+        if (_entries.TryRemove(cacheKey, out CacheEntry? entry))
         {
             UnindexEntry(cacheKey, entry.Value);
         }
@@ -109,7 +123,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         cancellationToken.ThrowIfCancellationRequested();
 
         string indexKey = RecordIndexKey(logicalName, id);
-        if (!_keysByRecord.TryRemove(indexKey, out ConcurrentDictionary<string, byte> keys))
+        if (!_keysByRecord.TryRemove(indexKey, out ConcurrentDictionary<string, byte>? keys))
         {
             return Task.CompletedTask;
         }
@@ -131,7 +145,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         {
             if (
                 !key.StartsWith(prefix, StringComparison.Ordinal)
-                || !_entries.TryRemove(key, out CacheEntry entry)
+                || !_entries.TryRemove(key, out CacheEntry? entry)
             )
             {
                 continue;
@@ -145,9 +159,9 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private void TrimCacheIfNeeded()
     {
-        while (_entries.Count > MaxEntries && _evictionQueue.TryDequeue(out string key))
+        while (_entries.Count > MaxEntries && _evictionQueue.TryDequeue(out string? key))
         {
-            if (_entries.TryRemove(key, out CacheEntry entry))
+            if (_entries.TryRemove(key!, out CacheEntry? entry))
             {
                 UnindexEntry(key, entry.Value);
             }
@@ -176,7 +190,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         }
 
         string indexKey = RecordIndexKey(entry.Record.LogicalName, entry.Record.Id);
-        if (!_keysByRecord.TryGetValue(indexKey, out ConcurrentDictionary<string, byte> keys))
+        if (!_keysByRecord.TryGetValue(indexKey, out ConcurrentDictionary<string, byte>? keys))
         {
             return;
         }
@@ -195,6 +209,6 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
     {
         public CachedEntity Value { get; } = value;
         public DateTime ExpiresUtc { get; } = expiresUtc;
-        public Task<CachedEntity> ReadTask { get; } = Task.FromResult(value);
+        public Task<CachedEntity?> ReadTask { get; } = Task.FromResult<CachedEntity?>(value);
     }
 }

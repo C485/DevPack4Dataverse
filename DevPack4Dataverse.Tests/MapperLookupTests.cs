@@ -22,6 +22,28 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public void EntityKey_AlternateReferenceValues_DoNotCollide()
+    {
+        EntityReference first = new("account");
+        first.KeyAttributes["accountnumber"] = "A-1";
+        EntityReference second = new("account");
+        second.KeyAttributes["accountnumber"] = "A-2";
+
+        EntityKey firstKey = EntityKey.ByAlternateKey(
+            "contact",
+            "parentcustomerid",
+            first
+        );
+        EntityKey secondKey = EntityKey.ByAlternateKey(
+            "contact",
+            "parentcustomerid",
+            second
+        );
+
+        Assert.NotEqual(firstKey, secondKey);
+    }
+
+    [Fact]
     public void EntityKey_TwoPairAlternateKeyOverload()
     {
         EntityKey key = EntityKey.ByAlternateKey(
@@ -54,7 +76,7 @@ public class MapperLookupTests
     public async Task BasicKey_ResolvesLookupAndRequestsOnlyConfiguredColumns()
     {
         Guid id = Guid.NewGuid();
-        QueryExpression captured = null;
+        QueryExpression? captured = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = query =>
@@ -84,10 +106,10 @@ public class MapperLookupTests
 
             Assert.False(result.HasErrors);
             Assert.Equal(id, result.Records[0].Target.Account.Id);
-            Assert.Contains("name", captured.ColumnSet.Columns);
-            Assert.DoesNotContain("email", captured.ColumnSet.Columns);
+            Assert.Contains("name", captured!.ColumnSet.Columns);
+            Assert.DoesNotContain("email", captured!.ColumnSet.Columns);
             Assert.Contains(
-                captured.Criteria.Conditions,
+                captured!.Criteria.Conditions,
                 condition =>
                     condition.AttributeName == "accountid"
                     && Equals(condition.Values[0], id)
@@ -97,10 +119,46 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public async Task AlternateKeyLookup_WithMultipleMatches_Throws()
+    {
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", Guid.NewGuid()) { ["accountnumber"] = "A-1" },
+                new Entity("account", Guid.NewGuid()) { ["accountnumber"] = "A-1" }
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+        var options = new LookupMappingOptions();
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("multi-match")
+                .MapLookup(
+                    target => target.Account,
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            "accountnumber",
+                            context.Source.AccountNumber
+                        ),
+                    options
+                )
+                .Build();
+
+            await Assert.ThrowsAsync<MapperException>(
+                () => mapper.ExecuteAsync(new LookupSource { AccountNumber = "A-1" })
+            );
+        }
+    }
+
+    [Fact]
     public async Task AlternateKey_ResolvesLookup()
     {
         Guid id = Guid.NewGuid();
-        QueryExpression captured = null;
+        QueryExpression? captured = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = query =>
@@ -141,7 +199,7 @@ public class MapperLookupTests
 
             Assert.Equal(id, result.Records[0].Target.Account.Id);
             Assert.Contains(
-                captured.Criteria.Conditions,
+                captured!.Criteria.Conditions,
                 condition =>
                     condition.AttributeName == "accountnumber"
                     && Equals(condition.Values[0], "A-1")
@@ -288,9 +346,17 @@ public class MapperLookupTests
 
             await mapper.ExecuteAsync(new LookupSource { AccountId = id });
 
-            options.Fields.Clear();
-            options.Fields.Add("email");
-            await mapper.ExecuteAsync(new LookupSource { AccountId = id });
+            LookupMappingOptions secondOptions = new();
+            secondOptions.Fields.Add("email");
+            var secondMapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup-email")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    secondOptions
+                )
+                .Build();
+            await secondMapper.ExecuteAsync(new LookupSource { AccountId = id });
 
             Assert.Equal(2, columnSets.Count);
             Assert.DoesNotContain("name", columnSets[1].Columns);
@@ -499,7 +565,7 @@ public class MapperLookupTests
                 .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
                 .MapLookup(
                     target => target.Account,
-                    _ => null,
+                    _ => null!,
                     new LookupMappingOptions { ThrowIfEmpty = true }
                 )
                 .Build();
@@ -587,7 +653,7 @@ public class MapperLookupTests
                 .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
                 .MapLookup(
                     target => target.Account,
-                    _ => null,
+                    _ => null!,
                     new LookupMappingOptions { ThrowIfEmpty = false }
                 )
                 .Build();
@@ -688,7 +754,7 @@ public class MapperLookupTests
 
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        IEntityCache cache = null
+        IEntityCache? cache = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
@@ -700,29 +766,29 @@ public class MapperLookupTests
     {
         public Guid AccountId { get; set; }
         public Guid OtherAccountId { get; set; }
-        public string AccountNumber { get; set; }
+        public string AccountNumber { get; set; } = null!;
     }
 
     public sealed class LookupTarget
     {
-        public EntityReference Account { get; set; }
+        public EntityReference Account { get; set; } = null!;
     }
 
     public sealed class LookupPairs
     {
-        public EntityReference First { get; set; }
-        public EntityReference Second { get; set; }
+        public EntityReference First { get; set; } = null!;
+        public EntityReference Second { get; set; } = null!;
     }
 
     public sealed class AlternateLookupSource
     {
-        public string FirstNumber { get; set; }
-        public string SecondNumber { get; set; }
+        public string FirstNumber { get; set; } = null!;
+        public string SecondNumber { get; set; } = null!;
     }
 
     private sealed class ThrowingReadCache : IEntityCache
     {
-        public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+        public Task<CachedEntity?> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("cache unavailable");
 
         public Task SetAsync(

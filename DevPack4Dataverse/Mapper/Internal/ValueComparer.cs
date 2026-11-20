@@ -20,7 +20,7 @@ namespace DevPack4Dataverse.Mapper.Internal;
 
 internal static class ValueComparer
 {
-    public static bool AreEqual(object left, object right)
+    public static bool AreEqual(object? left, object? right)
     {
         left = Unwrap(left);
         right = Unwrap(right);
@@ -63,6 +63,6 @@ internal static class ValueComparer
         return left.Equals(right);
     }
 
-    private static object Unwrap(object value) =>
+    private static object? Unwrap(object? value) =>
         value is AliasedValue aliased ? aliased.Value : value;
 }

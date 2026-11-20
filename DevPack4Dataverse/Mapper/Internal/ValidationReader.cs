@@ -20,16 +20,19 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse.Mapper.Internal;
 
-internal sealed class ValidationReader(SdkProxy sdkProxy)
+internal sealed class ValidationReader(
+    SdkProxy sdkProxy,
+    PrimaryKeyAttributeProvider primaryKeys
+)
 {
     private const int MaxIdsPerQuery = 1000;
 
     public async Task<IReadOnlyList<MappingError>> ValidateAsync(
         IReadOnlyList<ValidationTarget> targets,
-        Func<string, ISet<string>> fieldsProvider,
-        Func<Entity, MappingValidationContext, IEnumerable<string>> validator,
-        string mapperName,
-        RequestSettings requestSettings,
+        Func<string, ISet<string>>? fieldsProvider,
+        Func<Entity, MappingValidationContext, IEnumerable<string>>? validator,
+        string? mapperName,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -69,7 +72,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
         foreach (ValidationTarget target in validTargets)
         {
             string key = ValidationKey(target.Reference.LogicalName, target.Reference.Id);
-            if (!records.TryGetValue(key, out Entity record))
+            if (!records.TryGetValue(key, out Entity? record))
             {
                 errors.Add(
                     new MappingError(
@@ -131,8 +134,8 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
     private async Task<Dictionary<string, Entity>> RetrieveAsync(
         IReadOnlyList<ValidationTarget> targets,
-        Func<string, ISet<string>> fieldsProvider,
-        RequestSettings requestSettings,
+        Func<string, ISet<string>>? fieldsProvider,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -146,13 +149,16 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
             )
         )
         {
-            ISet<string> fields = fieldsProvider?.Invoke(group.Key);
+            ISet<string>? fields = fieldsProvider?.Invoke(group.Key);
             columns =
                 fields?
                     .Where(p => !string.IsNullOrWhiteSpace(p))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray() ?? Array.Empty<string>();
             Guid[] ids = group.Select(p => p.Reference.Id).Distinct().ToArray();
+            string primaryIdAttribute = await primaryKeys
+                .GetAsync(group.Key, cancellationToken)
+                .ConfigureAwait(false);
             for (int offset = 0; offset < ids.Length; offset += MaxIdsPerQuery)
             {
                 Guid[] chunk = ids.Skip(offset).Take(MaxIdsPerQuery).ToArray();
@@ -162,7 +168,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
                     ColumnSet = columns.Length == 0 ? new ColumnSet(false) : new ColumnSet(columns)
                 };
                 query.Criteria.AddCondition(
-                    group.Key.ToLowerInvariant() + "id",
+                    primaryIdAttribute,
                     ConditionOperator.In,
                     chunk.Cast<object>().ToArray()
                 );
@@ -187,16 +193,16 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
 internal sealed class ValidationTarget(
     EntityReference reference,
-    object source,
-    object target,
-    Entity savedEntity
+    object? source,
+    object? target,
+    Entity? savedEntity
 )
 {
     public EntityReference Reference { get; } = reference;
 
-    public object Source { get; } = source;
+    public object? Source { get; } = source;
 
-    public object Target { get; } = target;
+    public object? Target { get; } = target;
 
-    public Entity SavedEntity { get; } = savedEntity;
+    public Entity? SavedEntity { get; } = savedEntity;
 }

@@ -37,9 +37,9 @@ public sealed class MapperWrapper
     public MapperWrapper(
         SdkProxy sdkProxy,
         ILogger logger,
-        MapperWrapperOptions options = null,
-        IEntityCache cache = null,
-        IEntityLock entityLock = null
+        MapperWrapperOptions? options = null,
+        IEntityCache? cache = null,
+        IEntityLock? entityLock = null
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
@@ -47,7 +47,10 @@ public sealed class MapperWrapper
         Options = options ?? new MapperWrapperOptions();
         Cache = cache ?? new InMemoryEntityCache();
         Lock = entityLock ?? new InMemoryEntityLock();
-        _validationReader = new ValidationReader(_sdkProxy);
+        _validationReader = new ValidationReader(
+            _sdkProxy,
+            new PrimaryKeyAttributeProvider(_sdkProxy)
+        );
     }
 
     public MapperWrapperOptions Options { get; }
@@ -57,7 +60,7 @@ public sealed class MapperWrapper
     public IEntityLock Lock { get; }
 
     public MapperBuilder<TSource, TTarget> CreateMapperBuilder<TSource, TTarget>(
-        string name = null
+        string? name = null
     ) where TTarget : class, new()
     {
         return new MapperBuilder<TSource, TTarget>(
@@ -95,7 +98,7 @@ public sealed class MapperWrapper
         return _mappers.TryAdd(name, mapper);
     }
 
-    public bool TryGet(string name, out IMapper mapper)
+    public bool TryGet(string name, out IMapper? mapper)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -107,18 +110,18 @@ public sealed class MapperWrapper
 
     public IMapper Get(string name)
     {
-        if (!TryGet(name, out IMapper mapper))
+        if (!TryGet(name, out IMapper? mapper))
         {
             throw new MapperException($"Mapper '{name}' is not registered.");
         }
 
-        return mapper;
+        return mapper!;
     }
 
     public async Task<MapperWrapperResult> ExecuteAsync(
         string name,
         object source,
-        MappingRunOptions runOptions = null,
+        MappingRunOptions? runOptions = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -129,7 +132,8 @@ public sealed class MapperWrapper
 
         List<MappingError> errors = new(result.Errors);
         if (
-            Options.ValidateAfterSave
+            runOptions?.ValidateAfterSave != false
+            && Options.ValidateAfterSave
             && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
         )
         {
@@ -174,7 +178,10 @@ public sealed class MapperWrapper
             results.Add(result);
             errors.AddRange(result.Errors);
 
-            if (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+            if (
+                execution.RunOptions?.ValidateAfterSave != false
+                && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+            )
             {
                 referencesToValidate.AddRange(result.SavedReferences);
             }

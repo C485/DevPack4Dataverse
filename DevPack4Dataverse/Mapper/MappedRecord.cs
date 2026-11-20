@@ -24,10 +24,10 @@ namespace DevPack4Dataverse.Mapper;
 public sealed class MappedRecord<TTarget>
 {
     internal MappedRecord(
-        object source,
+        object? source,
         TTarget target,
-        EntityReference reference,
-        Entity savedEntity,
+        EntityReference? reference,
+        Entity? savedEntity,
         bool created,
         bool skipped,
         IReadOnlyCollection<string> changedFields
@@ -42,13 +42,13 @@ public sealed class MappedRecord<TTarget>
         ChangedFields = changedFields ?? Array.Empty<string>();
     }
 
-    public object Source { get; }
+    public object? Source { get; }
 
     public TTarget Target { get; }
 
-    public EntityReference Reference { get; }
+    public EntityReference? Reference { get; }
 
-    public Entity SavedEntity { get; }
+    public Entity? SavedEntity { get; }
 
     public bool Created { get; }
 

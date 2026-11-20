@@ -47,7 +47,7 @@ public class MapperValidationTests
                     {
                         options.ValidateAfterSave = true;
                         options.Validator = (entity, context) =>
-                            new[] { $"validation:{((OrderSource)context.Source).Name}" };
+                            new[] { $"validation:{((OrderSource)context.Source!).Name}" };
                     }
                 )
                 .Build();
@@ -134,6 +134,49 @@ public class MapperValidationTests
             Assert.True(result.HasErrors);
             Assert.Contains(result.Errors, error => error.Message == "wrapper-error");
             Assert.Equal(1, validationReads);
+        }
+    }
+
+    [Fact]
+    public async Task WrapperValidation_SkipsWhenRunOptionDisablesIt()
+    {
+        Guid id = Guid.NewGuid();
+        int validationReads = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ => id,
+            RetrieveMultipleHandler = _ =>
+            {
+                validationReads++;
+                return new[] { new Entity("account", id) { ["name"] = "Saved" } };
+            }
+        };
+        var wrapperOptions = new MapperWrapperOptions
+        {
+            ValidateAfterSave = true,
+            Validator = (entity, context) => new[] { "wrapper-error" }
+        };
+        wrapperOptions.ValidationFields.Add("name");
+        var (proxy, wrapper) = Create(fake, wrapperOptions);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders-skip")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            Assert.True(wrapper.Register("orders-skip", mapper));
+
+            MapperWrapperResult result = await wrapper.ExecuteAsync(
+                "orders-skip",
+                new OrderSource { Name = "One" },
+                new MappingRunOptions { ValidateAfterSave = false }
+            );
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(0, validationReads);
         }
     }
 
@@ -316,7 +359,7 @@ public class MapperValidationTests
 
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        MapperWrapperOptions options = null
+        MapperWrapperOptions? options = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
@@ -326,6 +369,6 @@ public class MapperValidationTests
 
     public sealed class OrderSource
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
     }
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
@@ -34,11 +34,11 @@ public class FieldDrillTests
     private static Entity Record(
         string logicalName,
         Guid id,
-        params (string Name, object Value)[] attributes
+        params (string Name, object? Value)[] attributes
     )
     {
         var entity = new Entity(logicalName) { Id = id };
-        foreach ((string name, object value) in attributes)
+        foreach ((string name, object? value) in attributes)
         {
             entity[name] = value;
         }
@@ -376,7 +376,7 @@ public class FieldDrillTests
         using (proxy)
         {
             Assert.Throws<ArgumentNullException>(
-                () => drill.Retreive<string>((EntityReference)null, "name")
+                () => drill.Retreive<string>((EntityReference)null!, "name")
             );
         }
     }
@@ -391,11 +391,11 @@ public class FieldDrillTests
 
         using (proxy)
         {
-            Assert.ThrowsAny<ArgumentException>(() => drill.Retreive<string>(accountReference, (string)null));
+            Assert.ThrowsAny<ArgumentException>(() => drill.Retreive<string>(accountReference, (string)null!));
             Assert.ThrowsAny<ArgumentException>(() => drill.Retreive<string>(accountReference, ""));
             Assert.ThrowsAny<ArgumentException>(() => drill.Retreive<string>(accountReference, " "));
             Assert.Throws<ArgumentNullException>(
-                () => drill.Retreive<string>(accountReference, (string[])null)
+                () => drill.Retreive<string>(accountReference, (string[])null!)
             );
             Assert.ThrowsAny<ArgumentException>(
                 () => drill.Retreive<string>(accountReference, new string[0])
@@ -404,7 +404,7 @@ public class FieldDrillTests
                 () => drill.Retreive<string>(accountReference, new[] { "name", " " })
             );
             Assert.ThrowsAny<ArgumentException>(
-                () => drill.Retreive<string>(accountReference, "name", null)
+                () => drill.Retreive<string>(accountReference, "name", null!)
             );
             Assert.ThrowsAny<ArgumentException>(
                 () => drill.Retreive<string>(accountReference, "name", "")

@@ -33,7 +33,7 @@ public sealed class MapperOptions<TSource, TTarget>
     public bool ValidateAfterSave { get; set; }
 
     /// <summary>Runs after all stages and before change detection.</summary>
-    public Action<MappingContext<TSource, TTarget>> PreSave { get; set; }
+    public Action<MappingContext<TSource, TTarget>>? PreSave { get; set; }
 
     /// <summary>Fields ignored when deciding whether an update is required.</summary>
     public ISet<string> SkipFieldsToChanged { get; } =
@@ -49,7 +49,7 @@ public sealed class MapperOptions<TSource, TTarget>
     /// Returns validation error messages for a freshly read record. When null and validation
     /// is enabled, the mapper only verifies that the saved record exists.
     /// </summary>
-    public Func<Entity, MappingValidationContext, IEnumerable<string>> Validator { get; set; }
+    public Func<Entity, MappingValidationContext, IEnumerable<string>>? Validator { get; set; }
 
     /// <summary>
     /// Extra columns required by <see cref="Validator"/>. When empty, mapped attributes are used.

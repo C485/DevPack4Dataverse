@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,6 @@ public sealed class SequentialRequestBuilder
     /// <exception cref="ArgumentNullException">A dependency is null.</exception>
     public SequentialRequestBuilder(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         _logger = Guard.Against.Null(logger);
     }
@@ -63,7 +62,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Execute(
         OrganizationRequest request,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(request, nameof(request));
@@ -78,7 +77,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Execute(
         Func<SequentialRequestContext, OrganizationRequest> requestFactory,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(requestFactory, nameof(requestFactory));
@@ -94,7 +93,7 @@ public sealed class SequentialRequestBuilder
     /// <param name="record">Record to create. Cannot be null.</param>
     /// <param name="requestSettings">Optional request settings for this step.</param>
     /// <returns>This builder for chaining.</returns>
-    public SequentialRequestBuilder Create(Entity record, RequestSettings requestSettings = null)
+    public SequentialRequestBuilder Create(Entity record, RequestSettings? requestSettings = null)
     {
         ValidateCreateRecord(record, nameof(record));
         return Execute(new CreateRequest { Target = record }, requestSettings);
@@ -108,7 +107,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Create(
         Func<SequentialRequestContext, Entity> recordFactory,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(recordFactory, nameof(recordFactory));
@@ -129,7 +128,7 @@ public sealed class SequentialRequestBuilder
     /// <param name="record">Record to update. Cannot be null.</param>
     /// <param name="requestSettings">Optional request settings for this step.</param>
     /// <returns>This builder for chaining.</returns>
-    public SequentialRequestBuilder Update(Entity record, RequestSettings requestSettings = null)
+    public SequentialRequestBuilder Update(Entity record, RequestSettings? requestSettings = null)
     {
         ValidateUpdateRecord(record, nameof(record));
         return Execute(new UpdateRequest { Target = record }, requestSettings);
@@ -143,7 +142,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Update(
         Func<SequentialRequestContext, Entity> recordFactory,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(recordFactory, nameof(recordFactory));
@@ -166,7 +165,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Delete(
         EntityReference entityReference,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         ValidateEntityReference(entityReference, nameof(entityReference));
@@ -181,7 +180,7 @@ public sealed class SequentialRequestBuilder
     /// <returns>This builder for chaining.</returns>
     public SequentialRequestBuilder Delete(
         Func<SequentialRequestContext, EntityReference> entityReferenceFactory,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(entityReferenceFactory, nameof(entityReferenceFactory));
@@ -209,7 +208,7 @@ public sealed class SequentialRequestBuilder
     public SequentialRequestBuilder Retrieve(
         EntityReference target,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         ValidateEntityReference(target, nameof(target));
@@ -230,7 +229,7 @@ public sealed class SequentialRequestBuilder
     public SequentialRequestBuilder Retrieve(
         Func<SequentialRequestContext, EntityReference> targetFactory,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.Null(targetFactory, nameof(targetFactory));
@@ -261,7 +260,7 @@ public sealed class SequentialRequestBuilder
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.NullOrWhiteSpace(entityName, nameof(entityName));
@@ -281,7 +280,7 @@ public sealed class SequentialRequestBuilder
         string entityName,
         Func<SequentialRequestContext, Guid> idFactory,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.NullOrWhiteSpace(entityName, nameof(entityName));
@@ -309,8 +308,8 @@ public sealed class SequentialRequestBuilder
     public SequentialRequestBuilder ExecuteAction(
         string actionName,
         EntityReference target,
-        Action<OrganizationRequest> configure = null,
-        RequestSettings requestSettings = null
+        Action<OrganizationRequest>? configure = null,
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.NullOrWhiteSpace(actionName, nameof(actionName));
@@ -338,8 +337,8 @@ public sealed class SequentialRequestBuilder
     public SequentialRequestBuilder ExecuteAction(
         string actionName,
         Func<SequentialRequestContext, EntityReference> targetFactory,
-        Action<SequentialRequestContext, OrganizationRequest> configure = null,
-        RequestSettings requestSettings = null
+        Action<SequentialRequestContext, OrganizationRequest>? configure = null,
+        RequestSettings? requestSettings = null
     )
     {
         Guard.Against.NullOrWhiteSpace(actionName, nameof(actionName));
@@ -369,9 +368,11 @@ public sealed class SequentialRequestBuilder
     /// <remarks>
     /// Execution stops at the first exception and that exception propagates to the caller.
     /// </remarks>
-    public SequentialRequestContext Execute()
+    public SequentialRequestContext Execute() =>
+        OperationLogger.RunLogged(_logger, nameof(Execute), ExecuteCore);
+
+    private SequentialRequestContext ExecuteCore()
     {
-        using EntryExitLogger logGuard = new(_logger);
         SequentialStep[] steps = _steps.ToArray();
         EnsureHasSteps(steps);
 
@@ -405,11 +406,19 @@ public sealed class SequentialRequestBuilder
     /// <remarks>
     /// Execution stops at the first exception and that exception propagates to the caller.
     /// </remarks>
-    public async Task<SequentialRequestContext> ExecuteAsync(
+    public Task<SequentialRequestContext> ExecuteAsync(
         CancellationToken cancellationToken = default
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            nameof(ExecuteAsync),
+            () => ExecuteCoreAsync(cancellationToken)
+        );
+
+    private async Task<SequentialRequestContext> ExecuteCoreAsync(
+        CancellationToken cancellationToken
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         SequentialStep[] steps = _steps.ToArray();
         EnsureHasSteps(steps);
 
@@ -479,7 +488,7 @@ public sealed class SequentialRequestBuilder
 
     private SequentialRequestBuilder AddStep(
         Func<SequentialRequestContext, OrganizationRequest> requestFactory,
-        RequestSettings requestSettings
+        RequestSettings? requestSettings
     )
     {
         _steps.Add(new SequentialStep(requestFactory, requestSettings));
@@ -488,11 +497,11 @@ public sealed class SequentialRequestBuilder
 
     private sealed class SequentialStep(
         Func<SequentialRequestContext, OrganizationRequest> requestFactory,
-        RequestSettings requestSettings
+        RequestSettings? requestSettings
     )
     {
         public Func<SequentialRequestContext, OrganizationRequest> RequestFactory { get; } =
             requestFactory;
-        public RequestSettings RequestSettings { get; } = requestSettings;
+        public RequestSettings? RequestSettings { get; } = requestSettings;
     }
 }

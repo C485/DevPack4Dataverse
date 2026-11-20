@@ -23,7 +23,7 @@ namespace DevPack4Dataverse.Mapper;
 /// </summary>
 public sealed class MappingValidationContext
 {
-    public MappingValidationContext(string mapperName, object source, object target, Entity record)
+    public MappingValidationContext(string? mapperName, object? source, object? target, Entity record)
     {
         MapperName = mapperName;
         Source = source;
@@ -31,11 +31,11 @@ public sealed class MappingValidationContext
         Record = record;
     }
 
-    public string MapperName { get; }
+    public string? MapperName { get; }
 
-    public object Source { get; }
+    public object? Source { get; }
 
-    public object Target { get; }
+    public object? Target { get; }
 
     public Entity Record { get; }
 }

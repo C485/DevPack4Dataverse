@@ -76,26 +76,26 @@ public class KnownBugTests
         Assert.Null(exception);
     }
 
-    // Bug 4: maximumConcurrentlyUsage is not validated when the connection string already ends with
+    // Bug 4: connectionCount is not validated when the connection string already ends with
     // ';' (or already contains RequireNewInstance=True), because the constructor returns early.
     [Fact]
-    public void ConnectionStringCreator_ShouldRejectNegativeConcurrency_WhenStringEndsWithSemicolon()
+    public void ConnectionStringCreator_ShouldRejectZeroConnectionCount_WhenStringEndsWithSemicolon()
     {
         var exception = Record.Exception(() =>
             new ConnectionStringConnectionCreator(
                 "AuthType=ClientSecret;Url=https://example.crm.dynamics.com;",
-                maximumConcurrentlyUsage: -1));
+                connectionCount: 0));
 
         Assert.NotNull(exception);
     }
 
     [Fact]
-    public void ConnectionStringCreator_ShouldRejectNegativeConcurrency_WhenRequireNewInstancePresent()
+    public void ConnectionStringCreator_ShouldRejectZeroConnectionCount_WhenRequireNewInstancePresent()
     {
         var exception = Record.Exception(() =>
             new ConnectionStringConnectionCreator(
                 "AuthType=ClientSecret;Url=https://example.crm.dynamics.com;RequireNewInstance=True",
-                maximumConcurrentlyUsage: -1));
+                connectionCount: 0));
 
         Assert.NotNull(exception);
     }

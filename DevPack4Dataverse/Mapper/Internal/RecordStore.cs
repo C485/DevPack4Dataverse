@@ -29,6 +29,7 @@ internal sealed class RecordStore
     private const int CacheWriteParallelism = 32;
     private readonly IEntityCache _cache;
     private readonly ILogger _logger;
+    private readonly PrimaryKeyAttributeProvider _primaryKeys;
     private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
@@ -38,21 +39,23 @@ internal sealed class RecordStore
         SdkProxy sdkProxy,
         ILogger logger,
         IEntityCache cache,
-        MapperWrapperOptions wrapperOptions
+        MapperWrapperOptions wrapperOptions,
+        PrimaryKeyAttributeProvider primaryKeys
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _wrapperOptions = wrapperOptions ?? throw new ArgumentNullException(nameof(wrapperOptions));
+        _primaryKeys = primaryKeys ?? throw new ArgumentNullException(nameof(primaryKeys));
     }
 
-    public async Task<Entity> GetAsync(
+    public async Task<Entity?> GetAsync(
         EntityKey key,
         IEnumerable<string> requiredColumns,
         bool useCache,
         bool forceRefresh,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -70,7 +73,7 @@ internal sealed class RecordStore
 
         if (useCache && !forceRefresh)
         {
-            CachedEntity cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
+            CachedEntity? cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
             if (cached != null)
             {
                 string[] missing = columns
@@ -79,10 +82,11 @@ internal sealed class RecordStore
 
                 if (missing.Length == 0)
                 {
-                    return cached.Record;
+                    // Return a copy so callers cannot mutate the cached record.
+                    return EntityCopy.Clone(cached.Record);
                 }
 
-                Entity missingValues = await RetrieveAsync(
+                Entity? missingValues = await RetrieveAsync(
                         key,
                         missing,
                         requestSettings,
@@ -96,7 +100,7 @@ internal sealed class RecordStore
                     return null;
                 }
 
-                Entity merged = EntityCopy.Clone(cached.Record);
+                Entity merged = EntityCopy.Clone(cached.Record)!;
                 EntityCopy.Merge(merged, missingValues);
                 HashSet<string> loadedColumns = new(
                     cached.LoadedColumns,
@@ -113,7 +117,7 @@ internal sealed class RecordStore
             }
         }
 
-        Entity record = await RetrieveAsync(key, columns, requestSettings, cancellationToken)
+        Entity? record = await RetrieveAsync(key, columns, requestSettings, cancellationToken)
             .ConfigureAwait(false);
         if (record == null)
         {
@@ -175,6 +179,7 @@ internal sealed class RecordStore
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
 
+        ConcurrentDictionary<string, byte> alternateKeys = new(StringComparer.Ordinal);
         await AsyncParallel
             .ForEachAsync(
                 records,
@@ -193,13 +198,20 @@ internal sealed class RecordStore
                             .ConfigureAwait(false);
                     }
 
-                    EntityKey alternateKey = TryCreateAlternateKey(
+                    EntityKey? alternateKey = TryCreateAlternateKey(
                         logicalName,
                         record,
                         alternateAttributes
                     );
                     if (alternateKey != null)
                     {
+                        if (!alternateKeys.TryAdd(alternateKey.ToString(), 0))
+                        {
+                            throw new MapperException(
+                                $"Alternate key '{alternateKey}' matches more than one '{logicalName}' record."
+                            );
+                        }
+
                         await CacheRecordAsync(record, alternateKey, columns, token)
                             .ConfigureAwait(false);
                     }
@@ -217,7 +229,7 @@ internal sealed class RecordStore
             return;
         }
 
-        EntityKey key = EntityKey.FromEntity(entity);
+        EntityKey? key = EntityKey.FromEntity(entity);
         if (key == null)
         {
             return;
@@ -235,10 +247,10 @@ internal sealed class RecordStore
         await CacheRecordAsync(entity, key, columns, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Entity> RetrieveAsync(
+    private async Task<Entity?> RetrieveAsync(
         EntityKey key,
         IEnumerable<string> columns,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -259,16 +271,26 @@ internal sealed class RecordStore
         }
         else
         {
+            string primaryIdAttribute = await _primaryKeys
+                .GetAsync(key.LogicalName, cancellationToken)
+                .ConfigureAwait(false);
             query.Criteria.AddCondition(
-                key.LogicalName + "id",
+                primaryIdAttribute,
                 ConditionOperator.Equal,
-                key.Id.Value
+                key.Id!.Value
             );
         }
 
         Entity[] records = await _sdkProxy
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
+
+        if (key.IsAlternateKey && records.Length > 1)
+        {
+            throw new MapperException(
+                $"Alternate key '{key}' matched {records.Length} records in table '{key.LogicalName}'."
+            );
+        }
 
         return records.FirstOrDefault();
     }
@@ -280,7 +302,7 @@ internal sealed class RecordStore
         CancellationToken cancellationToken
     )
     {
-        CachedEntity entry = new(EntityCopy.Clone(record), loadedColumns);
+        CachedEntity entry = new(EntityCopy.Clone(record)!, loadedColumns);
         await CacheEntryAsync(requestedKey, entry, cancellationToken).ConfigureAwait(false);
 
         if (record.Id != Guid.Empty)
@@ -317,7 +339,7 @@ internal sealed class RecordStore
                 .ConfigureAwait(false);
         }
 
-        EntityKey key = EntityKey.FromEntity(entity);
+        EntityKey? key = EntityKey.FromEntity(entity);
         if (key != null)
         {
             await RemoveCacheKeyAsync(key, cancellationToken).ConfigureAwait(false);
@@ -362,7 +384,7 @@ internal sealed class RecordStore
         }
     }
 
-    private async Task<CachedEntity> GetCacheEntryAsync(
+    private async Task<CachedEntity?> GetCacheEntryAsync(
         EntityKey key,
         CancellationToken cancellationToken
     )
@@ -453,7 +475,7 @@ internal sealed class RecordStore
         }
     }
 
-    private static EntityKey TryCreateAlternateKey(
+    private static EntityKey? TryCreateAlternateKey(
         string logicalName,
         Entity record,
         string[] attributes
@@ -470,7 +492,7 @@ internal sealed class RecordStore
         );
         foreach (string attribute in attributes)
         {
-            if (!record.Attributes.TryGetValue(attribute, out object value) || value == null)
+            if (!record.Attributes.TryGetValue(attribute, out object? value) || value == null)
             {
                 return null;
             }

@@ -13,7 +13,7 @@ public class MapperCoreTests
     [Fact]
     public async Task PocoToEntity_MapsBothStagesAndCreatesRecord()
     {
-        Entity captured = null;
+        Entity? captured = null;
         var fake = new FakeConnection
         {
             CreateRecordHandler = entity =>
@@ -49,7 +49,7 @@ public class MapperCoreTests
             Assert.True(record.Created);
             Assert.NotNull(record.Reference);
             Assert.NotNull(captured);
-            Assert.Equal("Contoso", captured.GetAttributeValue<string>("name"));
+            Assert.Equal("Contoso", captured!.GetAttributeValue<string>("name"));
             Assert.Equal("Contoso:3", captured.GetAttributeValue<string>("description"));
         }
     }
@@ -57,7 +57,7 @@ public class MapperCoreTests
     [Fact]
     public async Task EntityToEntity_MapsSourceAttributes()
     {
-        Entity captured = null;
+        Entity? captured = null;
         var fake = new FakeConnection
         {
             CreateRecordHandler = entity =>
@@ -81,7 +81,7 @@ public class MapperCoreTests
             );
 
             Assert.False(result.HasErrors);
-            Assert.Equal("Contoso", captured.GetAttributeValue<string>("name"));
+            Assert.Equal("Contoso", captured!.GetAttributeValue<string>("name"));
         }
     }
 
@@ -119,7 +119,7 @@ public class MapperCoreTests
             ["name"] = "Old",
             ["creditlimit"] = 10m
         };
-        Entity update = null;
+        Entity? update = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = _ => new[] { current },
@@ -150,7 +150,7 @@ public class MapperCoreTests
             Assert.False(record.Created);
             Assert.False(record.Skipped);
             Assert.NotNull(update);
-            Assert.Equal("New", update["name"]);
+            Assert.Equal("New", update!["name"]);
             Assert.Equal(20m, update["creditlimit"]);
             Assert.Equal(2, update.Attributes.Count);
         }
@@ -232,7 +232,7 @@ public class MapperCoreTests
     {
         Guid id = Guid.NewGuid();
         Entity current = new("account", id) { ["name"] = "Old" };
-        Entity update = null;
+        Entity? update = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = _ => new[] { current },
@@ -258,14 +258,14 @@ public class MapperCoreTests
             );
 
             Assert.False(result.Records[0].Skipped);
-            Assert.Equal("PreSaved", update["name"]);
+            Assert.Equal("PreSaved", update!["name"]);
         }
     }
 
     [Fact]
     public async Task PocoTarget_WithConverter_SavesEntity()
     {
-        Entity captured = null;
+        Entity? captured = null;
         Guid id = Guid.NewGuid();
         var fake = new FakeConnection
         {
@@ -290,9 +290,9 @@ public class MapperCoreTests
                 new OrderSource { Name = "Contoso", Quantity = 5 }
             );
 
-            Assert.Equal(id, result.Records[0].Reference.Id);
+            Assert.Equal(id, result.Records[0].Reference!.Id);
             Assert.NotNull(captured);
-            Assert.Equal("account", captured.LogicalName);
+            Assert.Equal("account", captured!.LogicalName);
             Assert.Equal("Contoso", captured["name"]);
         }
     }
@@ -330,7 +330,7 @@ public class MapperCoreTests
     public async Task AlternateKeySave_UpsertsAndReturnsReference()
     {
         Guid id = Guid.NewGuid();
-        UpsertRequest captured = null;
+        UpsertRequest? captured = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = _ => Array.Empty<Entity>(),
@@ -369,10 +369,122 @@ public class MapperCoreTests
 
             var record = Assert.Single(result.Records);
             Assert.True(record.Created);
-            Assert.Equal(id, record.Reference.Id);
+            Assert.Equal(id, record.Reference!.Id);
             Assert.NotNull(captured);
+            Assert.Equal("A-1", captured!.Target.KeyAttributes["accountnumber"]);
+        }
+    }
+
+    [Fact]
+    public async Task AlternateKeySave_RemovesKeyColumnFromBody()
+    {
+        Guid id = Guid.NewGuid();
+        UpsertRequest? captured = null;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>(),
+            ExecuteHandler = request =>
+            {
+                captured = Assert.IsType<UpsertRequest>(request);
+                UpsertResponse response = new();
+                response.Results["Target"] = new EntityReference("account", id);
+                response.Results["RecordCreated"] = true;
+                return response;
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AlternateKeySource, Entity>("alternate-body")
+                .WithLogicalName("account")
+                .WithEntityKey(
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            new KeyValuePair<string, object>(
+                                "accountnumber",
+                                context.Source.AccountNumber
+                            )
+                        )
+                )
+                .Map("accountnumber", context => context.Source.AccountNumber)
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await mapper.ExecuteAsync(
+                new AlternateKeySource { AccountNumber = "A-1", Name = "Contoso" }
+            );
+
+            Assert.NotNull(captured);
+            Assert.False(captured!.Target.Attributes.Contains("accountnumber"));
             Assert.Equal("A-1", captured.Target.KeyAttributes["accountnumber"]);
         }
+    }
+
+    [Fact]
+    public async Task BlankAlternateKey_ThrowsInsteadOfUpdatingArbitraryRecord()
+    {
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>()
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AlternateKeySource, Entity>("alternate-blank")
+                .WithLogicalName("account")
+                .WithEntityKey(
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            "accountnumber",
+                            context.Source.AccountNumber
+                        )
+                )
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await Assert.ThrowsAsync<MapperException>(
+                () => mapper.ExecuteAsync(new AlternateKeySource { AccountNumber = string.Empty })
+            );
+        }
+    }
+
+    [Fact]
+    public async Task ActivityTable_UsesPrimaryIdAttributeForChangeDetection()
+    {
+        Guid id = Guid.NewGuid();
+        string? conditionAttribute = null;
+        var fake = new FakeConnection
+        {
+            PrimaryKeyHandler = logicalName =>
+                logicalName == "email" ? "activityid" : logicalName + "id",
+            RetrieveMultipleHandler = query =>
+            {
+                conditionAttribute = query.Criteria.Conditions[0].AttributeName;
+                return new[] { new Entity("email", id) { ["subject"] = "Old" } };
+            },
+            UpdateRecordHandler = _ => { }
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<Entity, Entity>("email")
+                .WithLogicalName("email")
+                .WithEntityKey(context => EntityKey.ById("email", context.Source.Id))
+                .Map("subject", context => context.Source.GetAttributeValue<string>("subject"))
+                .Build();
+
+            await mapper.ExecuteAsync(new Entity("email", id) { ["subject"] = "New" });
+        }
+
+        Assert.Equal("activityid", conditionAttribute);
     }
 
     [Fact]
@@ -385,7 +497,7 @@ public class MapperCoreTests
             new CachedEntity(new Entity("account", id) { ["name"] = "Cached" }, new[] { "name" }),
             TimeSpan.FromMinutes(1)
         );
-        Entity update = null;
+        Entity? update = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = _ => new[]
@@ -411,7 +523,7 @@ public class MapperCoreTests
 
             Assert.False(result.Records[0].Skipped);
             Assert.NotNull(update);
-            Assert.Equal("Cached", update["name"]);
+            Assert.Equal("Cached", update!["name"]);
         }
     }
 
@@ -523,7 +635,7 @@ public class MapperCoreTests
             var result = await mapper.ExecuteAsync(new OrderSource { Name = "Contoso" });
 
             Assert.False(result.HasErrors);
-            Assert.Equal(id, result.Records[0].Reference.Id);
+            Assert.Equal(id, result.Records[0].Reference!.Id);
         }
     }
 
@@ -565,8 +677,8 @@ public class MapperCoreTests
 
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        MapperWrapperOptions options = null,
-        IEntityCache cache = null
+        MapperWrapperOptions? options = null,
+        IEntityCache? cache = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
@@ -576,27 +688,27 @@ public class MapperCoreTests
 
     public sealed class OrderSource
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
         public int Quantity { get; set; }
     }
 
     public sealed class OrderModel
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
         public int Quantity { get; set; }
     }
 
     public sealed class AccountUpdate
     {
         public Guid Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
         public decimal CreditLimit { get; set; }
     }
 
     public sealed class AlternateKeySource
     {
-        public string AccountNumber { get; set; }
-        public string Name { get; set; }
+        public string AccountNumber { get; set; } = null!;
+        public string Name { get; set; } = null!;
     }
 
     private sealed class OrderConverter : IModelEntityConverter<OrderModel>
@@ -611,8 +723,8 @@ public class MapperCoreTests
 
     private sealed class ThrowingCache : IEntityCache
     {
-        public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
-            Task.FromResult<CachedEntity>(null);
+        public Task<CachedEntity?> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+            Task.FromResult<CachedEntity?>(null);
 
         public Task SetAsync(
             EntityKey key,

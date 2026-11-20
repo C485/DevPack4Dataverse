@@ -36,12 +36,13 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         string keyPrefix = "devpack:mapper:entity:"
     )
     {
+        // Use a unique prefix per environment when several environments share one Redis.
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _database = connection.GetDatabase();
         _prefix = string.IsNullOrWhiteSpace(keyPrefix) ? "devpack:mapper:entity:" : keyPrefix;
     }
 
-    public async Task<CachedEntity> GetAsync(
+    public async Task<CachedEntity?> GetAsync(
         EntityKey key,
         CancellationToken cancellationToken = default
     )
@@ -55,7 +56,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             return null;
         }
 
-        return Deserialize(value);
+        return Deserialize(value.ToString()!);
     }
 
     public async Task SetAsync(
@@ -66,8 +67,14 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (timeToLive <= TimeSpan.Zero)
+        {
+            // A non-positive TTL means the entry must not be cached.
+            return;
+        }
+
         string json = Serialize(entry);
-        TimeSpan? expiry = timeToLive > TimeSpan.Zero ? timeToLive : (TimeSpan?)null;
+        TimeSpan expiry = timeToLive;
         await _database.StringSetAsync(Key(key), json, expiry).ConfigureAwait(false);
 
         if (entry.Record.Id != Guid.Empty)
@@ -77,10 +84,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 entry.Record.Id
             );
             await _database.SetAddAsync(indexKey, Key(key).ToString()).ConfigureAwait(false);
-            if (expiry.HasValue)
-            {
-                await _database.KeyExpireAsync(indexKey, expiry).ConfigureAwait(false);
-            }
+            await _database.KeyExpireAsync(indexKey, expiry).ConfigureAwait(false);
         }
     }
 
@@ -93,7 +97,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             .ConfigureAwait(false);
         if (!value.IsNull)
         {
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            CachedEntityDto? dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+                value.ToString()
+            );
             if (dto != null && dto.Id != Guid.Empty)
             {
                 await _database
@@ -139,7 +145,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 continue;
             }
 
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            CachedEntityDto? dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+                value.ToString()
+            );
             if (dto?.Id == id)
             {
                 await _database.KeyDeleteAsync(key).ConfigureAwait(false);
@@ -171,7 +179,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     internal static string Serialize(CachedEntity entry) =>
         JsonConvert.SerializeObject(CachedEntityDto.From(entry));
 
-    internal static CachedEntity Deserialize(string json) =>
+    internal static CachedEntity? Deserialize(string json) =>
         JsonConvert.DeserializeObject<CachedEntityDto>(json)?.ToCachedEntity();
 
     private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeys(
@@ -191,13 +199,20 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             throw new MapperException("Redis connection has no endpoints.");
         }
 
-        StackExchange.Redis.IServer server = _connection.GetServer(endpoints[0]);
-        foreach (
-            StackExchange.Redis.RedisKey key in server.Keys(pattern: pattern, pageSize: 1000)
-        )
+        StackExchange.Redis.IServer[] servers = endpoints
+            .Select(endpoint => _connection.GetServer(endpoint))
+            .Where(server => !server.IsReplica)
+            .ToArray();
+
+        foreach (StackExchange.Redis.IServer server in servers)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return key;
+            foreach (
+                StackExchange.Redis.RedisKey key in server.Keys(pattern: pattern, pageSize: 1000)
+            )
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return key;
+            }
         }
     }
 
@@ -211,11 +226,12 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private sealed class CachedEntityDto
     {
-        public string LogicalName { get; set; }
+        public string LogicalName { get; set; } = null!;
         public Guid Id { get; set; }
         public List<string> LoadedColumns { get; set; } = new();
         public List<CachedAttributeDto> Attributes { get; set; } = new();
         public List<CachedAttributeDto> KeyAttributes { get; set; } = new();
+        public List<KeyValuePair<string, string>> FormattedValues { get; set; } = new();
 
         public static CachedEntityDto From(CachedEntity entry)
         {
@@ -225,25 +241,25 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 Id = entry.Record.Id,
                 LoadedColumns = new List<string>(entry.LoadedColumns),
                 Attributes = new List<CachedAttributeDto>(entry.Record.Attributes.Count),
-                KeyAttributes = new List<CachedAttributeDto>(entry.Record.KeyAttributes.Count)
+                KeyAttributes = new List<CachedAttributeDto>(entry.Record.KeyAttributes.Count),
+                FormattedValues = new List<KeyValuePair<string, string>>(
+                    entry.Record.FormattedValues.Count
+                )
             };
 
             foreach (KeyValuePair<string, object> attribute in entry.Record.Attributes)
             {
-                CachedAttributeDto value = CachedAttributeDto.From(attribute.Key, attribute.Value);
-                if (value != null)
-                {
-                    dto.Attributes.Add(value);
-                }
+                dto.Attributes.Add(CachedAttributeDto.From(attribute.Key, attribute.Value));
             }
 
             foreach (KeyValuePair<string, object> attribute in entry.Record.KeyAttributes)
             {
-                CachedAttributeDto value = CachedAttributeDto.From(attribute.Key, attribute.Value);
-                if (value != null)
-                {
-                    dto.KeyAttributes.Add(value);
-                }
+                dto.KeyAttributes.Add(CachedAttributeDto.From(attribute.Key, attribute.Value));
+            }
+
+            foreach (KeyValuePair<string, string> formatted in entry.Record.FormattedValues)
+            {
+                dto.FormattedValues.Add(formatted);
             }
 
             return dto;
@@ -262,23 +278,28 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 record.KeyAttributes[attribute.Name] = attribute.ToValue();
             }
 
+            foreach (KeyValuePair<string, string> formatted in FormattedValues)
+            {
+                record.FormattedValues[formatted.Key] = formatted.Value;
+            }
+
             return new CachedEntity(record, LoadedColumns);
         }
     }
 
     private sealed class CachedAttributeDto
     {
-        public string Name { get; set; }
-        public string Type { get; set; }
-        public string Value { get; set; }
-        public string ReferenceName { get; set; }
+        public string Name { get; set; } = null!;
+        public string Type { get; set; } = null!;
+        public string Value { get; set; } = null!;
+        public string? ReferenceName { get; set; }
         public List<CachedAttributeDto> ReferenceKeyAttributes { get; set; } = new();
 
-        public static CachedAttributeDto From(string name, object value)
+        public static CachedAttributeDto From(string name, object? value)
         {
             if (value == null)
             {
-                return null;
+                return Create(name, "null", string.Empty);
             }
 
             switch (value)
@@ -315,7 +336,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                     return Create(
                         name,
                         "datetime",
-                        dateTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+                        dateTime.ToString("O", CultureInfo.InvariantCulture)
                     );
                 case Money money:
                     return Create(
@@ -345,14 +366,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                             KeyValuePair<string, object> keyAttribute in reference.KeyAttributes
                         )
                         {
-                            CachedAttributeDto keyDto = From(
-                                keyAttribute.Key,
-                                keyAttribute.Value
+                            referenceDto.ReferenceKeyAttributes.Add(
+                                From(keyAttribute.Key, keyAttribute.Value)
                             );
-                            if (keyDto != null)
-                            {
-                                referenceDto.ReferenceKeyAttributes.Add(keyDto);
-                            }
                         }
                     }
 
@@ -370,6 +386,8 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         {
             switch (Type)
             {
+                case "null":
+                    return null!;
                 case "string":
                     return Value;
                 case "guid":

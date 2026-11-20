@@ -13,7 +13,7 @@ public class MapperCacheLockTests
     {
         var cache = new InMemoryEntityCache();
         EntityKey key = EntityKey.ById("account", Guid.NewGuid());
-        var entry = new CachedEntity(new Entity("account", key.Id.Value) { ["name"] = "Contoso" }, new[] { "name" });
+        var entry = new CachedEntity(new Entity("account", key.Id!.Value) { ["name"] = "Contoso" }, new[] { "name" });
 
         await cache.SetAsync(key, entry, TimeSpan.FromMinutes(1));
 
@@ -26,14 +26,14 @@ public class MapperCacheLockTests
         var cache = new InMemoryEntityCache();
         EntityKey key = EntityKey.ById("account", Guid.NewGuid());
         var entry = new CachedEntity(
-            new Entity("account", key.Id.Value) { ["name"] = "Contoso" },
+            new Entity("account", key.Id!.Value) { ["name"] = "Contoso" },
             new[] { "name" }
         );
 
         await cache.SetAsync(key, entry, TimeSpan.FromMinutes(1));
 
-        Task<CachedEntity> first = cache.GetAsync(key);
-        Task<CachedEntity> second = cache.GetAsync(key);
+        Task<CachedEntity?> first = cache.GetAsync(key);
+        Task<CachedEntity?> second = cache.GetAsync(key);
 
         Assert.Same(first, second);
         Assert.Same(entry, await first);
@@ -44,7 +44,7 @@ public class MapperCacheLockTests
     {
         var cache = new InMemoryEntityCache();
         EntityKey key = EntityKey.ById("account", Guid.NewGuid());
-        var entry = new CachedEntity(new Entity("account", key.Id.Value));
+        var entry = new CachedEntity(new Entity("account", key.Id!.Value));
 
         await cache.SetAsync(key, entry, TimeSpan.FromMilliseconds(20));
         await Task.Delay(80);
@@ -60,9 +60,9 @@ public class MapperCacheLockTests
         EntityKey second = EntityKey.ById("account", Guid.NewGuid());
         EntityKey other = EntityKey.ById("contact", Guid.NewGuid());
 
-        await cache.SetAsync(first, new CachedEntity(new Entity("account", first.Id.Value)), TimeSpan.FromMinutes(1));
-        await cache.SetAsync(second, new CachedEntity(new Entity("account", second.Id.Value)), TimeSpan.FromMinutes(1));
-        await cache.SetAsync(other, new CachedEntity(new Entity("contact", other.Id.Value)), TimeSpan.FromMinutes(1));
+        await cache.SetAsync(first, new CachedEntity(new Entity("account", first.Id!.Value)), TimeSpan.FromMinutes(1));
+        await cache.SetAsync(second, new CachedEntity(new Entity("account", second.Id!.Value)), TimeSpan.FromMinutes(1));
+        await cache.SetAsync(other, new CachedEntity(new Entity("contact", other.Id!.Value)), TimeSpan.FromMinutes(1));
 
         await cache.ClearAsync("account");
 

@@ -16,6 +16,7 @@ limitations under the License.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.ServiceModel;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
@@ -50,7 +51,6 @@ public sealed class ExecuteMultipleLogic
     /// <exception cref="ArgumentNullException">A dependency is null.</exception>
     public ExecuteMultipleLogic(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         _logger = Guard.Against.Null(logger);
     }
@@ -78,15 +78,31 @@ public sealed class ExecuteMultipleLogic
     /// <param name="cancellationToken">Token used to stop scheduling further chunks.</param>
     /// <param name="requestSettings">Optional settings applied to the outer batch request.</param>
     /// <returns>Execution statistics and responses ordered by the original request order.</returns>
-    public async Task<ExecuteMultipleLogicResult> ExecuteAsync(
+    public Task<ExecuteMultipleLogicResult> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            nameof(ExecuteAsync),
+            () =>
+                ExecuteCoreAsync(
+                    executeMultipleRequestBuilder,
+                    executeMultipleRequestSettings,
+                    cancellationToken,
+                    requestSettings
+                )
+        );
+
+    private async Task<ExecuteMultipleLogicResult> ExecuteCoreAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        ExecuteMultipleRequestSettings executeMultipleRequestSettings,
+        CancellationToken cancellationToken,
+        RequestSettings? requestSettings
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         ValidateSettings(executeMultipleRequestSettings);
         Guard.Against.Null(executeMultipleRequestBuilder, parameterName: nameof(executeMultipleRequestBuilder));
 
@@ -110,7 +126,7 @@ public sealed class ExecuteMultipleLogic
             () =>
             {
                 executeMultipleRequestSettings.ReportProgress?.Invoke(
-                    Thread.VolatileRead(ref progress),
+                    Volatile.Read(ref progress),
                     requests.Length
                 );
             },
@@ -119,6 +135,7 @@ public sealed class ExecuteMultipleLogic
         repeatedTask.Start();
 
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
+        bool cancelled = false;
 
         try
         {
@@ -131,21 +148,21 @@ public sealed class ExecuteMultipleLogic
                         chunks,
                         threadsCount,
                         cancellationToken,
-                        async (chunk, _) =>
+                        async (chunk, token) =>
                         {
                             OrganizationRequest[] packOfRequests = chunk.Requests;
                             try
                             {
-                                ExecuteMultipleResponse responseWithResults =
+                                List<ExecuteMultipleResponseItem> responseWithResults =
                                     await ExecutePackAsync(
                                             packOfRequests,
                                             true,
                                             requestSettings,
-                                            cancellationToken
+                                            token
                                         )
                                         .ConfigureAwait(false);
 
-                                StoreResponses(
+                                _ = StoreResponses(
                                     responseWithResults,
                                     packOfRequests,
                                     chunk.StartIndex,
@@ -154,11 +171,16 @@ public sealed class ExecuteMultipleLogic
                                     false
                                 );
                             }
+                            catch (OperationCanceledException) when (token.IsCancellationRequested)
+                            {
+                                throw;
+                            }
                             catch (Exception e)
                             {
                                 foreach (OrganizationRequest recordToSave in packOfRequests)
                                 {
-                                    executeMultipleRequestSettings.ErrorReport?.Invoke(
+                                    InvokeErrorReport(
+                                        executeMultipleRequestSettings.ErrorReport,
                                         recordToSave,
                                         e.ToString()
                                     );
@@ -173,6 +195,7 @@ public sealed class ExecuteMultipleLogic
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Cancellation is reported through logicResult.Cancelled.
+                cancelled = true;
             }
         }
         finally
@@ -185,9 +208,13 @@ public sealed class ExecuteMultipleLogic
             responsesByIndex,
             progress,
             requests.Length,
-            cancellationToken
+            cancelled
         );
-        executeMultipleRequestSettings.ReportProgress?.Invoke(progress, requests.Length);
+        ReportProgressSafely(
+            executeMultipleRequestSettings.ReportProgress,
+            progress,
+            requests.Length
+        );
         return result;
     }
 
@@ -199,15 +226,31 @@ public sealed class ExecuteMultipleLogic
     /// <param name="cancellationToken">Token used to stop scheduling further chunks.</param>
     /// <param name="requestSettings">Optional settings applied to the outer batch request.</param>
     /// <returns>Execution statistics and responses ordered by the original request order.</returns>
-    public async Task<ExecuteMultipleLogicResult> ExecuteAsync(
+    public Task<ExecuteMultipleLogicResult> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            "ExecuteAsync (simple)",
+            () =>
+                ExecuteSimpleCoreAsync(
+                    executeMultipleRequestBuilder,
+                    executeMultipleRequestSettings,
+                    cancellationToken,
+                    requestSettings
+                )
+        );
+
+    private async Task<ExecuteMultipleLogicResult> ExecuteSimpleCoreAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings,
+        CancellationToken cancellationToken,
+        RequestSettings? requestSettings
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
-
         ValidateSettings(executeMultipleRequestSettings);
         Guard.Against.Null(executeMultipleRequestBuilder, parameterName: nameof(executeMultipleRequestBuilder));
 
@@ -226,6 +269,9 @@ public sealed class ExecuteMultipleLogic
         int progress = 0;
 
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
+        bool cancelled = false;
+        ExecuteMultipleResponseItem? firstFault = null;
+        int firstFaultIndex = -1;
 
         RequestChunk[] chunks = RequestsToChunks(requests, executeMultipleRequestSettings.RequestSize);
 
@@ -235,7 +281,7 @@ public sealed class ExecuteMultipleLogic
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 OrganizationRequest[] packOfRequests = chunk.Requests;
-                ExecuteMultipleResponse responseWithResults = await ExecutePackAsync(
+                List<ExecuteMultipleResponseItem> responseWithResults = await ExecutePackAsync(
                         packOfRequests,
                         false,
                         requestSettings,
@@ -243,7 +289,7 @@ public sealed class ExecuteMultipleLogic
                     )
                     .ConfigureAwait(false);
 
-                StoreResponses(
+                firstFault = StoreResponses(
                     responseWithResults,
                     packOfRequests,
                     chunk.StartIndex,
@@ -253,26 +299,96 @@ public sealed class ExecuteMultipleLogic
                 );
 
                 Interlocked.Add(ref progress, packOfRequests.Length);
+                if (firstFault != null)
+                {
+                    firstFaultIndex = chunk.StartIndex + firstFault.RequestIndex;
+                    break;
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Cancellation is reported through logicResult.Cancelled.
+            cancelled = true;
         }
 
-        return CompleteResult(
+        ExecuteMultipleLogicResult result = CompleteResult(
             logicResult,
             responsesByIndex,
             progress,
             requests.Length,
-            cancellationToken
+            cancelled
         );
+
+        if (firstFault != null)
+        {
+            throw new ExecuteMultipleException(
+                $"Request on index {firstFaultIndex} failed with error, {firstFault.Fault}",
+                result,
+                firstFault
+            );
+        }
+
+        return result;
     }
 
-    private async Task<ExecuteMultipleResponse> ExecutePackAsync(
+    private async Task<List<ExecuteMultipleResponseItem>> ExecutePackAsync(
         OrganizationRequest[] packOfRequests,
         bool continueOnError,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            return await ExecutePackCoreAsync(
+                    packOfRequests,
+                    continueOnError,
+                    requestSettings,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (FaultException<OrganizationServiceFault> fault)
+            when (TryGetMaxBatchSize(fault, out int maxBatchSize)
+                && maxBatchSize > 0
+                && maxBatchSize < packOfRequests.Length)
+        {
+            List<ExecuteMultipleResponseItem> combined = new(packOfRequests.Length);
+            for (int offset = 0; offset < packOfRequests.Length; offset += maxBatchSize)
+            {
+                int count = Math.Min(maxBatchSize, packOfRequests.Length - offset);
+                OrganizationRequest[] part = new OrganizationRequest[count];
+                Array.Copy(packOfRequests, offset, part, 0, count);
+
+                List<ExecuteMultipleResponseItem> partResponse = await ExecutePackAsync(
+                        part,
+                        continueOnError,
+                        requestSettings,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+
+                foreach (ExecuteMultipleResponseItem item in partResponse)
+                {
+                    if (item == null)
+                    {
+                        continue;
+                    }
+
+                    item.RequestIndex += offset;
+                    combined.Add(item);
+                }
+            }
+
+            return combined;
+        }
+    }
+
+    private async Task<List<ExecuteMultipleResponseItem>> ExecutePackCoreAsync(
+        OrganizationRequest[] packOfRequests,
+        bool continueOnError,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -289,23 +405,61 @@ public sealed class ExecuteMultipleLogic
 
         requestWithResults.Requests.AddRange(packOfRequests);
 
-        ExecuteMultipleResponse response = await _sdkProxy
-            .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults, requestSettings)
-            .ConfigureAwait(false);
+        ExecuteMultipleResponse response = (await _sdkProxy
+            .ExecuteAsync<ExecuteMultipleResponse>(
+                requestWithResults,
+                requestSettings,
+                cancellationToken
+            )
+            .ConfigureAwait(false))!;
 
-        return Guard.Against.Null(response);
+        Guard.Against.Null(response);
+
+        List<ExecuteMultipleResponseItem> items = new(
+            response.Responses?.Count ?? packOfRequests.Length
+        );
+        if (response.Responses != null)
+        {
+            items.AddRange(response.Responses);
+        }
+
+        return items;
     }
 
-    private static void StoreResponses(
-        ExecuteMultipleResponse response,
+    private static bool TryGetMaxBatchSize(
+        FaultException<OrganizationServiceFault> fault,
+        out int maxBatchSize
+    )
+    {
+        maxBatchSize = 0;
+        OrganizationServiceFault? detail = fault.Detail;
+        if (detail?.ErrorDetails == null || !detail.ErrorDetails.Contains("MaxBatchSize"))
+        {
+            return false;
+        }
+
+        try
+        {
+            maxBatchSize = Convert.ToInt32(detail.ErrorDetails["MaxBatchSize"]);
+            return maxBatchSize > 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private ExecuteMultipleResponseItem? StoreResponses(
+        IEnumerable<ExecuteMultipleResponseItem> responseItems,
         OrganizationRequest[] packOfRequests,
         int startIndex,
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex,
-        Action<OrganizationRequest, string> errorReport,
-        bool throwOnFault
+        Action<OrganizationRequest, string>? errorReport,
+        bool stopAtFirstFault
     )
     {
-        foreach (ExecuteMultipleResponseItem responseItem in response.Responses)
+        ExecuteMultipleResponseItem? firstFault = null;
+        foreach (ExecuteMultipleResponseItem responseItem in responseItems)
         {
             if (responseItem == null)
             {
@@ -321,18 +475,24 @@ public sealed class ExecuteMultipleLogic
                 continue;
             }
 
-            if (throwOnFault)
+            if (firstFault == null)
             {
-                throw new InvalidOperationException(
-                    $"Request on index {globalIndex} failed with error, {responseItem.Fault}"
-                );
+                firstFault = responseItem;
             }
 
-            errorReport?.Invoke(
+            if (stopAtFirstFault)
+            {
+                break;
+            }
+
+            InvokeErrorReport(
+                errorReport,
                 packOfRequests[responseItem.RequestIndex],
                 responseItem.Fault.ToString()
             );
         }
+
+        return firstFault;
     }
 
     /// <summary>
@@ -343,14 +503,31 @@ public sealed class ExecuteMultipleLogic
     /// <param name="requestSettings">Optional settings applied to the outer batch requests.</param>
     /// <param name="cancellationToken">Token used to stop scheduling further waves.</param>
     /// <returns>Execution statistics and responses ordered by the original request order.</returns>
-    public async Task<ExecuteMultipleLogicResult> ExecuteAdaptiveAsync(
+    public Task<ExecuteMultipleLogicResult> ExecuteAdaptiveAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        AdaptiveRequesterSettings settings = null,
-        RequestSettings requestSettings = null,
+        AdaptiveRequesterSettings? settings = null,
+        RequestSettings? requestSettings = null,
         CancellationToken cancellationToken = default
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            nameof(ExecuteAdaptiveAsync),
+            () =>
+                ExecuteAdaptiveCoreAsync(
+                    executeMultipleRequestBuilder,
+                    settings,
+                    requestSettings,
+                    cancellationToken
+                )
+        );
+
+    private async Task<ExecuteMultipleLogicResult> ExecuteAdaptiveCoreAsync(
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
+        AdaptiveRequesterSettings? settings,
+        RequestSettings? requestSettings,
+        CancellationToken cancellationToken
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(executeMultipleRequestBuilder, parameterName: nameof(executeMultipleRequestBuilder));
         settings = (settings ?? new AdaptiveRequesterSettings()).Validate();
 
@@ -373,11 +550,13 @@ public sealed class ExecuteMultipleLogic
         int nextIndex = 0;
         long recordsSinceAdjustment = 0;
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
+        bool cancelled = false;
 
         while (nextIndex < requests.Length)
         {
             if (cancellationToken.IsCancellationRequested)
             {
+                cancelled = true;
                 break;
             }
 
@@ -401,7 +580,7 @@ public sealed class ExecuteMultipleLogic
                             OrganizationRequest[] packOfRequests = chunk.Requests;
                             try
                             {
-                                ExecuteMultipleResponse responseWithResults =
+                                List<ExecuteMultipleResponseItem> responseWithResults =
                                     await ExecutePackAsync(
                                             packOfRequests,
                                             true,
@@ -427,7 +606,11 @@ public sealed class ExecuteMultipleLogic
                             {
                                 foreach (OrganizationRequest request in packOfRequests)
                                 {
-                                    settings.ErrorReport?.Invoke(request, exception.ToString());
+                                    InvokeErrorReport(
+                                        settings.ErrorReport,
+                                        request,
+                                        exception.ToString()
+                                    );
                                 }
                             }
 
@@ -439,6 +622,7 @@ public sealed class ExecuteMultipleLogic
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Cancellation is reported through logicResult.Cancelled.
+                cancelled = true;
                 break;
             }
 
@@ -464,7 +648,7 @@ public sealed class ExecuteMultipleLogic
                 recordsSinceAdjustment = 0;
             }
 
-            settings.ReportProgress?.Invoke(progress, requests.Length);
+            ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         }
 
         ExecuteMultipleLogicResult result = CompleteResult(
@@ -472,11 +656,11 @@ public sealed class ExecuteMultipleLogic
             responsesByIndex,
             progress,
             requests.Length,
-            cancellationToken
+            cancelled
         );
         result.ThreadsUsed = degreeOfParallelism;
         result.BatchSizeUsed = batchSize;
-        settings.ReportProgress?.Invoke(progress, requests.Length);
+        ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         return result;
     }
 
@@ -525,7 +709,7 @@ public sealed class ExecuteMultipleLogic
             return;
         }
 
-        long fastThresholdTicks = settings.TargetBatchDuration.Ticks * 7 / 10;
+        long fastThresholdTicks = settings.TargetBatchDuration.Ticks / 10 * 7;
         if (waveDuration.Ticks < fastThresholdTicks)
         {
             if (batchSize < settings.MaxBatchSize)
@@ -565,7 +749,7 @@ public sealed class ExecuteMultipleLogic
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex,
         int progress,
         int requestCount,
-        CancellationToken cancellationToken
+        bool cancelled
     )
     {
         logicResult.Stopwatch.Stop();
@@ -574,15 +758,53 @@ public sealed class ExecuteMultipleLogic
         List<ExecuteMultipleResponseItem> orderedResponses = new(responsesByIndex.Count);
         for (int index = 0; index < requestCount; index++)
         {
-            if (responsesByIndex.TryGetValue(index, out ExecuteMultipleResponseItem response))
+            if (responsesByIndex.TryGetValue(index, out ExecuteMultipleResponseItem? response))
             {
                 orderedResponses.Add(response);
             }
         }
 
         logicResult.Results = orderedResponses.ToArray();
-        logicResult.Cancelled = cancellationToken.IsCancellationRequested;
+        logicResult.Cancelled = cancelled;
         return logicResult;
+    }
+
+    private void ReportProgressSafely(Action<int, int>? callback, int current, int total)
+    {
+        if (callback == null)
+        {
+            return;
+        }
+
+        try
+        {
+            callback(current, total);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "ReportProgress callback failed. Execution continues.");
+        }
+    }
+
+    private void InvokeErrorReport(
+        Action<OrganizationRequest, string>? callback,
+        OrganizationRequest request,
+        string error
+    )
+    {
+        if (callback == null)
+        {
+            return;
+        }
+
+        try
+        {
+            callback(request, error);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "ErrorReport callback failed. Execution continues.");
+        }
     }
 
     private static RequestChunk[] RequestsToChunks(OrganizationRequest[] requests, int requestSize)

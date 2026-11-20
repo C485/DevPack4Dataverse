@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Data.Common;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.PowerPlatform.Dataverse.Client;
 
@@ -28,50 +28,52 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
         "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
 
     private readonly string _connectionString;
-    private readonly int _maximumConcurrentlyUsage;
+    private readonly int _connectionCount;
     private bool _isCreated;
     private bool _isError;
 
-    public ConnectionStringConnectionCreator(string connectionString, int maximumConcurrentlyUsage = 1)
+    public ConnectionStringConnectionCreator(string connectionString, int connectionCount = 1)
     {
         _connectionString = Guard.Against.NullOrWhiteSpace(connectionString);
-        _maximumConcurrentlyUsage = Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
+        _connectionCount = Guard.Against.NegativeOrZero(connectionCount);
 
-        if (_connectionString.IndexOf("RequireNewInstance=True", StringComparison.OrdinalIgnoreCase) >= 0)
+        DbConnectionStringBuilder builder = new();
+        builder.ConnectionString = _connectionString;
+        if (builder.TryGetValue("RequireNewInstance", out object? requireNewInstance))
         {
-            return;
+            if (
+                !bool.TryParse(requireNewInstance?.ToString(), out bool required)
+                || !required
+            )
+            {
+                throw new InvalidProgramException(ConnectionStringInvalidError);
+            }
+        }
+        else
+        {
+            builder["RequireNewInstance"] = true;
         }
 
-        if (_connectionString.IndexOf("RequireNewInstance", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            throw new InvalidProgramException(ConnectionStringInvalidError);
-        }
-
-        _connectionString = _connectionString.Trim();
-
-        if (_connectionString.Last() == ';')
-        {
-            _connectionString += "RequireNewInstance=True";
-
-            return;
-        }
-
-        _connectionString += ";RequireNewInstance=True";
+        _connectionString = builder.ConnectionString;
     }
 
     public bool IsCreated => _isCreated;
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
+    public int ConnectionCount => _connectionCount;
 
-    public IConnection Create(ILogger logger)
+    internal string ConnectionString => _connectionString;
+
+    public IReadOnlyList<IConnection> Create(ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
 
         Guard.Against.Null(logger);
 
+        ServiceClient? crmServiceClient = null;
+        bool ownershipTransferred = false;
         try
         {
-            ServiceClient crmServiceClient = new(_connectionString, logger);
+            crmServiceClient = new(_connectionString, logger);
             Guard.Against.NullOrInvalidInput(
                 crmServiceClient,
                 nameof(crmServiceClient),
@@ -79,18 +81,23 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
                 $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
             );
 
-            Connection connection = new(crmServiceClient, logger, _maximumConcurrentlyUsage);
-            bool isConnectionValid = connection.Test();
-            if (!isConnectionValid)
-            {
-                throw new InvalidProgramException("Test on connection failed.");
-            }
+            ownershipTransferred = true;
+            IReadOnlyList<IConnection> connections = ConnectionFactory.Create(
+                crmServiceClient,
+                _connectionCount,
+                logger
+            );
 
             _isCreated = true;
-            return connection;
+            return connections;
         }
         catch (Exception e)
         {
+            if (!ownershipTransferred)
+            {
+                crmServiceClient?.Dispose();
+            }
+
             logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
             _isError = true;
             throw;
