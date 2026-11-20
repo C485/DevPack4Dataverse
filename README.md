@@ -179,6 +179,7 @@ Mapper<Order, Entity> mapper = mapperWrapper
     .WithOptions(options =>
     {
         options.RequestSettings.ImpersonateAsUserByDataverseId = userId;
+        options.RequestSettings.ImpersonateAsUserByAADId = userAadObjectId;
         options.RequestSettings.SkipPluginExecution = true;
         options.SkipFieldsToChanged.Add("modifiedon");
         options.PreSave = context => context.Target["new_name"] = context.Target
@@ -212,6 +213,7 @@ Mapper behaviour:
 - `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
 - Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload.
+- When impersonating, set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available. On some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
 - Only changed attributes are sent on update; unchanged records are skipped.
 - Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
 - POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.

@@ -18,10 +18,15 @@ namespace DevPack4Dataverse.Models;
 
 public class RequestImpersonateSettings
 {
+    /// <summary>
+    /// Entra (AAD) object id of the user to impersonate. Set it together with
+    /// <see cref="ImpersonateAsUserByDataverseId"/> when both are available.
+    /// </summary>
     public Guid? ImpersonateAsUserByAADId { get; set; }
 
     /// <summary>
-    ///  Guid of SystemUser record id
+    /// SystemUser record id of the user to impersonate. Set it together with
+    /// <see cref="ImpersonateAsUserByAADId"/> when both are available.
     /// </summary>
     public Guid? ImpersonateAsUserByDataverseId { get; set; }
 }
