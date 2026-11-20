@@ -28,6 +28,67 @@ public interface IDataverseConnectionLayer
 
     Task<Guid> CreateRecordAsync(Entity record, RequestSettings? requestSettings = null);
 
+    /// <summary>
+    /// Creates several records of one table with the <c>CreateMultiple</c> message.
+    /// </summary>
+    /// <param name="targets">Records to create. All records must use the same table.</param>
+    /// <param name="requestSettings">Optional settings applied to the request.</param>
+    /// <returns>Created record ids in the same order as <paramref name="targets"/>.</returns>
+    Guid[] CreateMultiple(EntityCollection targets, RequestSettings? requestSettings = null);
+
+    /// <inheritdoc cref="CreateMultiple(EntityCollection, RequestSettings?)"/>
+    Task<Guid[]> CreateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Updates several records of one table with the <c>UpdateMultiple</c> message.
+    /// Each target must have an id or alternate-key values.
+    /// </summary>
+    void UpdateMultiple(EntityCollection targets, RequestSettings? requestSettings = null);
+
+    /// <inheritdoc cref="UpdateMultiple(EntityCollection, RequestSettings?)"/>
+    Task UpdateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Creates or updates several records of one table with the <c>UpsertMultiple</c> message.
+    /// Each target must have an id or alternate-key values.
+    /// </summary>
+    /// <returns>One result per target, in the same order as <paramref name="targets"/>.</returns>
+    UpsertResponse[] UpsertMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    );
+
+    /// <inheritdoc cref="UpsertMultiple(EntityCollection, RequestSettings?)"/>
+    Task<UpsertResponse[]> UpsertMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Deletes several records with the <c>DeleteMultiple</c> message.
+    /// This message is supported only for elastic tables.
+    /// </summary>
+    void DeleteMultiple(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    );
+
+    /// <inheritdoc cref="DeleteMultiple(EntityReferenceCollection, RequestSettings?)"/>
+    Task DeleteMultipleAsync(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    );
+
     void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null);
 
     void DeleteRecord(EntityReference entityReference, RequestSettings? requestSettings = null);
