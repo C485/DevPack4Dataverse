@@ -27,8 +27,7 @@ public sealed class ConnectionLease : IDisposable
 
     public ConnectionLease(IConnection connection)
     {
-        Connection = connection;
-        Guard.Against.Null(connection);
+        Connection = Guard.Against.Null(connection);
     }
 
     ~ConnectionLease()
@@ -60,7 +59,7 @@ public sealed class ConnectionLease : IDisposable
             return;
         }
 
-        Connection.ReleaseLock();
+        Connection?.ReleaseLock();
 
         _disposedValue = true;
     }

@@ -32,6 +32,12 @@ public sealed class CachedEntity
         );
     }
 
+    internal CachedEntity(Entity record, ISet<string> loadedColumns)
+    {
+        Record = record ?? throw new ArgumentNullException(nameof(record));
+        LoadedColumns = loadedColumns ?? throw new ArgumentNullException(nameof(loadedColumns));
+    }
+
     public Entity Record { get; }
 
     public ISet<string> LoadedColumns { get; }

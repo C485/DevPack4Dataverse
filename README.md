@@ -51,6 +51,8 @@ await dataverseDevPack.WaitForConnectionsAsync(4, cancellationToken);
 ```
 The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if fewer creators are configured than requested or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
 
+A connection handles one request at a time. The Dataverse caller id is a client-wide setting, so impersonated and ordinary requests cannot safely share a client; create more connections when you need parallel work. Dispose `DataverseDevPack` (or `SdkProxy`) to stop the background creator and close the clients.
+
 ### ExecuteMultiple
 Gives the ability to quickly call the Dataverse endpoint with optimized packs of requests. Multiple connections are used to increase throughput and avoid request-per-minute limits. In the example below you can build an unlimited number of requests that are later sent to Dataverse in packs.
 ```C#
@@ -76,8 +78,8 @@ Gives the ability to quickly call the Dataverse endpoint with optimized packs of
 ```
 
 Production notes:
-- Requests are split into chunks of `RequestSize`; it must be greater than zero.
-- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads.
+- Requests are split into chunks of `RequestSize`; it must be greater than zero and is capped at 1000. A Dataverse deployment can allow a smaller batch.
+- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads. A request that fails at the batch/transport level, or that returns no response, is absent from `Results`; use `ErrorReport` for failures. `RequestIndex` on an item is relative to its own chunk.
 - The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and runs chunks sequentially.
 - Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
@@ -177,6 +179,7 @@ Mapper<Order, Entity> mapper = mapperWrapper
     .WithOptions(options =>
     {
         options.RequestSettings.ImpersonateAsUserByDataverseId = userId;
+        options.RequestSettings.ImpersonateAsUserByAADId = userAadObjectId;
         options.RequestSettings.SkipPluginExecution = true;
         options.SkipFieldsToChanged.Add("modifiedon");
         options.PreSave = context => context.Target["new_name"] = context.Target
@@ -209,6 +212,8 @@ Mapper behaviour:
 - `PreSave` runs before change detection.
 - `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
 - Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
+- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload.
+- When impersonating, set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available. On some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
 - Only changed attributes are sent on update; unchanged records are skipped.
 - Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
 - POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.
@@ -266,8 +271,15 @@ string formatted = money.GetFormattedValue(account, "creditlimit");
 ```
 `SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
 
+Choice label metadata is cached for five minutes per table and column. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata changes immediately.
+
+`FileOrImageFieldTypeMethods.Delete(record, field)` reads the file id stored on the record. Image columns do not return that id in a normal retrieve; for images, keep `UploadFileFieldResult.FileId` and call `Delete(fileId)`.
+
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint.
+
+`SdkProxy.ApplyProcessWideOptimizations()` is an opt-in static method for the legacy process-wide HTTP and thread-pool tuning. The library does not call it; call it once at host startup if you want those settings.
+
 ### CreateLinqExpressionBuilder
 Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK.
 ```C#
@@ -291,6 +303,45 @@ Production notes:
 - The Dataverse LINQ provider supports a limited set of expression shapes. The builder combines expression trees but does not validate them; unsupported expressions fail during query translation.
 - Adding an empty builder, a builder to itself, or a builder whose `Result` is null throws an exception.
 
+## Audit and live-test fixes
+
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 264 tests, all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+
+### Security and correctness
+- A failed connection pool fails fast instead of looping forever when every connection creator has errored.
+- Caller-id impersonation is serialized per connection, so a shared `ServiceClient` cannot run a request as the wrong user or leave the impersonation behind. Set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available; on some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
+- Deleting a missing file/image returns `false` instead of throwing. For image columns, keep the `FileId` returned by `Upload` and call `Delete(fileId)`; image values are not returned by a normal retrieve.
+- Finalizers tolerate a failed constructor, so a null-argument guard cannot crash the process later.
+- The transitive `System.Security.Cryptography.Pkcs` and `System.Security.Cryptography.Xml` packages are pinned to patched versions.
+- Mapper reads and validation use `<logicalname>id` instead of the invalid `entityid`, and no longer combine `TopCount` with paging. This was found on a custom table.
+- File upload block ids avoid `+`, which Dataverse decodes as a space in the blockid query value.
+- Lookups honor `UseCache=false` in the create-race recheck.
+- Alternate-key cache and lock keys are length-prefixed, so values containing `;` or `=` cannot collide.
+- Language-specific option-set label lookup is case-insensitive by default again.
+- `Mapper` clones its options at `Build`; later builder changes do not mutate a live mapper.
+- `RequestSize` is capped at 1,000. `ExecuteMultiple` results document that transport-failed or no-response requests are absent and that `RequestIndex` is chunk-local.
+- `Connection.DeleteRecordAsync(EntityReference)` has the same null guard as the sync overload; `FieldDrill` trims path segments.
+- `DataverseDevPack` implements `IDisposable` and exposes `DisposeAsync`.
+
+### Caching and performance
+- `Statistics` keeps a bounded 2-minute bucket ring instead of scanning up to 100,000 entries per connection choice.
+- Option-set metadata is cached for five minutes per table and column using a case-insensitive tuple key; label lookup no longer uses LINQ per cell.
+- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the cache TTL expires; `ForceRefresh` still reloads.
+- Redis preload writes run with bounded parallelism; reference parsing avoids `string.Split` and DTO lists are pre-sized.
+- `SdkProxy` does not change process-wide `ThreadPool` and `ServicePointManager` settings by default; `SdkProxy.ApplyProcessWideOptimizations()` is the explicit opt-in.
+- Entry/exit logging is limited to batch and creation boundaries; per-record mapper and field-helper paths no longer allocate the logger guard and stopwatch.
+- Mapper per-record collections are reduced: lazy error lists, a single required-column pass, shared loaded-column sets, and no per-record LINQ in the cache and field paths.
+- The in-memory cache reuses its completed read task instead of allocating a `Task` per hit.
+- Entity keys normalize names at construction; key building uses a sized `StringBuilder` and an array sort instead of LINQ. `FieldDrill` path trimming and cache clearing use plain loops, and an alternate-key two-pair overload avoids the `params` array.
+- Removed the double statistics entry for sync `ExecuteMultiple` and two dead project lines.
+
+### Live validation
+Validated on a live Dataverse environment with fake data on a test table that has choice, boolean, money, file, image and self-lookup columns:
+- CRUD, `ExecuteMultiple`, sequential, transaction, mapper create/update/validation/lookups, `FieldDrill`, choice, boolean, money, file, image, LINQ and impersonation all passed.
+- 5,000 records with regular `ExecuteMultiple`, one connection: **1:55.6** (about 43 records/sec).
+- 5,000 records with adaptive `ExecuteMultiple`, four connections, 3-second target: **50.0s**, **100 records/sec**, 0 errors, final batch 54 × 4 threads.
+- 5,000-record download: **0.665s**.
+- All test records were removed after validation.
 
 ## Roadmap
 

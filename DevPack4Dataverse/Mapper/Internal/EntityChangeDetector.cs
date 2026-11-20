@@ -36,7 +36,7 @@ internal static class EntityChangeDetector
             return mapped.Attributes.Keys.ToArray();
         }
 
-        List<string> changed = new();
+        List<string> changed = new(mapped.Attributes.Count);
         foreach (KeyValuePair<string, object> attribute in mapped.Attributes)
         {
             if (skipFields != null && skipFields.Contains(attribute.Key))

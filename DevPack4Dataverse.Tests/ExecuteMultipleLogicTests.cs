@@ -442,6 +442,31 @@ public class ExecuteMultipleLogicTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_RequestSizeAboveServiceLimit_IsCappedAt1000()
+    {
+        var batchSizes = new List<int>();
+        var (proxy, logic) = Create(request =>
+        {
+            batchSizes.Add(((ExecuteMultipleRequest)request).Requests.Count);
+            return Response();
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 1501).Select(index => "req" + index).ToArray()
+            );
+
+            await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSimpleSettings { RequestSize = 1500 }
+            );
+
+            Assert.Equal(new[] { 1000, 501 }, batchSizes);
+        }
+    }
+
+    [Fact]
     public void Result_ToString_WorksWithDefaultInstance()
     {
         string text = new ExecuteMultipleLogicResult().ToString();

@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,6 @@ internal static class EntityReferenceUtils
 {
     public static EntityReference CreateEntityReference(Guid recordId, string logicalName, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
 
         return new EntityReference(Guard.Against.NullOrEmpty(logicalName), Guard.Against.Default(recordId));
     }

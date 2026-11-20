@@ -223,7 +223,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             {
                 LogicalName = entry.Record.LogicalName,
                 Id = entry.Record.Id,
-                LoadedColumns = entry.LoadedColumns.ToList()
+                LoadedColumns = new List<string>(entry.LoadedColumns),
+                Attributes = new List<CachedAttributeDto>(entry.Record.Attributes.Count),
+                KeyAttributes = new List<CachedAttributeDto>(entry.Record.KeyAttributes.Count)
             };
 
             foreach (KeyValuePair<string, object> attribute in entry.Record.Attributes)
@@ -334,6 +336,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                         reference.LogicalName + "|" + reference.Id.ToString("N")
                     );
                     referenceDto.ReferenceName = reference.Name;
+                    referenceDto.ReferenceKeyAttributes = new List<CachedAttributeDto>(
+                        reference.KeyAttributes?.Count ?? 0
+                    );
                     if (reference.KeyAttributes != null)
                     {
                         foreach (
@@ -392,12 +397,20 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 case "optionset":
                     return new OptionSetValue(int.Parse(Value, CultureInfo.InvariantCulture));
                 case "entityreference":
-                    string[] parts = Value.Split('|');
-                    Guid id = Guid.Parse(parts[1]);
+                    int separator = Value.IndexOf('|');
+                    if (separator < 0)
+                    {
+                        throw new MapperException(
+                            $"Redis mapper cache contains an invalid entity reference '{Value}'."
+                        );
+                    }
+
+                    string logicalName = Value.Substring(0, separator);
+                    Guid id = Guid.Parse(Value.Substring(separator + 1));
                     EntityReference reference =
                         id == Guid.Empty
-                            ? new EntityReference(parts[0])
-                            : new EntityReference(parts[0], id);
+                            ? new EntityReference(logicalName)
+                            : new EntityReference(logicalName, id);
                     reference.Name = ReferenceName;
                     foreach (CachedAttributeDto keyAttribute in ReferenceKeyAttributes)
                     {

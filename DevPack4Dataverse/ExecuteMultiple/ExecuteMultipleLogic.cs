@@ -38,6 +38,7 @@ namespace DevPack4Dataverse.ExecuteMultiple;
 /// </remarks>
 public sealed class ExecuteMultipleLogic
 {
+    private const int MaxRequestSize = 1000;
     private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
 
@@ -306,6 +307,11 @@ public sealed class ExecuteMultipleLogic
     {
         foreach (ExecuteMultipleResponseItem responseItem in response.Responses)
         {
+            if (responseItem == null)
+            {
+                continue;
+            }
+
             EnsureValidResponseIndex(responseItem, packOfRequests.Length);
             int globalIndex = startIndex + responseItem.RequestIndex;
             responsesByIndex[globalIndex] = responseItem;
@@ -581,6 +587,8 @@ public sealed class ExecuteMultipleLogic
 
     private static RequestChunk[] RequestsToChunks(OrganizationRequest[] requests, int requestSize)
     {
+        // Dataverse's default maximum batch size is 1000; a deployment can lower it.
+        requestSize = Math.Min(requestSize, MaxRequestSize);
         int chunkCount = (requests.Length + requestSize - 1) / requestSize;
         var chunks = new List<RequestChunk>(chunkCount);
         for (int offset = 0; offset < requests.Length; offset += requestSize)

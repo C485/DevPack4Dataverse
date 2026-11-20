@@ -24,6 +24,9 @@ namespace DevPack4Dataverse.Mapper.Cache;
 public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
 {
     private const int MaxEntries = 100_000;
+    private static readonly Task<CachedEntity> NullTask = Task.FromResult<CachedEntity>(
+        null
+    );
     private readonly ConcurrentDictionary<string, CacheEntry> _entries =
         new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<string> _evictionQueue = new();
@@ -41,7 +44,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         {
             if (entry.ExpiresUtc > DateTime.UtcNow)
             {
-                return Task.FromResult(entry.Value);
+                return entry.ReadTask;
             }
 
             if (_entries.TryRemove(cacheKey, out CacheEntry expired))
@@ -50,7 +53,7 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
             }
         }
 
-        return Task.FromResult<CachedEntity>(null);
+        return NullTask;
     }
 
     public Task SetAsync(
@@ -124,12 +127,17 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         cancellationToken.ThrowIfCancellationRequested();
 
         string prefix = logicalName.ToLowerInvariant() + "|";
-        foreach (string key in _entries.Keys.Where(p => p.StartsWith(prefix, StringComparison.Ordinal)))
+        foreach (string key in _entries.Keys)
         {
-            if (_entries.TryRemove(key, out CacheEntry entry))
+            if (
+                !key.StartsWith(prefix, StringComparison.Ordinal)
+                || !_entries.TryRemove(key, out CacheEntry entry)
+            )
             {
-                UnindexEntry(key, entry.Value);
+                continue;
             }
+
+            UnindexEntry(key, entry.Value);
         }
 
         return Task.CompletedTask;
@@ -187,5 +195,6 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
     {
         public CachedEntity Value { get; } = value;
         public DateTime ExpiresUtc { get; } = expiresUtc;
+        public Task<CachedEntity> ReadTask { get; } = Task.FromResult(value);
     }
 }

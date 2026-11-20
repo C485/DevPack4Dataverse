@@ -21,12 +21,12 @@
 	 <FileVersion>0.0.0.3</FileVersion>
 	 <Version>0.0.0.3-beta</Version>
 	 <Authors>Kamil Skoracki/C485@GitHub</Authors>
-	 <Description>DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on top of the SDK for Dataverse. 
+	 <Description>DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on top of the SDK for Dataverse.
 Designed with the idea of optimizing and speeding up work with Dataverse SDK.</Description>
 	 <PackageReleaseNotes>Added statistics
 Added connection picking based on statistics
 Added async GetConnection
-Added maximum concurrently usage to connection (connection can be used more than once at the time)
+Added connection leasing; requests on one client are serialized for caller-id safety
 Random fixes and stability improvements</PackageReleaseNotes>
   </PropertyGroup>
 
@@ -44,14 +44,8 @@ Random fixes and stability improvements</PackageReleaseNotes>
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.2.27" />
     <PackageReference Include="MimeMapping" Version="4.0.0" />
     <PackageReference Include="System.Linq.Async" Version="7.0.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EditorConfigFiles Remove="C:\Dev\DataverseClientProxy\.editorconfig" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>

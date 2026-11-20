@@ -21,7 +21,7 @@ namespace DevPack4Dataverse.Mapper;
 /// </summary>
 public sealed class MappingContext<TSource, TTarget>
 {
-    private readonly List<MappingError> _errors = new();
+    private List<MappingError> _errors;
 
     internal MappingContext(TSource source, TTarget target)
     {
@@ -36,7 +36,8 @@ public sealed class MappingContext<TSource, TTarget>
     /// <summary>One-based mapping stage.</summary>
     public int Stage { get; internal set; }
 
-    public IReadOnlyList<MappingError> Errors => _errors;
+    public IReadOnlyList<MappingError> Errors =>
+        _errors ?? (IReadOnlyList<MappingError>)Array.Empty<MappingError>();
 
-    internal void AddError(MappingError error) => _errors.Add(error);
+    internal void AddError(MappingError error) => (_errors ??= new List<MappingError>()).Add(error);
 }

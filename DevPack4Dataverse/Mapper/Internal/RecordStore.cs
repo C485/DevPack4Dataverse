@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Models;
+using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -24,8 +26,11 @@ namespace DevPack4Dataverse.Mapper.Internal;
 
 internal sealed class RecordStore
 {
+    private const int CacheWriteParallelism = 32;
     private readonly IEntityCache _cache;
     private readonly ILogger _logger;
+    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
     private readonly MapperWrapperOptions _wrapperOptions;
 
@@ -132,20 +137,30 @@ internal sealed class RecordStore
         string logicalName,
         IEnumerable<string> requiredColumns,
         IEnumerable<string> alternateKeyAttributes,
+        bool forceRefresh,
         RequestSettings requestSettings,
         CancellationToken cancellationToken
     )
     {
+        DateTime now = DateTime.UtcNow;
+        if (
+            !forceRefresh
+            && _preloadedAt.TryGetValue(logicalName, out DateTime loadedAt)
+            && now - loadedAt < _wrapperOptions.GetCacheTtl(logicalName)
+        )
+        {
+            return;
+        }
+
+        string[] alternateAttributes =
+            alternateKeyAttributes?.ToArray() ?? Array.Empty<string>();
         HashSet<string> columns = new(
             requiredColumns ?? Enumerable.Empty<string>(),
             StringComparer.OrdinalIgnoreCase
         );
-        if (alternateKeyAttributes != null)
+        foreach (string attribute in alternateAttributes)
         {
-            foreach (string attribute in alternateKeyAttributes)
-            {
-                columns.Add(attribute);
-            }
+            columns.Add(attribute);
         }
 
         await ClearCacheAsync(logicalName, cancellationToken).ConfigureAwait(false);
@@ -160,27 +175,39 @@ internal sealed class RecordStore
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
 
-        IEnumerable<string> attributes = alternateKeyAttributes ?? Enumerable.Empty<string>();
-        foreach (Entity record in records)
-        {
-            if (record.Id != Guid.Empty)
-            {
-                await CacheRecordAsync(
-                        record,
-                        EntityKey.ById(logicalName, record.Id),
-                        columns,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-            }
+        await AsyncParallel
+            .ForEachAsync(
+                records,
+                CacheWriteParallelism,
+                cancellationToken,
+                async (record, token) =>
+                {
+                    if (record.Id != Guid.Empty)
+                    {
+                        await CacheRecordAsync(
+                                record,
+                                EntityKey.ById(logicalName, record.Id),
+                                columns,
+                                token
+                            )
+                            .ConfigureAwait(false);
+                    }
 
-            EntityKey alternateKey = TryCreateAlternateKey(logicalName, record, attributes);
-            if (alternateKey != null)
-            {
-                await CacheRecordAsync(record, alternateKey, columns, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
+                    EntityKey alternateKey = TryCreateAlternateKey(
+                        logicalName,
+                        record,
+                        alternateAttributes
+                    );
+                    if (alternateKey != null)
+                    {
+                        await CacheRecordAsync(record, alternateKey, columns, token)
+                            .ConfigureAwait(false);
+                    }
+                }
+            )
+            .ConfigureAwait(false);
+
+        _preloadedAt[logicalName] = DateTime.UtcNow;
     }
 
     public async Task CacheSavedAsync(Entity entity, CancellationToken cancellationToken)
@@ -220,8 +247,7 @@ internal sealed class RecordStore
         QueryExpression query = new()
         {
             EntityName = key.LogicalName,
-            ColumnSet = CreateColumnSet(columns),
-            TopCount = 1
+            ColumnSet = CreateColumnSet(columns)
         };
 
         if (key.IsAlternateKey)
@@ -233,7 +259,11 @@ internal sealed class RecordStore
         }
         else
         {
-            query.Criteria.AddCondition("entityid", ConditionOperator.Equal, key.Id.Value);
+            query.Criteria.AddCondition(
+                key.LogicalName + "id",
+                ConditionOperator.Equal,
+                key.Id.Value
+            );
         }
 
         Entity[] records = await _sdkProxy
@@ -246,7 +276,7 @@ internal sealed class RecordStore
     private async Task CacheRecordAsync(
         Entity record,
         EntityKey requestedKey,
-        IEnumerable<string> loadedColumns,
+        ISet<string> loadedColumns,
         CancellationToken cancellationToken
     )
     {
@@ -426,10 +456,18 @@ internal sealed class RecordStore
     private static EntityKey TryCreateAlternateKey(
         string logicalName,
         Entity record,
-        IEnumerable<string> attributes
+        string[] attributes
     )
     {
-        Dictionary<string, object> values = new(StringComparer.OrdinalIgnoreCase);
+        if (attributes.Length == 0)
+        {
+            return null;
+        }
+
+        Dictionary<string, object> values = new(
+            attributes.Length,
+            StringComparer.OrdinalIgnoreCase
+        );
         foreach (string attribute in attributes)
         {
             if (!record.Attributes.TryGetValue(attribute, out object value) || value == null)
@@ -437,10 +475,10 @@ internal sealed class RecordStore
                 return null;
             }
 
-            values[attribute] = value;
+            values[attribute.ToLowerInvariant()] = value;
         }
 
-        return values.Count == 0 ? null : EntityKey.ByAlternateKey(logicalName, values);
+        return values.Count == 0 ? null : EntityKey.FromAlternateKeyValues(logicalName, values);
     }
 
     private static ColumnSet CreateColumnSet(IEnumerable<string> columns)

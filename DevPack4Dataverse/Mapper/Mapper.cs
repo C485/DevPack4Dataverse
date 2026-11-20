@@ -225,7 +225,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             .AcquireAsync(key, state.LockTimeout, cancellationToken)
             .ConfigureAwait(false);
 
-        string[] requiredColumns = GetRequiredColumns(entity, key);
+        IEnumerable<string> requiredColumns = entity.Attributes.Keys;
         bool useCacheForChangeDetection = _options.UseCacheForChangeDetection;
         Entity current = await _recordStore
             .GetAsync(
@@ -469,17 +469,4 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             .ConfigureAwait(false);
     }
 
-    private static string[] GetRequiredColumns(Entity entity, EntityKey key)
-    {
-        HashSet<string> columns = new(entity.Attributes.Keys, StringComparer.OrdinalIgnoreCase);
-        if (key != null && key.IsAlternateKey)
-        {
-            foreach (string attribute in key.AlternateKey.Keys)
-            {
-                columns.Add(attribute);
-            }
-        }
-
-        return columns.ToArray();
-    }
 }

@@ -27,7 +27,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse;
 
-public sealed class DataverseDevPack
+public sealed class DataverseDevPack : IDisposable
 {
     public readonly ExecuteMultipleLogic ExecuteMultiple;
     public readonly FieldDrill FieldDrill;
@@ -121,4 +121,14 @@ public sealed class DataverseDevPack
     /// <returns>A new mapper wrapper.</returns>
     public MapperWrapper CreateMapperWrapper(MapperWrapperOptions options = null) =>
         new(SdkProxy, _logger, options);
+
+    /// <summary>
+    /// Stops background connection creation and disposes the pooled connection clients.
+    /// </summary>
+    public void Dispose() => SdkProxy.Dispose();
+
+    /// <summary>
+    /// Asynchronously stops background connection creation and disposes the pooled connection clients.
+    /// </summary>
+    public Task DisposeAsync() => SdkProxy.DisposeAsync();
 }

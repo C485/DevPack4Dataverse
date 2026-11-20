@@ -318,7 +318,11 @@ public class MapperCoreTests
 
             await mapper.ExecuteAsync(new OrderSource { Name = "Contoso" });
 
-            Assert.Same(settings, fake.LastRequestSettings);
+            Assert.NotNull(fake.LastRequestSettings);
+            Assert.Equal(
+                settings.ImpersonateAsUserByDataverseId,
+                fake.LastRequestSettings.ImpersonateAsUserByDataverseId
+            );
         }
     }
 
@@ -520,6 +524,42 @@ public class MapperCoreTests
 
             Assert.False(result.HasErrors);
             Assert.Equal(id, result.Records[0].Reference.Id);
+        }
+    }
+
+    [Fact]
+    public async Task Mapper_IsImmutable_WhenBuilderOptionsChangeAfterBuild()
+    {
+        Guid id = Guid.NewGuid();
+        int updates = 0;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", id) { ["name"] = "Old" }
+            },
+            UpdateRecordHandler = _ => updates++
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var builder = wrapper
+                .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+                .WithLogicalName("account")
+                .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+                .Map("name", context => context.Source.Name);
+            builder.WithOptions(options => options.SkipFieldsToChanged.Add("name"));
+            var mapper = builder.Build();
+
+            builder.WithOptions(options => options.SkipFieldsToChanged.Clear());
+
+            var result = await mapper.ExecuteAsync(
+                new AccountUpdate { Id = id, Name = "New" }
+            );
+
+            Assert.True(result.Records[0].Skipped);
+            Assert.Equal(0, updates);
         }
     }
 

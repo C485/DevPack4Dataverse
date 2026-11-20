@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,9 +54,20 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// </summary>
     public bool SuppressDuplicateDetection { private get; set; }
 
+    internal RequestSettings Clone() =>
+        new()
+        {
+            ConcurrencyBehavior = ConcurrencyBehavior,
+            PartitionId = PartitionId,
+            SharedVariable = SharedVariable,
+            SkipPluginExecution = SkipPluginExecution,
+            SuppressDuplicateDetection = SuppressDuplicateDetection,
+            ImpersonateAsUserByAADId = ImpersonateAsUserByAADId,
+            ImpersonateAsUserByDataverseId = ImpersonateAsUserByDataverseId
+        };
+
     public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         Guard.Against.Null(organizationRequest, parameterName: nameof(organizationRequest));
         if (!string.IsNullOrEmpty(SharedVariable))
         {

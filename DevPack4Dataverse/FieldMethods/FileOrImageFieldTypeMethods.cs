@@ -44,14 +44,13 @@ public sealed class FileOrImageFieldTypeMethods
 
     public async Task<bool> Delete(EntityReference recordId, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(recordId);
         Guard.Against.NullOrEmpty(fieldName);
         Entity fileFieldData = await _sdkProxy
             .RetrieveAsync(recordId.LogicalName, recordId.Id, new ColumnSet(fieldName))
             .ConfigureAwait(false);
-        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
+        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) || fileId == Guid.Empty)
         {
             return false;
         }
@@ -61,7 +60,6 @@ public sealed class FileOrImageFieldTypeMethods
 
     public async Task Delete(Guid fileId)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         DeleteFileRequest deleteFileRequest = new() { FileId = Guard.Against.Default(fileId) };
         _ = await _sdkProxy.ExecuteAsync<DeleteFileResponse>(deleteFileRequest).ConfigureAwait(false);
@@ -69,7 +67,6 @@ public sealed class FileOrImageFieldTypeMethods
 
     public async Task<FileData> Receive(Guid recordId, string logicalName, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         return await Receive(EntityReferenceUtils.CreateEntityReference(recordId, logicalName, _logger), fieldName)
             .ConfigureAwait(false);
@@ -77,7 +74,6 @@ public sealed class FileOrImageFieldTypeMethods
 
     public async Task<FileData> Receive(EntityReference recordId, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         InitializeFileBlocksDownloadRequest fileBlocksRequest =
             new() { Target = Guard.Against.Null(recordId), FileAttributeName = Guard.Against.NullOrEmpty(fieldName) };
@@ -149,7 +145,6 @@ public sealed class FileOrImageFieldTypeMethods
         byte[] data
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         return await Upload(fileName, recordId, fieldName, new MemoryStream(Guard.Against.Null(data)))
             .ConfigureAwait(false);
     }
@@ -161,7 +156,6 @@ public sealed class FileOrImageFieldTypeMethods
         Stream dataStream
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         InitializeFileBlocksUploadRequest fileBlocksRequest =
             new()
@@ -217,10 +211,16 @@ public sealed class FileOrImageFieldTypeMethods
 
     private string GetRandomBase64FromRandomGuid()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
-        Guid genGuid = Guid.NewGuid();
-        return Convert.ToBase64String(genGuid.ToByteArray());
+        // The block id is sent as a query value; a '+' is decoded as a space.
+        string blockId;
+        do
+        {
+            blockId = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        }
+        while (blockId.Contains('+'));
+
+        return blockId;
     }
 
     private static byte[] GetFileBytes(MemoryStream stream)

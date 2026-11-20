@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
@@ -26,14 +27,18 @@ namespace DevPack4Dataverse.FieldMethods;
 public sealed class OptionSetFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
-    private readonly ILogger _logger;
+    private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
+    private readonly ConcurrentDictionary<
+        (string LogicalName, string FieldName),
+        MetadataCacheEntry
+    > _metadataCache = new(MetadataKeyComparer.Instance);
     private readonly SdkProxy _sdkProxy;
 
     public OptionSetFieldTypeMethods(SdkProxy sdkProxy, ILogger logger)
     {
         using EntryExitLogger logGuard = new(logger);
 
-        _logger = Guard.Against.Null(logger);
+        Guard.Against.Null(logger);
 
         _sdkProxy = Guard.Against.Null(sdkProxy);
     }
@@ -45,7 +50,6 @@ public sealed class OptionSetFieldTypeMethods
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(logicalName, fieldName, valueToMap.Value, languageCode).ConfigureAwait(false);
@@ -58,7 +62,6 @@ public sealed class OptionSetFieldTypeMethods
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode).ConfigureAwait(false);
@@ -71,7 +74,6 @@ public sealed class OptionSetFieldTypeMethods
         int languageCode = NoLanguageFilter
     ) where T : struct, Enum
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(valueToMap);
         return await MapOptionSetToString(logicalName, fieldName, Convert.ToInt32(valueToMap), languageCode).ConfigureAwait(false);
@@ -95,11 +97,13 @@ public sealed class OptionSetFieldTypeMethods
         int languageCode = NoLanguageFilter
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName).ConfigureAwait(false);
 
-        OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(p => p.Value == valueToMap);
+        OptionMetadata mappedFieldValueMetadata = FindOptionByValue(
+            metadataResponse,
+            valueToMap
+        );
         Guard.Against.Null(
             mappedFieldValueMetadata,
             message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
@@ -108,8 +112,10 @@ public sealed class OptionSetFieldTypeMethods
         {
             return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
         }
-        LocalizedLabel languageDependentLabel = mappedFieldValueMetadata.Label.LocalizedLabels.SingleOrDefault(
-            p => p.LanguageCode == languageCode
+
+        LocalizedLabel languageDependentLabel = FindLocalizedLabel(
+            mappedFieldValueMetadata.Label,
+            languageCode
         );
         return Guard.Against
             .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
@@ -126,7 +132,6 @@ public sealed class OptionSetFieldTypeMethods
     /// <exception cref="KeyNotFoundException"></exception>
     public string MapOptionSetToStringUsingFormatedValues(Entity sourceRecord, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(sourceRecord);
         Guard.Against.NullOrEmpty(fieldName);
@@ -147,7 +152,6 @@ public sealed class OptionSetFieldTypeMethods
         bool compareIgnoreCase = true
     ) where T : struct, Enum
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         OptionSetValue mapped = await MapStringToOptionSet(
             logicalName,
@@ -168,7 +172,6 @@ public sealed class OptionSetFieldTypeMethods
         bool compareIgnoreCase = true
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrEmpty(valueToMap);
 
@@ -176,13 +179,10 @@ public sealed class OptionSetFieldTypeMethods
 
         if (languageCode == NoLanguageFilter)
         {
-            OptionMetadata mappedFieldValueMetadata = metadataResponse.FirstOrDefault(
-                p =>
-                    string.Equals(
-                        valueToMap,
-                        p.Label.UserLocalizedLabel.Label,
-                        compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
-                    )
+            OptionMetadata mappedFieldValueMetadata = FindOptionByLabel(
+                metadataResponse,
+                valueToMap,
+                compareIgnoreCase
             );
             Guard.Against.Null(
                 mappedFieldValueMetadata,
@@ -204,7 +204,7 @@ public sealed class OptionSetFieldTypeMethods
                     && string.Equals(
                         valueToMap,
                         label.Label,
-                        compareIgnoreCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase
+                        compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
                     )
                 )
                 {
@@ -224,7 +224,18 @@ public sealed class OptionSetFieldTypeMethods
 
     private async Task<OptionMetadataCollection> DownloadMetadataForField(string logicalName, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
+
+        (string LogicalName, string FieldName) cacheKey = (
+            logicalName ?? string.Empty,
+            fieldName ?? string.Empty
+        );
+        if (
+            _metadataCache.TryGetValue(cacheKey, out MetadataCacheEntry cached)
+            && cached.ExpiresUtc > DateTime.UtcNow
+        )
+        {
+            return cached.Metadata;
+        }
 
         RetrieveAttributeResponse metadataInfo = await _sdkProxy
             .ExecuteAsync<RetrieveAttributeResponse>(
@@ -236,39 +247,135 @@ public sealed class OptionSetFieldTypeMethods
                 }
             )
             .ConfigureAwait(false);
+        OptionMetadataCollection metadata;
         if (metadataInfo == null || metadataInfo.AttributeMetadata == null)
         {
-            return new OptionMetadataCollection();
+            metadata = new OptionMetadataCollection();
         }
-        Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
-        Guard.Against.Expression(
-            attributeType =>
-            {
-                return attributeType
-                    is not (
-                        AttributeTypeCode.State
-                        or AttributeTypeCode.Status
-                        or AttributeTypeCode.Picklist
-                        or AttributeTypeCode.Boolean
-                    );
-            },
-            metadataInfo.AttributeMetadata.AttributeType.Value,
-            $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
-        );
-        return metadataInfo.AttributeMetadata switch
+        else
         {
-            StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,
-            StateAttributeMetadata stateAttributeMetadata => stateAttributeMetadata.OptionSet.Options,
-            PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
-            BooleanAttributeMetadata booleanAttributeMetadata
-                => new OptionMetadataCollection(
-                    [booleanAttributeMetadata.OptionSet.TrueOption, booleanAttributeMetadata.OptionSet.FalseOption]
-                ),
-            EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
-            _
-                => throw new InvalidCastException(
-                    $"Field[{fieldName}] in table {logicalName} is not a valid option set, enum, boolean or state/status field."
-                ),
-        };
+            Guard.Against.Null(metadataInfo.AttributeMetadata.AttributeType);
+            Guard.Against.Expression(
+                attributeType =>
+                {
+                    return attributeType
+                        is not (
+                            AttributeTypeCode.State
+                            or AttributeTypeCode.Status
+                            or AttributeTypeCode.Picklist
+                            or AttributeTypeCode.Boolean
+                        );
+                },
+                metadataInfo.AttributeMetadata.AttributeType.Value,
+                $"Field[{fieldName}] in table {logicalName} is not a valid optionset or state/status field."
+            );
+            metadata = metadataInfo.AttributeMetadata switch
+            {
+                StatusAttributeMetadata statusAttributeMetadata => statusAttributeMetadata.OptionSet.Options,
+                StateAttributeMetadata stateAttributeMetadata => stateAttributeMetadata.OptionSet.Options,
+                PicklistAttributeMetadata picklistAttributeMetadata => picklistAttributeMetadata.OptionSet.Options,
+                BooleanAttributeMetadata booleanAttributeMetadata
+                    => new OptionMetadataCollection(
+                        [booleanAttributeMetadata.OptionSet.TrueOption, booleanAttributeMetadata.OptionSet.FalseOption]
+                    ),
+                EnumAttributeMetadata enumAttributeMetadata => enumAttributeMetadata.OptionSet.Options,
+                _
+                    => throw new InvalidCastException(
+                        $"Field[{fieldName}] in table {logicalName} is not a valid option set, enum, boolean or state/status field."
+                    ),
+            };
+        }
+
+        _metadataCache[cacheKey] = new MetadataCacheEntry(
+            metadata,
+            DateTime.UtcNow.Add(MetadataCacheTtl)
+        );
+        return metadata;
+    }
+
+    private static OptionMetadata FindOptionByValue(
+        OptionMetadataCollection options,
+        int value
+    )
+    {
+        foreach (OptionMetadata option in options)
+        {
+            if (option.Value == value)
+            {
+                return option;
+            }
+        }
+
+        return null;
+    }
+
+    private static OptionMetadata FindOptionByLabel(
+        OptionMetadataCollection options,
+        string label,
+        bool compareIgnoreCase
+    )
+    {
+        StringComparison comparison = compareIgnoreCase
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        foreach (OptionMetadata option in options)
+        {
+            string optionLabel = option.Label?.UserLocalizedLabel?.Label;
+            if (optionLabel != null && string.Equals(label, optionLabel, comparison))
+            {
+                return option;
+            }
+        }
+
+        return null;
+    }
+
+    private static LocalizedLabel FindLocalizedLabel(Label label, int languageCode)
+    {
+        if (label?.LocalizedLabels == null)
+        {
+            return null;
+        }
+
+        foreach (LocalizedLabel localizedLabel in label.LocalizedLabels)
+        {
+            if (localizedLabel.LanguageCode == languageCode)
+            {
+                return localizedLabel;
+            }
+        }
+
+        return null;
+    }
+
+    private sealed class MetadataKeyComparer
+        : IEqualityComparer<(string LogicalName, string FieldName)>
+    {
+        public static MetadataKeyComparer Instance { get; } = new();
+
+        public bool Equals(
+            (string LogicalName, string FieldName) x,
+            (string LogicalName, string FieldName) y
+        ) =>
+            StringComparer.OrdinalIgnoreCase.Equals(x.LogicalName, y.LogicalName)
+            && StringComparer.OrdinalIgnoreCase.Equals(x.FieldName, y.FieldName);
+
+        public int GetHashCode((string LogicalName, string FieldName) obj) =>
+            unchecked(
+                (
+                    StringComparer.OrdinalIgnoreCase.GetHashCode(
+                        obj.LogicalName ?? string.Empty
+                    ) * 397
+                ) ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.FieldName ?? string.Empty)
+            );
+    }
+
+    private sealed class MetadataCacheEntry(
+        OptionMetadataCollection metadata,
+        DateTime expiresUtc
+    )
+    {
+        public OptionMetadataCollection Metadata { get; } = metadata;
+        public DateTime ExpiresUtc { get; } = expiresUtc;
     }
 }

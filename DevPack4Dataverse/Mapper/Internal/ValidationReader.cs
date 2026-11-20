@@ -162,7 +162,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
                     ColumnSet = columns.Length == 0 ? new ColumnSet(false) : new ColumnSet(columns)
                 };
                 query.Criteria.AddCondition(
-                    "entityid",
+                    group.Key.ToLowerInvariant() + "id",
                     ConditionOperator.In,
                     chunk.Cast<object>().ToArray()
                 );

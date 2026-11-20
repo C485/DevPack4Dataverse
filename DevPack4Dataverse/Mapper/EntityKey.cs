@@ -41,7 +41,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
             throw new ArgumentException("Logical name is required.", nameof(logicalName));
         }
 
-        LogicalName = logicalName;
+        LogicalName = logicalName.ToLowerInvariant();
         Id = id;
         if (alternateKey == null)
         {
@@ -60,7 +60,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
                     );
                 }
 
-                values[pair.Key] = pair.Value;
+                values[pair.Key.ToLowerInvariant()] = pair.Value;
             }
 
             _alternateKey = values;
@@ -68,6 +68,28 @@ public sealed class EntityKey : IEquatable<EntityKey>
 
         _normalized = BuildNormalized();
     }
+
+    private EntityKey(
+        string logicalName,
+        Guid? id,
+        IReadOnlyDictionary<string, object> alternateKey
+    )
+    {
+        if (string.IsNullOrWhiteSpace(logicalName))
+        {
+            throw new ArgumentException("Logical name is required.", nameof(logicalName));
+        }
+
+        LogicalName = logicalName.ToLowerInvariant();
+        Id = id;
+        _alternateKey = alternateKey ?? EmptyAlternateKey;
+        _normalized = BuildNormalized();
+    }
+
+    internal static EntityKey FromAlternateKeyValues(
+        string logicalName,
+        Dictionary<string, object> values
+    ) => new(logicalName, null, values);
 
     private EntityKey(string logicalName, string attributeName, object attributeValue)
     {
@@ -83,10 +105,10 @@ public sealed class EntityKey : IEquatable<EntityKey>
             );
         }
 
-        LogicalName = logicalName;
+        LogicalName = logicalName.ToLowerInvariant();
         _alternateKey = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
-            [attributeName] = attributeValue
+            [attributeName.ToLowerInvariant()] = attributeValue
         };
         _normalized = BuildNormalized();
     }
@@ -133,6 +155,28 @@ public sealed class EntityKey : IEquatable<EntityKey>
         }
 
         return new EntityKey(logicalName, id, null);
+    }
+
+    public static EntityKey ByAlternateKey(
+        string logicalName,
+        KeyValuePair<string, object> first,
+        KeyValuePair<string, object> second
+    )
+    {
+        if (string.IsNullOrWhiteSpace(first.Key) || string.IsNullOrWhiteSpace(second.Key))
+        {
+            throw new ArgumentException(
+                "Alternate key attribute names cannot be empty.",
+                nameof(first)
+            );
+        }
+
+        Dictionary<string, object> values = new(2, StringComparer.OrdinalIgnoreCase)
+        {
+            [first.Key.ToLowerInvariant()] = first.Value,
+            [second.Key.ToLowerInvariant()] = second.Value
+        };
+        return FromAlternateKeyValues(logicalName, values);
     }
 
     public static EntityKey ByAlternateKey(
@@ -251,8 +295,8 @@ public sealed class EntityKey : IEquatable<EntityKey>
 
     private string BuildNormalized()
     {
-        StringBuilder builder = new();
-        builder.Append(LogicalName.ToLowerInvariant());
+        StringBuilder builder = new(64);
+        builder.Append(LogicalName);
 
         if (Id.HasValue && Id.Value != Guid.Empty)
         {
@@ -265,31 +309,40 @@ public sealed class EntityKey : IEquatable<EntityKey>
         {
             foreach (KeyValuePair<string, object> pair in _alternateKey)
             {
-                builder
-                    .Append(pair.Key.ToLowerInvariant())
-                    .Append('=')
-                    .Append(NormalizeValue(pair.Value))
-                    .Append(';');
+                AppendAlternateKeyPart(builder, pair);
             }
         }
         else
         {
-            foreach (
-                KeyValuePair<string, object> pair in _alternateKey.OrderBy(
-                    p => p.Key,
-                    StringComparer.OrdinalIgnoreCase
-                )
-            )
+            KeyValuePair<string, object>[] pairs = _alternateKey.ToArray();
+            Array.Sort(
+                pairs,
+                static (left, right) =>
+                    StringComparer.OrdinalIgnoreCase.Compare(left.Key, right.Key)
+            );
+            foreach (KeyValuePair<string, object> pair in pairs)
             {
-                builder
-                    .Append(pair.Key.ToLowerInvariant())
-                    .Append('=')
-                    .Append(NormalizeValue(pair.Value))
-                    .Append(';');
+                AppendAlternateKeyPart(builder, pair);
             }
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendAlternateKeyPart(
+        StringBuilder builder,
+        KeyValuePair<string, object> pair
+    )
+    {
+        string key = pair.Key;
+        string value = NormalizeValue(pair.Value);
+        builder
+            .Append(key.Length)
+            .Append(':')
+            .Append(key)
+            .Append(value.Length)
+            .Append(':')
+            .Append(value);
     }
 
     private static string NormalizeValue(object value)
