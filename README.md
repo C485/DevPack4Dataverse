@@ -302,7 +302,7 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 262 tests, all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 264 tests, all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
 - A failed connection pool fails fast instead of looping forever when every connection creator has errored.
@@ -321,11 +321,15 @@ This pass addressed the findings below and validated the library against a live 
 - `DataverseDevPack` implements `IDisposable` and exposes `DisposeAsync`.
 
 ### Caching and performance
-- `Statistics` keeps a bounded 10-minute bucket ring instead of scanning up to 100,000 entries per connection choice.
-- Option-set metadata is cached for five minutes per table and column.
+- `Statistics` keeps a bounded 2-minute bucket ring instead of scanning up to 100,000 entries per connection choice.
+- Option-set metadata is cached for five minutes per table and column using a case-insensitive tuple key; label lookup no longer uses LINQ per cell.
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the cache TTL expires; `ForceRefresh` still reloads.
-- Redis preload writes run with bounded parallelism instead of one awaited round trip per record and key.
+- Redis preload writes run with bounded parallelism; reference parsing avoids `string.Split` and DTO lists are pre-sized.
 - `SdkProxy` no longer changes process-wide `ThreadPool` and `ServicePointManager` settings.
+- Entry/exit logging is limited to batch and creation boundaries; per-record mapper and field-helper paths no longer allocate the logger guard and stopwatch.
+- Mapper per-record collections are reduced: lazy error lists, a single required-column pass, shared loaded-column sets, and no per-record LINQ in the cache and field paths.
+- The in-memory cache reuses its completed read task instead of allocating a `Task` per hit.
+- Entity keys normalize names at construction; key building uses a sized `StringBuilder` and an array sort instead of LINQ. `FieldDrill` path trimming and cache clearing use plain loops, and an alternate-key two-pair overload avoids the `params` array.
 - Removed the double statistics entry for sync `ExecuteMultiple` and two dead project lines.
 
 ### Live validation

@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,7 +68,6 @@ public static class LinqExpressionBuilder
         /// <inheritdoc />
         public void AddAnd(Expression<Func<U, bool>> expressionToAdd)
         {
-            using EntryExitLogger logGuard = new(_logger);
             Guard.Against.Null(expressionToAdd);
 
             if (TryApplyBooleanIdentity(expressionToAdd, isAnd: true, nameof(expressionToAdd)))
@@ -84,7 +83,6 @@ public static class LinqExpressionBuilder
         /// <inheritdoc />
         public void AddAnd(ILinqExpressionBuilder<U> expressionToAdd)
         {
-            using EntryExitLogger logGuard = new(_logger);
             Guard.Against.Null(expressionToAdd);
 
             if (ReferenceEquals(expressionToAdd, this))
@@ -109,7 +107,6 @@ public static class LinqExpressionBuilder
         /// <inheritdoc />
         public void AddOr(Expression<Func<U, bool>> expressionToAdd)
         {
-            using EntryExitLogger logGuard = new(_logger);
             Guard.Against.Null(expressionToAdd);
 
             if (TryApplyBooleanIdentity(expressionToAdd, isAnd: false, nameof(expressionToAdd)))
@@ -125,7 +122,6 @@ public static class LinqExpressionBuilder
         /// <inheritdoc />
         public void AddOr(ILinqExpressionBuilder<U> expressionToAdd)
         {
-            using EntryExitLogger logGuard = new(_logger);
             Guard.Against.Null(expressionToAdd);
 
             if (ReferenceEquals(expressionToAdd, this))

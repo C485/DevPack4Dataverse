@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,7 +38,6 @@ public sealed class MoneyFieldTypeMethods
     private const string TransactionCurrencyAttribute = "transactioncurrencyid";
     private const string TransactionCurrencyLogicalName = "transactioncurrency";
 
-    private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
 
     /// <summary>
@@ -51,7 +50,7 @@ public sealed class MoneyFieldTypeMethods
     {
         using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
-        _logger = Guard.Against.Null(logger);
+        Guard.Against.Null(logger);
     }
 
     /// <summary>
@@ -64,7 +63,6 @@ public sealed class MoneyFieldTypeMethods
     /// <exception cref="InvalidOperationException">The attribute is not a Money or decimal value.</exception>
     public decimal? GetValue(Entity entity, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
         return ReadMoneyValue(GetPresentAttribute(entity, fieldName), fieldName);
     }
 
@@ -78,7 +76,6 @@ public sealed class MoneyFieldTypeMethods
     /// <exception cref="InvalidOperationException">The attribute is not a Money or decimal value.</exception>
     public decimal? GetBaseValue(Entity entity, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.NullOrWhiteSpace(fieldName, nameof(fieldName));
         return GetValue(entity, $"{fieldName}{BaseFieldSuffix}");
     }
@@ -92,7 +89,6 @@ public sealed class MoneyFieldTypeMethods
     /// <returns>The same entity for chaining.</returns>
     public Entity SetValue(Entity entity, string fieldName, decimal value)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
         Guard.Against.NullOrWhiteSpace(fieldName, nameof(fieldName));
         entity[fieldName] = new Money(value);
@@ -108,7 +104,6 @@ public sealed class MoneyFieldTypeMethods
     /// <returns>The same entity for chaining.</returns>
     public Entity SetValue(Entity entity, string fieldName, Money value)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
         Guard.Against.NullOrWhiteSpace(fieldName, nameof(fieldName));
         entity[fieldName] = Guard.Against.Null(value);
@@ -123,7 +118,6 @@ public sealed class MoneyFieldTypeMethods
     /// <returns>The same entity for chaining.</returns>
     public Entity SetTransactionCurrency(Entity entity, EntityReference transactionCurrency)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
         string entityName = GetCurrencyEntityName(transactionCurrency);
         EntityReference currency = string.IsNullOrWhiteSpace(transactionCurrency.LogicalName)
@@ -143,7 +137,6 @@ public sealed class MoneyFieldTypeMethods
     /// <exception cref="InvalidOperationException">The lookup is not an EntityReference or Guid.</exception>
     public EntityReference GetTransactionCurrency(Entity entity)
     {
-        using EntryExitLogger logGuard = new(_logger);
         object rawValue = UnwrapAliased(GetPresentAttribute(entity, TransactionCurrencyAttribute));
 
         if (rawValue is EntityReference reference && reference.Id != Guid.Empty)
@@ -172,7 +165,6 @@ public sealed class MoneyFieldTypeMethods
     /// </exception>
     public decimal GetExchangeRate(Entity entity)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
 
         if (entity.Contains(ExchangeRateAttribute))
@@ -190,7 +182,6 @@ public sealed class MoneyFieldTypeMethods
     /// <returns>Exchange rate greater than zero.</returns>
     public decimal GetExchangeRate(EntityReference transactionCurrency)
     {
-        using EntryExitLogger logGuard = new(_logger);
         string entityName = GetCurrencyEntityName(transactionCurrency);
         Entity currency = Guard.Against.Null(
             _sdkProxy.Retrieve(
@@ -215,7 +206,6 @@ public sealed class MoneyFieldTypeMethods
         CancellationToken cancellationToken = default
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
 
         if (entity.Contains(ExchangeRateAttribute))
@@ -238,7 +228,6 @@ public sealed class MoneyFieldTypeMethods
         CancellationToken cancellationToken = default
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         string entityName = GetCurrencyEntityName(transactionCurrency);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -302,7 +291,6 @@ public sealed class MoneyFieldTypeMethods
     /// <exception cref="ArgumentException">The entity does not contain a formatted value for the field.</exception>
     public string GetFormattedValue(Entity entity, string fieldName)
     {
-        using EntryExitLogger logGuard = new(_logger);
         Guard.Against.Null(entity, nameof(entity));
         Guard.Against.NullOrWhiteSpace(fieldName, nameof(fieldName));
 

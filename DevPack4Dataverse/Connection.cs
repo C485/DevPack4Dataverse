@@ -64,7 +64,6 @@ public sealed class Connection : IConnection
 
     public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -79,7 +78,6 @@ public sealed class Connection : IConnection
 
     public async Task<Entity> CreateRecordAndGetAsync(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guid createdRecordId = await CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
 
@@ -91,7 +89,6 @@ public sealed class Connection : IConnection
 
     public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -107,7 +104,6 @@ public sealed class Connection : IConnection
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         DeleteRequest deleteRequest =
             new() { Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger) };
@@ -117,7 +113,6 @@ public sealed class Connection : IConnection
 
     public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(entityReference);
 
@@ -126,7 +121,6 @@ public sealed class Connection : IConnection
 
     public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         DeleteRequest deleteRequest =
             new() { Target = EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger) };
@@ -136,7 +130,6 @@ public sealed class Connection : IConnection
 
     public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(entityReference);
 
@@ -146,7 +139,6 @@ public sealed class Connection : IConnection
     public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
         where T : OrganizationResponse
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(request);
 
@@ -178,7 +170,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(executeMultipleRequestBuilder);
 
@@ -188,7 +179,6 @@ public sealed class Connection : IConnection
     public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
         where T : OrganizationResponse
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(request);
 
@@ -220,7 +210,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(executeMultipleRequestBuilder);
 
@@ -234,7 +223,6 @@ public sealed class Connection : IConnection
 
     public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -249,7 +237,6 @@ public sealed class Connection : IConnection
 
     public T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -264,7 +251,6 @@ public sealed class Connection : IConnection
 
     public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -279,7 +265,6 @@ public sealed class Connection : IConnection
 
     public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -294,13 +279,11 @@ public sealed class Connection : IConnection
 
     public void ReleaseLock()
     {
-        using EntryExitLogger logGuard = new(_logger);
         _semaphoreSlim.Release();
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(columnSet);
 
@@ -318,7 +301,6 @@ public sealed class Connection : IConnection
     public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
         where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         return Retrieve(entityName, id, columnSet, requestSettings)?.ToEntity<T>();
     }
@@ -330,7 +312,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(columnSet);
 
@@ -352,7 +333,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     ) where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Entity entity = await RetrieveAsync(entityName, id, columnSet, requestSettings)
             .ConfigureAwait(false);
@@ -361,7 +341,6 @@ public sealed class Connection : IConnection
 
     public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(queryExpression);
 
@@ -403,7 +382,6 @@ public sealed class Connection : IConnection
     public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
         where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(queryExpression);
 
@@ -447,7 +425,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(queryExpression);
 
@@ -491,7 +468,6 @@ public sealed class Connection : IConnection
         RequestSettings requestSettings = null
     ) where T : Entity
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(queryExpression);
 
@@ -532,7 +508,6 @@ public sealed class Connection : IConnection
 
     public bool Test()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
@@ -549,7 +524,6 @@ public sealed class Connection : IConnection
 
     public async Task<bool> TestAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Statistic statisticEntry = _usageStatistics.StartNew();
         try
@@ -566,19 +540,16 @@ public sealed class Connection : IConnection
 
     public bool TryLock()
     {
-        using EntryExitLogger logGuard = new(_logger);
         return _semaphoreSlim.Wait(0);
     }
 
     public async Task<bool> TryLockAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
         return await _semaphoreSlim.WaitAsync(0).ConfigureAwait(false);
     }
 
     public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -593,7 +564,6 @@ public sealed class Connection : IConnection
 
     public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -608,7 +578,6 @@ public sealed class Connection : IConnection
 
     public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -627,7 +596,6 @@ public sealed class Connection : IConnection
 
     public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,

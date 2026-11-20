@@ -22,6 +22,19 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public void EntityKey_TwoPairAlternateKeyOverload()
+    {
+        EntityKey key = EntityKey.ByAlternateKey(
+            "account",
+            new KeyValuePair<string, object>("accountnumber", "A-1"),
+            new KeyValuePair<string, object>("name", "Contoso")
+        );
+
+        Assert.Equal("A-1", key.AlternateKey["accountnumber"]);
+        Assert.Equal("Contoso", key.AlternateKey["name"]);
+    }
+
+    [Fact]
     public void AlternateKey_WithSeparatorInValue_DoesNotCollide()
     {
         EntityKey first = EntityKey.ByAlternateKey(

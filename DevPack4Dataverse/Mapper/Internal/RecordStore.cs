@@ -152,16 +152,15 @@ internal sealed class RecordStore
             return;
         }
 
+        string[] alternateAttributes =
+            alternateKeyAttributes?.ToArray() ?? Array.Empty<string>();
         HashSet<string> columns = new(
             requiredColumns ?? Enumerable.Empty<string>(),
             StringComparer.OrdinalIgnoreCase
         );
-        if (alternateKeyAttributes != null)
+        foreach (string attribute in alternateAttributes)
         {
-            foreach (string attribute in alternateKeyAttributes)
-            {
-                columns.Add(attribute);
-            }
+            columns.Add(attribute);
         }
 
         await ClearCacheAsync(logicalName, cancellationToken).ConfigureAwait(false);
@@ -176,7 +175,6 @@ internal sealed class RecordStore
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
 
-        IEnumerable<string> attributes = alternateKeyAttributes ?? Enumerable.Empty<string>();
         await AsyncParallel
             .ForEachAsync(
                 records,
@@ -198,7 +196,7 @@ internal sealed class RecordStore
                     EntityKey alternateKey = TryCreateAlternateKey(
                         logicalName,
                         record,
-                        attributes
+                        alternateAttributes
                     );
                     if (alternateKey != null)
                     {
@@ -262,7 +260,7 @@ internal sealed class RecordStore
         else
         {
             query.Criteria.AddCondition(
-                key.LogicalName.ToLowerInvariant() + "id",
+                key.LogicalName + "id",
                 ConditionOperator.Equal,
                 key.Id.Value
             );
@@ -278,7 +276,7 @@ internal sealed class RecordStore
     private async Task CacheRecordAsync(
         Entity record,
         EntityKey requestedKey,
-        IEnumerable<string> loadedColumns,
+        ISet<string> loadedColumns,
         CancellationToken cancellationToken
     )
     {
@@ -458,10 +456,18 @@ internal sealed class RecordStore
     private static EntityKey TryCreateAlternateKey(
         string logicalName,
         Entity record,
-        IEnumerable<string> attributes
+        string[] attributes
     )
     {
-        Dictionary<string, object> values = new(StringComparer.OrdinalIgnoreCase);
+        if (attributes.Length == 0)
+        {
+            return null;
+        }
+
+        Dictionary<string, object> values = new(
+            attributes.Length,
+            StringComparer.OrdinalIgnoreCase
+        );
         foreach (string attribute in attributes)
         {
             if (!record.Attributes.TryGetValue(attribute, out object value) || value == null)
@@ -469,10 +475,10 @@ internal sealed class RecordStore
                 return null;
             }
 
-            values[attribute] = value;
+            values[attribute.ToLowerInvariant()] = value;
         }
 
-        return values.Count == 0 ? null : EntityKey.ByAlternateKey(logicalName, values);
+        return values.Count == 0 ? null : EntityKey.FromAlternateKeyValues(logicalName, values);
     }
 
     private static ColumnSet CreateColumnSet(IEnumerable<string> columns)

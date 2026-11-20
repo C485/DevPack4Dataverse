@@ -32,7 +32,6 @@ namespace DevPack4Dataverse;
 /// </remarks>
 public sealed class FieldDrill
 {
-    private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
 
     /// <summary>
@@ -45,7 +44,7 @@ public sealed class FieldDrill
     {
         using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
-        _logger = Guard.Against.Null(logger);
+        Guard.Against.Null(logger);
     }
 
     /// <summary>
@@ -71,7 +70,6 @@ public sealed class FieldDrill
     /// </exception>
     public T Retreive<T>(EntityReference obj, string path, string delimiter = ".")
     {
-        using EntryExitLogger logGuard = new(_logger);
         string[] pathParts = SplitPath(path, delimiter);
         return Retreive<T>(obj, pathParts);
     }
@@ -96,7 +94,6 @@ public sealed class FieldDrill
     /// </exception>
     public T Retreive<T>(EntityReference obj, string[] pathParts)
     {
-        using EntryExitLogger logGuard = new(_logger);
         ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
@@ -132,7 +129,6 @@ public sealed class FieldDrill
     /// <inheritdoc cref="Retreive{T}(EntityReference, string, string)"/>
     public async Task<T> RetreiveAsync<T>(EntityReference obj, string path, string delimiter = ".")
     {
-        using EntryExitLogger logGuard = new(_logger);
         string[] pathParts = SplitPath(path, delimiter);
         return await RetreiveAsync<T>(obj, pathParts).ConfigureAwait(false);
     }
@@ -140,7 +136,6 @@ public sealed class FieldDrill
     /// <inheritdoc cref="Retreive{T}(EntityReference, string[])"/>
     public async Task<T> RetreiveAsync<T>(EntityReference obj, string[] pathParts)
     {
-        using EntryExitLogger logGuard = new(_logger);
         ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
@@ -179,18 +174,28 @@ public sealed class FieldDrill
     {
         Guard.Against.NullOrWhiteSpace(path, parameterName: nameof(path));
         Guard.Against.NullOrEmpty(delimiter, parameterName: nameof(delimiter));
-        return path.Split([delimiter], StringSplitOptions.None)
-            .Select(part => part.Trim())
-            .ToArray();
+        string[] parts = path.Split([delimiter], StringSplitOptions.None);
+        for (int index = 0; index < parts.Length; index++)
+        {
+            parts[index] = parts[index].Trim();
+        }
+
+        return parts;
     }
 
     private static void ValidateArguments(EntityReference obj, string[] pathParts)
     {
         Guard.Against.Null(pathParts, parameterName: nameof(pathParts));
+        bool pathIsValid = pathParts.Length > 0;
+        for (int index = 0; pathIsValid && index < pathParts.Length; index++)
+        {
+            pathIsValid = !string.IsNullOrWhiteSpace(pathParts[index]);
+        }
+
         Guard.Against.InvalidInput(
             pathParts,
             nameof(pathParts),
-            parts => parts.Length > 0 && parts.All(part => !string.IsNullOrWhiteSpace(part)),
+            _ => pathIsValid,
             "Path must contain at least one non-empty field name."
         );
         Guard.Against.Null(

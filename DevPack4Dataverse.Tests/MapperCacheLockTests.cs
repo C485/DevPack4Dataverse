@@ -21,6 +21,25 @@ public class MapperCacheLockTests
     }
 
     [Fact]
+    public async Task InMemoryCache_ReusesTheCompletedReadTask()
+    {
+        var cache = new InMemoryEntityCache();
+        EntityKey key = EntityKey.ById("account", Guid.NewGuid());
+        var entry = new CachedEntity(
+            new Entity("account", key.Id.Value) { ["name"] = "Contoso" },
+            new[] { "name" }
+        );
+
+        await cache.SetAsync(key, entry, TimeSpan.FromMinutes(1));
+
+        Task<CachedEntity> first = cache.GetAsync(key);
+        Task<CachedEntity> second = cache.GetAsync(key);
+
+        Assert.Same(first, second);
+        Assert.Same(entry, await first);
+    }
+
+    [Fact]
     public async Task InMemoryCache_ExpiresEntry()
     {
         var cache = new InMemoryEntityCache();

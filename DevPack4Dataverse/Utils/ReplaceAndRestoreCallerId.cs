@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,6 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         Guid? aadCallerId = null
     )
     {
-        using EntryExitLogger logGuard = new(logger);
         ServiceClient = Guard.Against.Null(serviceClient);
         oldCallerId = serviceClient.CallerId;
         oldAADCallerId = serviceClient.CallerAADObjectId;
@@ -48,7 +47,6 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         RequestImpersonateSettings requestSettings = null
     )
     {
-        using EntryExitLogger logGuard = new(logger);
         ServiceClient = Guard.Against.Null(serviceClient);
         oldCallerId = serviceClient.CallerId;
         oldAADCallerId = serviceClient.CallerAADObjectId;

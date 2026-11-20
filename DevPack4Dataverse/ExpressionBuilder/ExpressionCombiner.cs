@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,7 +67,6 @@ internal static class ExpressionCombiner
 
     private sealed class ReplaceExpressionVisitor : ExpressionVisitor
     {
-        private readonly ILogger _logger;
         private readonly Expression _newValue;
         private readonly Expression _oldValue;
 
@@ -76,12 +75,10 @@ internal static class ExpressionCombiner
             using EntryExitLogger logGuard = new(logger);
             _oldValue = oldValue;
             _newValue = newValue;
-            _logger = logger;
         }
 
         public override Expression Visit(Expression node)
         {
-            using EntryExitLogger logGuard = new(_logger);
             return node == _oldValue ? _newValue : base.Visit(node);
         }
     }

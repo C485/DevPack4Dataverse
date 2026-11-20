@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,7 +68,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddCreate(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -83,7 +82,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             entityReference,
@@ -98,14 +96,12 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
     }
 
     public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.Null(request);
 
@@ -116,7 +112,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddUpdate(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(
             record,
@@ -131,7 +126,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     public void AddUpsert(Entity record, RequestSettings requestSettings = null)
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
 
@@ -142,7 +136,6 @@ public sealed class ExecuteMultipleRequestBuilder
 
     private OrganizationRequestCollection GetOrganizationRequests()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         OrganizationRequestCollection organizationRequestCollection = new();
         organizationRequestCollection.AddRange(_requests);

@@ -22,8 +22,8 @@ namespace DevPack4Dataverse;
 
 internal sealed class Statistics : IStatistics
 {
-    // shortcut: weights are retained for 10 minutes; raise MaxBucketMinutes for longer windows.
-    private const int MaxBucketMinutes = 10;
+    // shortcut: weights are retained for 2 minutes, the window used by connection selection.
+    private const int MaxBucketMinutes = 2;
     private const int BucketsPerMinute = 60;
     private const int BucketCount = MaxBucketMinutes * BucketsPerMinute;
     private readonly object _lock = new();
