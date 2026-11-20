@@ -21,6 +21,10 @@ public sealed class FakeConnection : IConnection
     public Func<OrganizationRequest, OrganizationResponse>? ExecuteHandler { get; set; }
     public Func<OrganizationRequest, Task<OrganizationResponse>>? AsyncExecuteHandler { get; set; }
     public Func<Entity, Guid>? CreateRecordHandler { get; set; }
+    public Func<EntityCollection, Guid[]>? CreateMultipleHandler { get; set; }
+    public Action<EntityCollection>? UpdateMultipleHandler { get; set; }
+    public Func<EntityCollection, UpsertResponse[]>? UpsertMultipleHandler { get; set; }
+    public Action<EntityReferenceCollection>? DeleteMultipleHandler { get; set; }
     public Action<Entity>? UpdateRecordHandler { get; set; }
     public Func<QueryExpression, Entity[]>? RetrieveMultipleHandler { get; set; }
 
@@ -54,6 +58,80 @@ public sealed class FakeConnection : IConnection
 
     public Task<Guid> CreateRecordAsync(Entity record, RequestSettings? requestSettings = null) =>
         Task.FromResult(CreateRecord(record, requestSettings));
+
+    public Guid[] CreateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        LastRequestSettings = requestSettings;
+        return CreateMultipleHandler?.Invoke(targets) ?? throw new NotImplementedException();
+    }
+
+    public Task<Guid[]> CreateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    ) => Task.FromResult(CreateMultiple(targets, requestSettings));
+
+    public void UpdateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        LastRequestSettings = requestSettings;
+        if (UpdateMultipleHandler == null)
+        {
+            throw new NotImplementedException();
+        }
+
+        UpdateMultipleHandler(targets);
+    }
+
+    public Task UpdateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        UpdateMultiple(targets, requestSettings);
+        return Task.CompletedTask;
+    }
+
+    public UpsertResponse[] UpsertMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        LastRequestSettings = requestSettings;
+        return UpsertMultipleHandler?.Invoke(targets) ?? throw new NotImplementedException();
+    }
+
+    public Task<UpsertResponse[]> UpsertMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    ) => Task.FromResult(UpsertMultiple(targets, requestSettings));
+
+    public void DeleteMultiple(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        LastRequestSettings = requestSettings;
+        if (DeleteMultipleHandler == null)
+        {
+            throw new NotImplementedException();
+        }
+
+        DeleteMultipleHandler(targets);
+    }
+
+    public Task DeleteMultipleAsync(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        DeleteMultiple(targets, requestSettings);
+        return Task.CompletedTask;
+    }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null) =>
         throw new NotImplementedException();

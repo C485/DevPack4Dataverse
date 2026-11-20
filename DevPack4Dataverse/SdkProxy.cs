@@ -247,6 +247,94 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         return await connectionLease.Connection.CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
     }
 
+    public Guid[] CreateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.CreateMultiple(targets, requestSettings);
+    }
+
+    public async Task<Guid[]> CreateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+
+        return await connectionLease
+            .Connection.CreateMultipleAsync(targets, requestSettings)
+            .ConfigureAwait(false);
+    }
+
+    public void UpdateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = GetConnection();
+
+        connectionLease.Connection.UpdateMultiple(targets, requestSettings);
+    }
+
+    public async Task UpdateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+
+        await connectionLease
+            .Connection.UpdateMultipleAsync(targets, requestSettings)
+            .ConfigureAwait(false);
+    }
+
+    public UpsertResponse[] UpsertMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = GetConnection();
+
+        return connectionLease.Connection.UpsertMultiple(targets, requestSettings);
+    }
+
+    public async Task<UpsertResponse[]> UpsertMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+
+        return await connectionLease
+            .Connection.UpsertMultipleAsync(targets, requestSettings)
+            .ConfigureAwait(false);
+    }
+
+    public void DeleteMultiple(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = GetConnection();
+
+        connectionLease.Connection.DeleteMultiple(targets, requestSettings);
+    }
+
+    public async Task DeleteMultipleAsync(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+
+        await connectionLease
+            .Connection.DeleteMultipleAsync(targets, requestSettings)
+            .ConfigureAwait(false);
+    }
+
     public void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
         using ConnectionLease connectionLease = GetConnection();

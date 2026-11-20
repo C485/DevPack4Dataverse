@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
+using DevPack4Dataverse.BulkOperations;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
@@ -97,6 +98,147 @@ public sealed class Connection : IConnection
 
         CreateResponse createResponse = (await ExecuteAsync<CreateResponse>(createRequest, requestSettings).ConfigureAwait(false))!;
         return Guard.Against.Null(createResponse).id;
+    }
+
+    public Guid[] CreateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            false,
+            nameof(targets)
+        );
+        CreateMultipleResponse response = Execute<CreateMultipleResponse>(
+            new CreateMultipleRequest { Targets = prepared },
+            requestSettings
+        )!;
+
+        return response.Ids ?? Array.Empty<Guid>();
+    }
+
+    public async Task<Guid[]> CreateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            false,
+            nameof(targets)
+        );
+        CreateMultipleResponse response = (await ExecuteAsync<CreateMultipleResponse>(
+            new CreateMultipleRequest { Targets = prepared },
+            requestSettings
+        ).ConfigureAwait(false))!;
+
+        return response.Ids ?? Array.Empty<Guid>();
+    }
+
+    public void UpdateMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            true,
+            nameof(targets)
+        );
+        UpdateMultipleRequest request = new() { Targets = prepared };
+        if (requestSettings?.ConcurrencyBehavior is ConcurrencyBehavior behavior)
+        {
+            request.ConcurrencyBehavior = behavior;
+        }
+
+        _ = Execute<UpdateMultipleResponse>(request, requestSettings);
+    }
+
+    public async Task UpdateMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            true,
+            nameof(targets)
+        );
+        UpdateMultipleRequest request = new() { Targets = prepared };
+        if (requestSettings?.ConcurrencyBehavior is ConcurrencyBehavior behavior)
+        {
+            request.ConcurrencyBehavior = behavior;
+        }
+
+        _ = await ExecuteAsync<UpdateMultipleResponse>(request, requestSettings)
+            .ConfigureAwait(false);
+    }
+
+    public UpsertResponse[] UpsertMultiple(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            true,
+            nameof(targets)
+        );
+        UpsertMultipleResponse response = Execute<UpsertMultipleResponse>(
+            new UpsertMultipleRequest { Targets = prepared },
+            requestSettings
+        )!;
+
+        return response.Results ?? Array.Empty<UpsertResponse>();
+    }
+
+    public async Task<UpsertResponse[]> UpsertMultipleAsync(
+        EntityCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityCollection prepared = BulkOperationTargets.PrepareEntities(
+            targets,
+            true,
+            nameof(targets)
+        );
+        UpsertMultipleResponse response = (await ExecuteAsync<UpsertMultipleResponse>(
+            new UpsertMultipleRequest { Targets = prepared },
+            requestSettings
+        ).ConfigureAwait(false))!;
+
+        return response.Results ?? Array.Empty<UpsertResponse>();
+    }
+
+    public void DeleteMultiple(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityReferenceCollection prepared = BulkOperationTargets.PrepareReferences(
+            targets,
+            nameof(targets)
+        );
+        _ = Execute<OrganizationResponse>(
+            new DeleteMultipleRequest { Targets = prepared },
+            requestSettings
+        );
+    }
+
+    public async Task DeleteMultipleAsync(
+        EntityReferenceCollection targets,
+        RequestSettings? requestSettings = null
+    )
+    {
+        EntityReferenceCollection prepared = BulkOperationTargets.PrepareReferences(
+            targets,
+            nameof(targets)
+        );
+        _ = await ExecuteAsync<OrganizationResponse>(
+            new DeleteMultipleRequest { Targets = prepared },
+            requestSettings
+        ).ConfigureAwait(false);
     }
 
     public void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null)
