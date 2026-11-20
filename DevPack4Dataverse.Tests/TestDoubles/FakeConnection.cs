@@ -70,7 +70,8 @@ public sealed class FakeConnection : IConnection
 
     public Task<Guid[]> CreateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     ) => Task.FromResult(CreateMultiple(targets, requestSettings));
 
     public void UpdateMultiple(
@@ -89,7 +90,8 @@ public sealed class FakeConnection : IConnection
 
     public Task UpdateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         UpdateMultiple(targets, requestSettings);
@@ -107,7 +109,8 @@ public sealed class FakeConnection : IConnection
 
     public Task<UpsertResponse[]> UpsertMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     ) => Task.FromResult(UpsertMultiple(targets, requestSettings));
 
     public void DeleteMultiple(
@@ -126,7 +129,8 @@ public sealed class FakeConnection : IConnection
 
     public Task DeleteMultipleAsync(
         EntityReferenceCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         DeleteMultiple(targets, requestSettings);

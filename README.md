@@ -145,6 +145,21 @@ Production notes:
 - `RequestSettings` still applies, including impersonation, `BypassCustomPluginExecution` and `ConcurrencyBehavior` for `UpdateMultiple`.
 - These messages are not supported inside plug-ins.
 
+#### Chunked execution
+`DataverseDevPack.BulkOperation` sends the same messages in chunks and uses the connection pool:
+```C#
+Guid[] ids = await dataverseDevPack.BulkOperation.CreateMultipleAsync(
+    records,
+    new BulkOperationSettings
+    {
+        BatchSize = 1000,
+        MaxDegreeOfParallelism = 4,
+        ReportProgress = (current, total) => Console.WriteLine($"{current}/{total}")
+    },
+    new RequestSettings { ImpersonateAsUserByDataverseId = userId });
+```
+The same overloads exist for `UpdateMultipleAsync`, `UpsertMultipleAsync` and `DeleteMultipleAsync`. Results are merged in the original input order. `MaxDegreeOfParallelism = 0` uses the number of available connections. Each chunk is one request, so on a standard table a failed chunk rolls back only that chunk and earlier chunks stay committed. When a chunk throws, the original exception is rethrown and `Exception.Data` contains `BulkOperationLogic.FailedChunkStartIndexDataKey` and `FailedChunkCountDataKey`.
+
 ### ExecuteTransaction
 Executes all requests as one atomic database transaction. If any request fails, Dataverse rolls back every change and the fault identifies the failed request index:
 ```C#
@@ -357,7 +372,7 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 308 tests (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 316 tests (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
 - A failed connection pool fails fast instead of looping forever when every connection creator has errored.
@@ -390,6 +405,7 @@ This pass addressed the findings below and validated the library against a live 
 ### Hardening pass
 - Mapper reads the primary id attribute from metadata (activity tables now work); blank alternate keys and multi-match lookups throw; alternate-key upserts remove key columns from the body; lookup options are copied at `Build`.
 - Bulk operation messages `CreateMultiple`, `UpdateMultiple`, `UpsertMultiple` and `DeleteMultiple` are exposed on `SdkProxy` and `Connection`, with same-table and identity validation.
+- `BulkOperation` chunks records (default 1,000), runs chunks in parallel across the pool, merges ids/results in input order, reports progress and adds the failed chunk index/count to the exception.
 - A connection is always exclusive. `maximumConcurrentlyUsage` is gone; one creator can produce several cloned connections with `connectionCount`, so the pool gets real parallel clients instead of extra permits on one client.
 - `ExecuteMultiple` splits a chunk when the deployment returns `MaxBatchSize`, preserves partial results in `ExecuteMultipleException`, rejects nested batches and per-message impersonation, and ignores throwing progress callbacks.
 - Cancellation reaches the connection wait and call gate; `Dispose` waits for active leases before closing clients.

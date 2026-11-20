@@ -39,7 +39,8 @@ public interface IDataverseConnectionLayer
     /// <inheritdoc cref="CreateMultiple(EntityCollection, RequestSettings?)"/>
     Task<Guid[]> CreateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
     /// <summary>
@@ -51,7 +52,8 @@ public interface IDataverseConnectionLayer
     /// <inheritdoc cref="UpdateMultiple(EntityCollection, RequestSettings?)"/>
     Task UpdateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
     /// <summary>
@@ -67,7 +69,8 @@ public interface IDataverseConnectionLayer
     /// <inheritdoc cref="UpsertMultiple(EntityCollection, RequestSettings?)"/>
     Task<UpsertResponse[]> UpsertMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
     /// <summary>
@@ -82,7 +85,8 @@ public interface IDataverseConnectionLayer
     /// <inheritdoc cref="DeleteMultiple(EntityReferenceCollection, RequestSettings?)"/>
     Task DeleteMultipleAsync(
         EntityReferenceCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
     void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null);

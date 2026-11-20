@@ -259,13 +259,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task<Guid[]> CreateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         return await connectionLease
-            .Connection.CreateMultipleAsync(targets, requestSettings)
+            .Connection.CreateMultipleAsync(targets, requestSettings, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -281,13 +282,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task UpdateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         await connectionLease
-            .Connection.UpdateMultipleAsync(targets, requestSettings)
+            .Connection.UpdateMultipleAsync(targets, requestSettings, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -303,13 +305,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task<UpsertResponse[]> UpsertMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         return await connectionLease
-            .Connection.UpsertMultipleAsync(targets, requestSettings)
+            .Connection.UpsertMultipleAsync(targets, requestSettings, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -325,13 +328,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     public async Task DeleteMultipleAsync(
         EntityReferenceCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
-        using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        using ConnectionLease connectionLease = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         await connectionLease
-            .Connection.DeleteMultipleAsync(targets, requestSettings)
+            .Connection.DeleteMultipleAsync(targets, requestSettings, cancellationToken)
             .ConfigureAwait(false);
     }
 

@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using DevPack4Dataverse.BulkOperations;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.ExpressionBuilder;
@@ -29,6 +30,7 @@ namespace DevPack4Dataverse;
 
 public sealed class DataverseDevPack : IDisposable
 {
+    public readonly BulkOperationLogic BulkOperation;
     public readonly ExecuteMultipleLogic ExecuteMultiple;
     public readonly FieldDrill FieldDrill;
     public readonly FieldMethodsPack FieldMethods;
@@ -43,6 +45,7 @@ public sealed class DataverseDevPack : IDisposable
     {
         Guard.Against.Null(logger);
         SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
+        BulkOperation = new BulkOperationLogic(SdkProxy, logger);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
         FieldDrill = new FieldDrill(SdkProxy, logger);
         FieldMethods = new FieldMethodsPack(SdkProxy, ExecuteMultiple, logger);

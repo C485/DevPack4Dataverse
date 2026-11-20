@@ -120,7 +120,8 @@ public sealed class Connection : IConnection
 
     public async Task<Guid[]> CreateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         EntityCollection prepared = BulkOperationTargets.PrepareEntities(
@@ -130,7 +131,8 @@ public sealed class Connection : IConnection
         );
         CreateMultipleResponse response = (await ExecuteAsync<CreateMultipleResponse>(
             new CreateMultipleRequest { Targets = prepared },
-            requestSettings
+            requestSettings,
+            cancellationToken
         ).ConfigureAwait(false))!;
 
         return response.Ids ?? Array.Empty<Guid>();
@@ -157,7 +159,8 @@ public sealed class Connection : IConnection
 
     public async Task UpdateMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         EntityCollection prepared = BulkOperationTargets.PrepareEntities(
@@ -171,7 +174,11 @@ public sealed class Connection : IConnection
             request.ConcurrencyBehavior = behavior;
         }
 
-        _ = await ExecuteAsync<UpdateMultipleResponse>(request, requestSettings)
+        _ = await ExecuteAsync<UpdateMultipleResponse>(
+                request,
+                requestSettings,
+                cancellationToken
+            )
             .ConfigureAwait(false);
     }
 
@@ -195,7 +202,8 @@ public sealed class Connection : IConnection
 
     public async Task<UpsertResponse[]> UpsertMultipleAsync(
         EntityCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         EntityCollection prepared = BulkOperationTargets.PrepareEntities(
@@ -205,7 +213,8 @@ public sealed class Connection : IConnection
         );
         UpsertMultipleResponse response = (await ExecuteAsync<UpsertMultipleResponse>(
             new UpsertMultipleRequest { Targets = prepared },
-            requestSettings
+            requestSettings,
+            cancellationToken
         ).ConfigureAwait(false))!;
 
         return response.Results ?? Array.Empty<UpsertResponse>();
@@ -228,7 +237,8 @@ public sealed class Connection : IConnection
 
     public async Task DeleteMultipleAsync(
         EntityReferenceCollection targets,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
         EntityReferenceCollection prepared = BulkOperationTargets.PrepareReferences(
@@ -237,7 +247,8 @@ public sealed class Connection : IConnection
         );
         _ = await ExecuteAsync<OrganizationResponse>(
             new DeleteMultipleRequest { Targets = prepared },
-            requestSettings
+            requestSettings,
+            cancellationToken
         ).ConfigureAwait(false);
     }
 
