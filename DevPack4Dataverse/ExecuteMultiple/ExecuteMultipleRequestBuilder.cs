@@ -44,7 +44,6 @@ public sealed class ExecuteMultipleRequestBuilder
     /// <param name="continueOnError">Value used by <see cref="RequestWithResults"/> settings.</param>
     public ExecuteMultipleRequestBuilder(ILogger logger, bool continueOnError = true)
     {
-        using EntryExitLogger logGuard = new(logger);
         _requests = new();
         _logger = Guard.Against.Null(logger);
         _continueOnError = continueOnError;
@@ -104,6 +103,22 @@ public sealed class ExecuteMultipleRequestBuilder
     {
 
         Guard.Against.Null(request);
+
+        if (request is ExecuteMultipleRequest or ExecuteTransactionRequest)
+        {
+            throw new ArgumentException(
+                "An ExecuteMultipleRequest cannot contain ExecuteMultipleRequest or ExecuteTransactionRequest.",
+                nameof(request)
+            );
+        }
+
+        if (requestSettings?.HasImpersonation == true)
+        {
+            throw new ArgumentException(
+                "Per-request impersonation is not supported in a batch. Set it on the ExecuteAsync request settings.",
+                nameof(requestSettings)
+            );
+        }
 
         requestSettings?.AddToOrganizationRequest(request, _logger);
 

@@ -358,11 +358,42 @@ public sealed class EntityKey : IEquatable<EntityKey>
             case byte[] bytes:
                 return "b64:" + Convert.ToBase64String(bytes);
             case EntityReference reference:
-                return "er:" + reference.LogicalName.ToLowerInvariant() + ":" + reference.Id.ToString("N");
+                if (reference.Id != Guid.Empty)
+                {
+                    return "er:"
+                        + reference.LogicalName.ToLowerInvariant()
+                        + ":"
+                        + reference.Id.ToString("N");
+                }
+
+                if (reference.KeyAttributes == null || reference.KeyAttributes.Count == 0)
+                {
+                    return "er:" + reference.LogicalName.ToLowerInvariant() + ":empty";
+                }
+
+                KeyValuePair<string, object>[] referenceKeys = reference.KeyAttributes.ToArray();
+                Array.Sort(
+                    referenceKeys,
+                    static (left, right) =>
+                        StringComparer.OrdinalIgnoreCase.Compare(left.Key, right.Key)
+                );
+                StringBuilder referenceBuilder = new();
+                foreach (KeyValuePair<string, object> pair in referenceKeys)
+                {
+                    AppendAlternateKeyPart(referenceBuilder, pair);
+                }
+
+                return "er:"
+                    + reference.LogicalName.ToLowerInvariant()
+                    + "{"
+                    + referenceBuilder
+                    + "}";
             case OptionSetValue optionSetValue:
                 return "os:" + optionSetValue.Value.ToString(CultureInfo.InvariantCulture);
             case Money money:
                 return "m:" + money.Value.ToString(CultureInfo.InvariantCulture);
+            case string text:
+                return "s:" + text.ToLowerInvariant();
             case IFormattable formattable:
                 return "v:" + formattable.ToString(null, CultureInfo.InvariantCulture);
             default:

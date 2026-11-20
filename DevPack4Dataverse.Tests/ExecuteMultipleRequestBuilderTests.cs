@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Xunit;
 using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.Models;
 
 namespace DevPack4Dataverse.Tests;
 
@@ -104,5 +105,20 @@ public class ExecuteMultipleRequestBuilderTests
         var builder = Create();
 
         Assert.NotNull(Record.Exception(() => builder.AddRequest(null!)));
+    }
+
+    [Fact]
+    public void AddRequest_RejectsPerRequestImpersonation()
+    {
+        var builder = Create();
+        RequestSettings settings = new()
+        {
+            ImpersonateAsUserByDataverseId = Guid.NewGuid()
+        };
+
+        Assert.Throws<ArgumentException>(
+            () => builder.AddRequest(new OrganizationRequest("req"), settings)
+        );
+        Assert.Equal(0, builder.Count);
     }
 }

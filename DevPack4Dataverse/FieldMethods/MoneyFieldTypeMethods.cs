@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -48,7 +47,6 @@ public sealed class MoneyFieldTypeMethods
     /// <exception cref="ArgumentNullException">A dependency is null.</exception>
     public MoneyFieldTypeMethods(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         Guard.Against.Null(logger);
     }
@@ -252,6 +250,10 @@ public sealed class MoneyFieldTypeMethods
     /// <param name="transactionValue">Amount in the transaction currency.</param>
     /// <param name="exchangeRate">Positive exchange rate.</param>
     /// <returns>Amount in the base currency.</returns>
+    /// <remarks>
+    /// The result is unrounded. Dataverse rounds the stored <c>*_base</c> value to the
+    /// transaction currency precision, so round explicitly before comparing values.
+    /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="exchangeRate"/> is not positive.</exception>
     public decimal ConvertToBase(decimal transactionValue, decimal exchangeRate)
     {
@@ -270,6 +272,10 @@ public sealed class MoneyFieldTypeMethods
     /// <param name="baseValue">Amount in the base currency.</param>
     /// <param name="exchangeRate">Positive exchange rate.</param>
     /// <returns>Amount in the transaction currency.</returns>
+    /// <remarks>
+    /// The result is unrounded. Dataverse rounds the stored <c>*_base</c> value to the
+    /// transaction currency precision, so round explicitly before comparing values.
+    /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="exchangeRate"/> is not positive.</exception>
     public decimal ConvertFromBase(decimal baseValue, decimal exchangeRate)
     {

@@ -62,13 +62,20 @@ public sealed class MapperBuilder<TSource, TTarget>
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _entityLock = entityLock ?? throw new ArgumentNullException(nameof(entityLock));
         _name = name;
-        _recordStore = new RecordStore(_sdkProxy, _logger, _cache, _wrapperOptions);
+        PrimaryKeyAttributeProvider primaryKeys = new(_sdkProxy);
+        _recordStore = new RecordStore(
+            _sdkProxy,
+            _logger,
+            _cache,
+            _wrapperOptions,
+            primaryKeys
+        );
         _lookupResolver = new LookupResolver(
             _sdkProxy,
             _entityLock,
             _recordStore
         );
-        _validationReader = new ValidationReader(_sdkProxy);
+        _validationReader = new ValidationReader(_sdkProxy, primaryKeys);
     }
 
     /// <summary>
@@ -150,7 +157,7 @@ public sealed class MapperBuilder<TSource, TTarget>
                 (target, reference) => ((Entity)(object)target)[targetAttribute] = reference,
                 key,
                 createFactory,
-                options,
+                options.Clone(),
                 _lookupResolver
             )
         );
@@ -183,7 +190,7 @@ public sealed class MapperBuilder<TSource, TTarget>
                 (target, reference) => member.Setter(target, reference),
                 key,
                 createFactory,
-                options,
+                options.Clone(),
                 _lookupResolver
             )
         );

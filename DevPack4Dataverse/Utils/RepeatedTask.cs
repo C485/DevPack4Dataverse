@@ -36,7 +36,6 @@ public sealed class RepeatedTask
 
     public RepeatedTask(TimeSpan timeSpan, Action action, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _logger = Guard.Against.Null(logger);
         _action = Guard.Against.Null(action);
         Guard.Against.Expression(
@@ -55,7 +54,6 @@ public sealed class RepeatedTask
 
     public void Start()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         lock (_sync)
         {
@@ -76,7 +74,6 @@ public sealed class RepeatedTask
 
     public async Task StopAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         Task task;
         bool cancel;
@@ -86,6 +83,7 @@ public sealed class RepeatedTask
             {
                 _stopped = true;
                 _cancellationTokenSource.Dispose();
+                DisposeTimer();
                 return;
             }
 
@@ -100,16 +98,19 @@ public sealed class RepeatedTask
         }
 
         await task.ConfigureAwait(false);
+        DisposeTimer();
+        _cancellationTokenSource.Dispose();
+    }
 
-        if (cancel)
-        {
-            _cancellationTokenSource.Dispose();
-        }
+    private void DisposeTimer()
+    {
+#if NET6_0_OR_GREATER
+        _periodicTimer.Dispose();
+#endif
     }
 
     private async Task TickAsync()
     {
-        using EntryExitLogger logGuard = new(_logger);
 
         try
         {
@@ -127,7 +128,6 @@ public sealed class RepeatedTask
 #endif
                 try
                 {
-                    using EntryExitLogger logGuardInner = new(_logger, caller: $"{nameof(TickAsync)}-InnerFunction");
                     _action();
                 }
                 catch (Exception e)

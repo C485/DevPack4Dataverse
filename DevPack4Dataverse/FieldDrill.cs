@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -42,7 +41,6 @@ public sealed class FieldDrill
     /// <exception cref="ArgumentNullException">A dependency is null.</exception>
     public FieldDrill(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         Guard.Against.Null(logger);
     }

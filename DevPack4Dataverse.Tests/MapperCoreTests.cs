@@ -376,6 +376,118 @@ public class MapperCoreTests
     }
 
     [Fact]
+    public async Task AlternateKeySave_RemovesKeyColumnFromBody()
+    {
+        Guid id = Guid.NewGuid();
+        UpsertRequest? captured = null;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>(),
+            ExecuteHandler = request =>
+            {
+                captured = Assert.IsType<UpsertRequest>(request);
+                UpsertResponse response = new();
+                response.Results["Target"] = new EntityReference("account", id);
+                response.Results["RecordCreated"] = true;
+                return response;
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AlternateKeySource, Entity>("alternate-body")
+                .WithLogicalName("account")
+                .WithEntityKey(
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            new KeyValuePair<string, object>(
+                                "accountnumber",
+                                context.Source.AccountNumber
+                            )
+                        )
+                )
+                .Map("accountnumber", context => context.Source.AccountNumber)
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await mapper.ExecuteAsync(
+                new AlternateKeySource { AccountNumber = "A-1", Name = "Contoso" }
+            );
+
+            Assert.NotNull(captured);
+            Assert.False(captured!.Target.Attributes.Contains("accountnumber"));
+            Assert.Equal("A-1", captured.Target.KeyAttributes["accountnumber"]);
+        }
+    }
+
+    [Fact]
+    public async Task BlankAlternateKey_ThrowsInsteadOfUpdatingArbitraryRecord()
+    {
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>()
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AlternateKeySource, Entity>("alternate-blank")
+                .WithLogicalName("account")
+                .WithEntityKey(
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            "accountnumber",
+                            context.Source.AccountNumber
+                        )
+                )
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await Assert.ThrowsAsync<MapperException>(
+                () => mapper.ExecuteAsync(new AlternateKeySource { AccountNumber = string.Empty })
+            );
+        }
+    }
+
+    [Fact]
+    public async Task ActivityTable_UsesPrimaryIdAttributeForChangeDetection()
+    {
+        Guid id = Guid.NewGuid();
+        string? conditionAttribute = null;
+        var fake = new FakeConnection
+        {
+            PrimaryKeyHandler = logicalName =>
+                logicalName == "email" ? "activityid" : logicalName + "id",
+            RetrieveMultipleHandler = query =>
+            {
+                conditionAttribute = query.Criteria.Conditions[0].AttributeName;
+                return new[] { new Entity("email", id) { ["subject"] = "Old" } };
+            },
+            UpdateRecordHandler = _ => { }
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<Entity, Entity>("email")
+                .WithLogicalName("email")
+                .WithEntityKey(context => EntityKey.ById("email", context.Source.Id))
+                .Map("subject", context => context.Source.GetAttributeValue<string>("subject"))
+                .Build();
+
+            await mapper.ExecuteAsync(new Entity("email", id) { ["subject"] = "New" });
+        }
+
+        Assert.Equal("activityid", conditionAttribute);
+    }
+
+    [Fact]
     public async Task SaveDiff_ReadsFreshRecordEvenWhenCacheHasCopy()
     {
         Guid id = Guid.NewGuid();

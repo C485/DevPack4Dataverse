@@ -70,8 +70,13 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
             throw new ArgumentNullException(nameof(entry));
         }
 
-        DateTime expiresUtc =
-            timeToLive > TimeSpan.Zero ? DateTime.UtcNow.Add(timeToLive) : DateTime.MaxValue;
+        if (timeToLive <= TimeSpan.Zero)
+        {
+            // A non-positive TTL means the entry must not be cached.
+            return Task.CompletedTask;
+        }
+
+        DateTime expiresUtc = DateTime.UtcNow.Add(timeToLive);
         string cacheKey = key.ToString();
         if (_entries.TryGetValue(cacheKey, out CacheEntry? previous))
         {
@@ -83,7 +88,16 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
         IndexEntry(cacheKey, entry);
         _evictionQueue.Enqueue(cacheKey);
         TrimCacheIfNeeded();
-        while (_evictionQueue.Count > MaxEntries && _evictionQueue.TryDequeue(out _)) { }
+        while (
+            _evictionQueue.Count > MaxEntries
+            && _evictionQueue.TryDequeue(out string? staleKey)
+        )
+        {
+            if (_entries.TryRemove(staleKey, out CacheEntry? staleEntry))
+            {
+                UnindexEntry(staleKey, staleEntry.Value);
+            }
+        }
 
         return Task.CompletedTask;
     }

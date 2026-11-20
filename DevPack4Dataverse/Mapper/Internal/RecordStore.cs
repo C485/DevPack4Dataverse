@@ -29,6 +29,7 @@ internal sealed class RecordStore
     private const int CacheWriteParallelism = 32;
     private readonly IEntityCache _cache;
     private readonly ILogger _logger;
+    private readonly PrimaryKeyAttributeProvider _primaryKeys;
     private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
@@ -38,13 +39,15 @@ internal sealed class RecordStore
         SdkProxy sdkProxy,
         ILogger logger,
         IEntityCache cache,
-        MapperWrapperOptions wrapperOptions
+        MapperWrapperOptions wrapperOptions,
+        PrimaryKeyAttributeProvider primaryKeys
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _wrapperOptions = wrapperOptions ?? throw new ArgumentNullException(nameof(wrapperOptions));
+        _primaryKeys = primaryKeys ?? throw new ArgumentNullException(nameof(primaryKeys));
     }
 
     public async Task<Entity?> GetAsync(
@@ -79,7 +82,8 @@ internal sealed class RecordStore
 
                 if (missing.Length == 0)
                 {
-                    return cached.Record;
+                    // Return a copy so callers cannot mutate the cached record.
+                    return EntityCopy.Clone(cached.Record);
                 }
 
                 Entity? missingValues = await RetrieveAsync(
@@ -175,6 +179,7 @@ internal sealed class RecordStore
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
 
+        ConcurrentDictionary<string, byte> alternateKeys = new(StringComparer.Ordinal);
         await AsyncParallel
             .ForEachAsync(
                 records,
@@ -200,6 +205,13 @@ internal sealed class RecordStore
                     );
                     if (alternateKey != null)
                     {
+                        if (!alternateKeys.TryAdd(alternateKey.ToString(), 0))
+                        {
+                            throw new MapperException(
+                                $"Alternate key '{alternateKey}' matches more than one '{logicalName}' record."
+                            );
+                        }
+
                         await CacheRecordAsync(record, alternateKey, columns, token)
                             .ConfigureAwait(false);
                     }
@@ -259,8 +271,11 @@ internal sealed class RecordStore
         }
         else
         {
+            string primaryIdAttribute = await _primaryKeys
+                .GetAsync(key.LogicalName, cancellationToken)
+                .ConfigureAwait(false);
             query.Criteria.AddCondition(
-                key.LogicalName + "id",
+                primaryIdAttribute,
                 ConditionOperator.Equal,
                 key.Id!.Value
             );
@@ -269,6 +284,13 @@ internal sealed class RecordStore
         Entity[] records = await _sdkProxy
             .RetrieveMultipleAsync(query, requestSettings)
             .ConfigureAwait(false);
+
+        if (key.IsAlternateKey && records.Length > 1)
+        {
+            throw new MapperException(
+                $"Alternate key '{key}' matched {records.Length} records in table '{key.LogicalName}'."
+            );
+        }
 
         return records.FirstOrDefault();
     }

@@ -29,6 +29,10 @@ Added connection picking based on statistics
 Added async GetConnection
 Added connection leasing; requests on one client are serialized for caller-id safety
 Random fixes and stability improvements</PackageReleaseNotes>
+	 <IncludeSymbols>true</IncludeSymbols>
+	 <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	 <PublishRepositoryUrl>true</PublishRepositoryUrl>
+	 <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -42,11 +46,11 @@ Random fixes and stability improvements</PackageReleaseNotes>
   <ItemGroup>
     <PackageReference Include="Ardalis.GuardClauses" Version="5.0.0" />
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.27" />
-    <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client.Dynamics" Version="1.2.27" />
     <PackageReference Include="MimeMapping" Version="4.0.0" />
     <PackageReference Include="System.Linq.Async" Version="7.0.1" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.5" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.404" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

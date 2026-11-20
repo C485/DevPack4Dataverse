@@ -53,9 +53,19 @@ Connections are created in the background. Wait for the required pool size befor
 dataverseDevPack.WaitForConnections(4);
 await dataverseDevPack.WaitForConnectionsAsync(4, cancellationToken);
 ```
-The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if fewer creators are configured than requested or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
+The synchronous method waits until the count is reached; the asynchronous overload supports cancellation. Both return immediately when the count is already available. They throw `InvalidOperationException` if the configured creators cannot produce the requested number or if the remaining creators fail. A zero count returns immediately. The same methods are available directly on `dataverseDevPack.SdkProxy`.
 
-A connection handles one request at a time. The Dataverse caller id is a client-wide setting, so impersonated and ordinary requests cannot safely share a client; create more connections when you need parallel work. Dispose `DataverseDevPack` (or `SdkProxy`) to stop the background creator and close the clients.
+A connection handles one request at a time. The Dataverse caller id is a client-wide setting, so impersonated and ordinary requests cannot safely share a client. Create more connections when you need parallel work. Each creator can create several connections from one authenticated client:
+
+```C#
+var creator = new ClientSecretConnectionCreator(
+    "https://contoso.crm.dynamics.com",
+    appId,
+    secret,
+    connectionCount: 4);
+```
+
+The creator authenticates once, checks the first connection with `WhoAmI`, then clones the client. Each clone is a separate `ServiceClient`, so it can run its own request in parallel. `connectionCount` defaults to 1. Cloning requires an OAuth connection; on-premises AD connections cannot be cloned. Dispose `DataverseDevPack` (or `SdkProxy`) to stop the background creator and close the clients.
 
 ### ExecuteMultiple
 Gives the ability to quickly call the Dataverse endpoint with optimized packs of requests. Multiple connections are used to increase throughput and avoid request-per-minute limits. In the example below you can build an unlimited number of requests that are later sent to Dataverse in packs.
@@ -82,13 +92,13 @@ Gives the ability to quickly call the Dataverse endpoint with optimized packs of
 ```
 
 Production notes:
-- Requests are split into chunks of `RequestSize`; it must be greater than zero and is capped at 1000. A Dataverse deployment can allow a smaller batch.
+- Requests are split into chunks of `RequestSize`; it must be greater than zero and is capped at 1000. When a deployment allows a smaller batch, the fault's `MaxBatchSize` is used to split and resend the chunk automatically.
 - `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads. A request that fails at the batch/transport level, or that returns no response, is absent from `Results`; use `ErrorReport` for failures. `RequestIndex` on an item is relative to its own chunk.
-- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and runs chunks sequentially.
-- Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass.
-- `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive.
-- The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts.
-- Cancellation returns the partial result with `Cancelled = true` instead of throwing.
+- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and throws `ExecuteMultipleException`. Its `Result` property holds the responses collected before the fault and `Fault` holds the failed item, so the caller can resume instead of repeating successful work.
+- Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass. Per-message impersonation is rejected because Dataverse applies one caller id to the whole batch.
+- `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive. A throwing callback is logged and does not abort the run.
+- The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts. Nested `ExecuteMultipleRequest`/`ExecuteTransactionRequest` items are rejected.
+- Cancellation returns the partial result with `Cancelled = true` instead of throwing. The token also cancels the wait for a free connection and the request gate.
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
 #### Adaptive execution
@@ -215,11 +225,14 @@ Every lookup mapping has its own options:
 Mapper behaviour:
 - `PreSave` runs before change detection.
 - `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
-- Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness.
+- Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness. The primary key attribute is read from table metadata, so activity tables such as `email` and `task` use `activityid`.
+- A blank alternate key is rejected before any read; an alternate key that matches more than one record throws `MapperException` instead of picking one.
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload.
 - When impersonating, set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available. On some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
-- Only changed attributes are sent on update; unchanged records are skipped.
+- Only changed attributes are sent on update; unchanged records are skipped. For an alternate-key upsert, key columns are removed from the body so the key value always wins.
+- `LookupMappingOptions` is copied at `Build`; later changes to the options object do not affect a built mapper.
 - Validation errors are collected in `MappingResult.Errors`. When validation is enabled, saved records are read fresh from Dataverse, bypassing cache, using only the configured validation fields. Multiple saved records are read in batches.
+- `MappingRunOptions.ValidateAfterSave = false` also suppresses wrapper validation for that run.
 - POCO targets need an `IModelEntityConverter<TModel>` through `WithConverter` when they must be saved or validated.
 
 `MapperWrapper` is the global mapper container. It owns shared cache, lock, and wrapper-level validation:
@@ -251,7 +264,7 @@ MapperWrapper redisWrapper = new(
     new RedisEntityCache(redis),
     new RedisEntityLock(redis));
 ```
-Redis remains an optional project and is not referenced by the core project. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) so the lock does not expire just because the acquisition wait was long. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
+Redis remains an optional project and ships as the `DevPack4Dataverse.Mapper.Redis` package. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) and renews it while the handle is alive, so a long save keeps mutual exclusion. Release failures are ignored because the TTL cleans up. Use a unique key prefix per environment when several environments share one Redis. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
@@ -282,7 +295,11 @@ Choice label metadata is cached for five minutes per table and column. Recreate 
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint.
 
-`SdkProxy.ApplyProcessWideOptimizations()` is an opt-in static method for the legacy process-wide HTTP and thread-pool tuning. The library does not call it; call it once at host startup if you want those settings.
+`RetrieveMultiple` and `RetrieveMultipleAsync` page through all rows when the query has no `PageInfo`. If the caller supplies `PageInfo`, exactly that page is returned and the caller's paging values are left unchanged. Add an `Orders` entry for stable paging; without one, Dataverse can return the same row on two pages or skip a row.
+
+`GetConnection`, `GetConnectionAsync` and `ExecuteAsync<T>` accept a `CancellationToken`, so a caller waiting for a free connection can stop.
+
+`SdkProxy.ApplyProcessWideOptimizations()` is an opt-in static method for the legacy process-wide HTTP and thread-pool tuning. The library does not call it; call it once at host startup if you want those settings. On .NET 8 and later only the thread-pool part applies.
 
 ### CreateLinqExpressionBuilder
 Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK.
@@ -302,14 +319,16 @@ if (builder.ExpressionsAdded > 0)
 
 Production notes:
 - Builders are mutable and **not thread-safe**; create one builder per query and use it from a single thread.
+- `AddAnd` and `AddOr` combine the new expression with everything added before it, left to right: `(existing) OR (new)`. To express `tenant AND (a OR b)`, build `a OR b` in a separate builder and pass it to `AddAnd`.
 - Check `ExpressionsAdded > 0` before using `Result`; an empty builder throws `InvalidOperationException`. If there are no conditions, skip the `Where` call to return unfiltered data.
 - Top-level `AddAnd(p => true)` and `AddOr(p => false)` are boolean identities and are ignored. `AddAnd(p => false)` and `AddOr(p => true)` throw `ArgumentException` because the Dataverse LINQ provider cannot translate a generic always-false/always-true filter.
 - The Dataverse LINQ provider supports a limited set of expression shapes. The builder combines expression trees but does not validate them; unsupported expressions fail during query translation.
+- The 500 limit counts builder expressions. A single expression with many `&&`/`||` conditions can still exceed the Dataverse limit of 500 conditions and links.
 - Adding an empty builder, a builder to itself, or a builder whose `Result` is null throws an exception.
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 274 tests (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 294 tests (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
 - A failed connection pool fails fast instead of looping forever when every connection creator has errored.
@@ -333,11 +352,21 @@ This pass addressed the findings below and validated the library against a live 
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the cache TTL expires; `ForceRefresh` still reloads.
 - Redis preload writes run with bounded parallelism; reference parsing avoids `string.Split` and DTO lists are pre-sized.
 - `SdkProxy` does not change process-wide `ThreadPool` and `ServicePointManager` settings by default; `SdkProxy.ApplyProcessWideOptimizations()` is the explicit opt-in.
-- Entry/exit logging is limited to batch and creation boundaries; per-record mapper and field-helper paths no longer allocate the logger guard and stopwatch.
+- Batch boundaries log success, failure and real elapsed time through `OperationLogger`; the unused `EntryExitLogger` helper was removed.
 - Mapper per-record collections are reduced: lazy error lists, a single required-column pass, shared loaded-column sets, and no per-record LINQ in the cache and field paths.
 - The in-memory cache reuses its completed read task instead of allocating a `Task` per hit.
 - Entity keys normalize names at construction; key building uses a sized `StringBuilder` and an array sort instead of LINQ. `FieldDrill` path trimming and cache clearing use plain loops, and an alternate-key two-pair overload avoids the `params` array.
 - Removed the double statistics entry for sync `ExecuteMultiple` and two dead project lines.
+
+### Hardening pass
+- Mapper reads the primary id attribute from metadata (activity tables now work); blank alternate keys and multi-match lookups throw; alternate-key upserts remove key columns from the body; lookup options are copied at `Build`.
+- A connection is always exclusive. `maximumConcurrentlyUsage` is gone; one creator can produce several cloned connections with `connectionCount`, so the pool gets real parallel clients instead of extra permits on one client.
+- `ExecuteMultiple` splits a chunk when the deployment returns `MaxBatchSize`, preserves partial results in `ExecuteMultipleException`, rejects nested batches and per-message impersonation, and ignores throwing progress callbacks.
+- Cancellation reaches the connection wait and call gate; `Dispose` waits for active leases before closing clients.
+- `RetrieveMultiple` respects caller `PageInfo`; connection strings parse `RequireNewInstance` with spaces; `Test` is serialized with caller-id changes.
+- `ConnectionLease` construction and `GetOrganizationServiceContext` are internal; use the proxy methods instead of running an ungated LINQ context on a pooled client.
+- Redis cache preserves date-only values, null attributes and formatted values; the lock renews its TTL and ignores release failures; zero TTL means no caching.
+- Statistics total usage accumulates milliseconds instead of whole seconds.
 
 ### Live validation
 Validated on a live Dataverse environment with fake data on a test table that has choice, boolean, money, file, image and self-lookup columns:

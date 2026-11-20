@@ -50,4 +50,25 @@ public class RedisEntityCacheSerializerTests
         Assert.Equal("A-1", restored.Record.KeyAttributes["accountnumber"]);
         Assert.Contains("name", restored.LoadedColumns);
     }
+
+    [Fact]
+    public void RoundTrip_PreservesDateOnlyNullAndFormattedValues()
+    {
+        Guid id = Guid.NewGuid();
+        DateTime dateOnly = new(2025, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        Entity record = new("account", id) { ["birthdate"] = dateOnly };
+        record["name"] = null;
+        record.FormattedValues["statecode"] = "Active";
+        CachedEntity cached = new(record, new[] { "birthdate", "name" });
+
+        string json = RedisEntityCache.Serialize(cached);
+        CachedEntity restored = RedisEntityCache.Deserialize(json)!;
+
+        DateTime restoredDate = restored.Record.GetAttributeValue<DateTime>("birthdate");
+        Assert.Equal(dateOnly, restoredDate);
+        Assert.Equal(DateTimeKind.Unspecified, restoredDate.Kind);
+        Assert.True(restored.Record.Contains("name"));
+        Assert.Null(restored.Record["name"]);
+        Assert.Equal("Active", restored.Record.FormattedValues["statecode"]);
+    }
 }

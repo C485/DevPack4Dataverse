@@ -16,7 +16,6 @@ limitations under the License.
 
 using System.Collections.Concurrent;
 using Ardalis.GuardClauses;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -36,7 +35,6 @@ public sealed class OptionSetFieldTypeMethods
 
     public OptionSetFieldTypeMethods(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
 
         Guard.Against.Null(logger);
 
@@ -286,10 +284,15 @@ public sealed class OptionSetFieldTypeMethods
             };
         }
 
-        _metadataCache[cacheKey] = new MetadataCacheEntry(
-            metadata,
-            DateTime.UtcNow.Add(MetadataCacheTtl)
-        );
+        bool canCache = metadataInfo?.AttributeMetadata != null;
+        if (canCache)
+        {
+            _metadataCache[cacheKey] = new MetadataCacheEntry(
+                metadata,
+                DateTime.UtcNow.Add(MetadataCacheTtl)
+            );
+        }
+
         return metadata;
     }
 
@@ -345,7 +348,13 @@ public sealed class OptionSetFieldTypeMethods
             }
         }
 
-        return null;
+        // Dataverse falls back to the base-language label when the requested language is absent.
+        if (label.UserLocalizedLabel != null)
+        {
+            return label.UserLocalizedLabel;
+        }
+
+        return label.LocalizedLabels.FirstOrDefault();
     }
 
     private sealed class MetadataKeyComparer

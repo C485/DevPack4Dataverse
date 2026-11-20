@@ -22,6 +22,28 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public void EntityKey_AlternateReferenceValues_DoNotCollide()
+    {
+        EntityReference first = new("account");
+        first.KeyAttributes["accountnumber"] = "A-1";
+        EntityReference second = new("account");
+        second.KeyAttributes["accountnumber"] = "A-2";
+
+        EntityKey firstKey = EntityKey.ByAlternateKey(
+            "contact",
+            "parentcustomerid",
+            first
+        );
+        EntityKey secondKey = EntityKey.ByAlternateKey(
+            "contact",
+            "parentcustomerid",
+            second
+        );
+
+        Assert.NotEqual(firstKey, secondKey);
+    }
+
+    [Fact]
     public void EntityKey_TwoPairAlternateKeyOverload()
     {
         EntityKey key = EntityKey.ByAlternateKey(
@@ -93,6 +115,42 @@ public class MapperLookupTests
                     && Equals(condition.Values[0], id)
             );
             Assert.Null(captured.TopCount);
+        }
+    }
+
+    [Fact]
+    public async Task AlternateKeyLookup_WithMultipleMatches_Throws()
+    {
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", Guid.NewGuid()) { ["accountnumber"] = "A-1" },
+                new Entity("account", Guid.NewGuid()) { ["accountnumber"] = "A-1" }
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+        var options = new LookupMappingOptions();
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("multi-match")
+                .MapLookup(
+                    target => target.Account,
+                    context =>
+                        EntityKey.ByAlternateKey(
+                            "account",
+                            "accountnumber",
+                            context.Source.AccountNumber
+                        ),
+                    options
+                )
+                .Build();
+
+            await Assert.ThrowsAsync<MapperException>(
+                () => mapper.ExecuteAsync(new LookupSource { AccountNumber = "A-1" })
+            );
         }
     }
 
@@ -288,9 +346,17 @@ public class MapperLookupTests
 
             await mapper.ExecuteAsync(new LookupSource { AccountId = id });
 
-            options.Fields.Clear();
-            options.Fields.Add("email");
-            await mapper.ExecuteAsync(new LookupSource { AccountId = id });
+            LookupMappingOptions secondOptions = new();
+            secondOptions.Fields.Add("email");
+            var secondMapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup-email")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    secondOptions
+                )
+                .Build();
+            await secondMapper.ExecuteAsync(new LookupSource { AccountId = id });
 
             Assert.Equal(2, columnSets.Count);
             Assert.DoesNotContain("name", columnSets[1].Columns);

@@ -185,6 +185,8 @@ internal sealed class LookupResolver
             foreach (KeyValuePair<string, object> pair in key.AlternateKey)
             {
                 entity.KeyAttributes[pair.Key] = pair.Value;
+                // Dataverse uses the body value on create when the key column is also in Attributes.
+                entity.Attributes.Remove(pair.Key);
             }
 
             UpsertResponse response = (await _sdkProxy

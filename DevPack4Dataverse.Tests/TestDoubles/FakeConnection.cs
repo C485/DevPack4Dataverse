@@ -1,6 +1,7 @@
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Interfaces;
@@ -16,6 +17,7 @@ public sealed class FakeConnection : IConnection
     public ulong Weight { get; set; }
     public RequestSettings? LastRequestSettings { get; private set; }
     public Func<string, Guid, ColumnSet, Entity>? RetrieveHandler { get; set; }
+    public Func<string, string>? PrimaryKeyHandler { get; set; }
     public Func<OrganizationRequest, OrganizationResponse>? ExecuteHandler { get; set; }
     public Func<OrganizationRequest, Task<OrganizationResponse>>? AsyncExecuteHandler { get; set; }
     public Func<Entity, Guid>? CreateRecordHandler { get; set; }
@@ -69,6 +71,12 @@ public sealed class FakeConnection : IConnection
         where T : OrganizationResponse
     {
         LastRequestSettings = requestSettings;
+        T? metadataResponse = TryMetadataResponse<T>(request);
+        if (metadataResponse != null)
+        {
+            return metadataResponse;
+        }
+
         return (T)(ExecuteHandler?.Invoke(request) ?? throw new NotImplementedException());
     }
 
@@ -78,18 +86,51 @@ public sealed class FakeConnection : IConnection
 
     public Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings? requestSettings = null) => throw new NotImplementedException();
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-    public async Task<T?> ExecuteAsync<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
+    public async Task<T?> ExecuteAsync<T>(
+        OrganizationRequest request,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default)
         where T : OrganizationResponse
     {
         LastRequestSettings = requestSettings;
+        T? metadataResponse = TryMetadataResponse<T>(request);
+        if (metadataResponse != null)
+        {
+            return metadataResponse;
+        }
+
         if (AsyncExecuteHandler != null)
         {
             return (T)await AsyncExecuteHandler(request).ConfigureAwait(false);
         }
 
         return Execute<T>(request, requestSettings);
+    }
+
+    private T? TryMetadataResponse<T>(OrganizationRequest request)
+        where T : OrganizationResponse
+    {
+        if (request is not RetrieveEntityRequest retrieveEntityRequest)
+        {
+            return null;
+        }
+
+        string primaryIdAttribute =
+            PrimaryKeyHandler?.Invoke(retrieveEntityRequest.LogicalName)
+            ?? retrieveEntityRequest.LogicalName + "id";
+        EntityMetadata metadata = new()
+        {
+            LogicalName = retrieveEntityRequest.LogicalName
+        };
+        typeof(EntityMetadata)
+            .GetProperty(nameof(EntityMetadata.PrimaryIdAttribute))!
+            .SetValue(metadata, primaryIdAttribute);
+        RetrieveEntityResponse response = new();
+        response.Results["EntityMetadata"] = metadata;
+        return response as T;
     }
 
     public Entity RefreshRecord(Entity record, RequestSettings? requestSettings = null) =>

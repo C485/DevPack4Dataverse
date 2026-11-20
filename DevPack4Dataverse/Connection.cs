@@ -35,15 +35,12 @@ public sealed class Connection : IConnection
     private readonly SemaphoreSlim _callGate;
     private readonly Statistics _usageStatistics = new();
 
-    public Connection(ServiceClient connection, ILogger logger, int maximumConcurrentlyUsage = 1)
+    public Connection(ServiceClient connection, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
-
-        Guard.Against.NegativeOrZero(maximumConcurrentlyUsage);
 
         _logger = Guard.Against.Null(logger);
 
-        _semaphoreSlim = new SemaphoreSlim(maximumConcurrentlyUsage, maximumConcurrentlyUsage);
+        _semaphoreSlim = new SemaphoreSlim(1, 1);
         // shortcut: CallerId is client-wide, so calls on one client are serialized.
         // Use more connections when parallel work is needed.
         _callGate = new SemaphoreSlim(1, 1);
@@ -176,13 +173,16 @@ public sealed class Connection : IConnection
         return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings)!;
     }
 
-    public async Task<T?> ExecuteAsync<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
-        where T : OrganizationResponse
+    public async Task<T?> ExecuteAsync<T>(
+        OrganizationRequest request,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    ) where T : OrganizationResponse
     {
 
         Guard.Against.Null(request);
 
-        await _callGate.WaitAsync().ConfigureAwait(false);
+        await _callGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -207,7 +207,8 @@ public sealed class Connection : IConnection
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     )
     {
 
@@ -215,7 +216,8 @@ public sealed class Connection : IConnection
 
         return (await ExecuteAsync<ExecuteMultipleResponse>(
             executeMultipleRequestBuilder.RequestWithResults,
-            requestSettings
+            requestSettings,
+            cancellationToken
         ).ConfigureAwait(false))!;
     }
 
@@ -279,6 +281,16 @@ public sealed class Connection : IConnection
 
     public void ReleaseLock()
     {
+        _semaphoreSlim.Release();
+    }
+
+    /// <summary>
+    /// Waits until every permit is free, then releases them again. Used during disposal so a
+    /// client is not closed while a request is still using it.
+    /// </summary>
+    public async Task WaitForIdleAsync(CancellationToken cancellationToken = default)
+    {
+        await _semaphoreSlim.WaitAsync(cancellationToken).ConfigureAwait(false);
         _semaphoreSlim.Release();
     }
 
@@ -348,33 +360,37 @@ public sealed class Connection : IConnection
 
         IEnumerable<Entity> InnerRetrieveMultiple()
         {
-            queryExpression.PageInfo = new PagingInfo
+            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
+            try
             {
-                Count = 5000,
-                PageNumber = 1,
-                PagingCookie = null
-            };
+                while (true)
+                {
+                    RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                        new RetrieveMultipleRequest { Query = queryExpression },
+                        requestSettings
+                    )!;
+                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-            while (true)
+                    foreach (Entity record in retrieveMultipleResult.Entities)
+                    {
+                        yield return record;
+                    }
+
+                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
+                    {
+                        break;
+                    }
+
+                    autoPaging.PageNumber++;
+                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                }
+            }
+            finally
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
-                    new RetrieveMultipleRequest { Query = queryExpression },
-                    requestSettings
-                )!;
-                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                foreach (Entity record in retrieveMultipleResult.Entities)
+                if (autoPaging != null)
                 {
-                    yield return record;
+                    queryExpression.PageInfo = null;
                 }
-
-                if (!retrieveMultipleResult.MoreRecords)
-                {
-                    break;
-                }
-
-                queryExpression.PageInfo.PageNumber++;
-                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -389,33 +405,37 @@ public sealed class Connection : IConnection
 
         IEnumerable<T> InnerRetrieveMultiple()
         {
-            queryExpression.PageInfo = new PagingInfo
+            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
+            try
             {
-                Count = 5000,
-                PageNumber = 1,
-                PagingCookie = null
-            };
+                while (true)
+                {
+                    RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                        new RetrieveMultipleRequest { Query = queryExpression },
+                        requestSettings
+                    )!;
+                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-            while (true)
+                    foreach (Entity entity in retrieveMultipleResult.Entities)
+                    {
+                        yield return entity.ToEntity<T>();
+                    }
+
+                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
+                    {
+                        break;
+                    }
+
+                    autoPaging.PageNumber++;
+                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                }
+            }
+            finally
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
-                    new RetrieveMultipleRequest { Query = queryExpression },
-                    requestSettings
-                )!;
-                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                foreach (Entity entity in retrieveMultipleResult.Entities)
+                if (autoPaging != null)
                 {
-                    yield return entity.ToEntity<T>();
+                    queryExpression.PageInfo = null;
                 }
-
-                if (!retrieveMultipleResult.MoreRecords)
-                {
-                    break;
-                }
-
-                queryExpression.PageInfo.PageNumber++;
-                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -432,33 +452,37 @@ public sealed class Connection : IConnection
 
         async IAsyncEnumerable<Entity> InnerRetrieveMultiple()
         {
-            queryExpression.PageInfo = new PagingInfo
+            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
+            try
             {
-                Count = 5000,
-                PageNumber = 1,
-                PagingCookie = null
-            };
+                while (true)
+                {
+                    RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
+                        new RetrieveMultipleRequest { Query = queryExpression },
+                        requestSettings
+                    ).ConfigureAwait(false))!;
+                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-            while (true)
+                    foreach (Entity record in retrieveMultipleResult.Entities)
+                    {
+                        yield return record;
+                    }
+
+                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
+                    {
+                        break;
+                    }
+
+                    autoPaging.PageNumber++;
+                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                }
+            }
+            finally
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
-                    new RetrieveMultipleRequest { Query = queryExpression },
-                    requestSettings
-                ).ConfigureAwait(false))!;
-                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                foreach (Entity record in retrieveMultipleResult.Entities)
+                if (autoPaging != null)
                 {
-                    yield return record;
+                    queryExpression.PageInfo = null;
                 }
-
-                if (!retrieveMultipleResult.MoreRecords)
-                {
-                    break;
-                }
-
-                queryExpression.PageInfo.PageNumber++;
-                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -475,66 +499,103 @@ public sealed class Connection : IConnection
 
         async IAsyncEnumerable<T> InnerRetrieveMultiple()
         {
-            queryExpression.PageInfo = new PagingInfo
+            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
+            try
             {
-                Count = 5000,
-                PageNumber = 1,
-                PagingCookie = null
-            };
+                while (true)
+                {
+                    RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
+                        new RetrieveMultipleRequest { Query = queryExpression },
+                        requestSettings
+                    ).ConfigureAwait(false))!;
+                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
-            while (true)
+                    foreach (Entity entity in retrieveMultipleResult.Entities)
+                    {
+                        yield return entity.ToEntity<T>();
+                    }
+
+                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
+                    {
+                        break;
+                    }
+
+                    autoPaging.PageNumber++;
+                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                }
+            }
+            finally
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
-                    new RetrieveMultipleRequest { Query = queryExpression },
-                    requestSettings
-                ).ConfigureAwait(false))!;
-                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                foreach (Entity entity in retrieveMultipleResult.Entities)
+                if (autoPaging != null)
                 {
-                    yield return entity.ToEntity<T>();
+                    queryExpression.PageInfo = null;
                 }
-
-                if (!retrieveMultipleResult.MoreRecords)
-                {
-                    break;
-                }
-
-                queryExpression.PageInfo.PageNumber++;
-                queryExpression.PageInfo.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
+    }
+
+    private static PagingInfo? EnsureAutoPaging(QueryExpression queryExpression)
+    {
+        if (queryExpression.PageInfo != null)
+        {
+            return null;
+        }
+
+        PagingInfo paging = new()
+        {
+            Count = 5000,
+            PageNumber = 1,
+            PagingCookie = null
+        };
+        queryExpression.PageInfo = paging;
+        return paging;
     }
 
     public bool Test()
     {
 
-        Statistic statisticEntry = _usageStatistics.StartNew();
+        _callGate.Wait();
         try
         {
-            WhoAmIResponse response = (WhoAmIResponse)PureServiceClient.Execute(new WhoAmIRequest());
+            Statistic statisticEntry = _usageStatistics.StartNew();
+            try
+            {
+                WhoAmIResponse response = (WhoAmIResponse)PureServiceClient.Execute(new WhoAmIRequest());
 
-            return response != null && response.UserId != Guid.Empty;
+                return response != null && response.UserId != Guid.Empty;
+            }
+            finally
+            {
+                _usageStatistics.Finish(statisticEntry);
+            }
         }
         finally
         {
-            _usageStatistics.Finish(statisticEntry);
+            _callGate.Release();
         }
     }
 
     public async Task<bool> TestAsync()
     {
 
-        Statistic statisticEntry = _usageStatistics.StartNew();
+        await _callGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest()).ConfigureAwait(false);
+            Statistic statisticEntry = _usageStatistics.StartNew();
+            try
+            {
+                WhoAmIResponse response = (WhoAmIResponse)await PureServiceClient.ExecuteAsync(new WhoAmIRequest()).ConfigureAwait(false);
 
-            return response != null && response.UserId != Guid.Empty;
+                return response != null && response.UserId != Guid.Empty;
+            }
+            finally
+            {
+                _usageStatistics.Finish(statisticEntry);
+            }
         }
         finally
         {
-            _usageStatistics.Finish(statisticEntry);
+            _callGate.Release();
         }
     }
 

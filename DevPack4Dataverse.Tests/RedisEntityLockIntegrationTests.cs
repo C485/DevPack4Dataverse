@@ -53,7 +53,7 @@ public sealed class RedisEntityLockIntegrationTests
     }
 
     [RedisFact]
-    public async Task LockExpires_AfterTimeToLive()
+    public async Task LockIsRenewedWhileHeld_AndRemovedOnDispose()
     {
         using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();
         string prefix = RedisIntegrationTest.NewPrefix();
@@ -70,18 +70,14 @@ public sealed class RedisEntityLockIntegrationTests
             Assert.True(ttl.HasValue && ttl.Value > TimeSpan.Zero);
 
             await Task.Delay(1500);
-            Assert.False(await database.KeyExistsAsync(redisKey));
+            Assert.True(await database.KeyExistsAsync(redisKey));
         }
         finally
         {
             handle.Dispose();
         }
 
-        using IEntityLockHandle reacquired = await entityLock.AcquireAsync(
-            key,
-            TimeSpan.FromSeconds(1)
-        );
-        Assert.NotNull(reacquired);
+        Assert.False(await database.KeyExistsAsync(redisKey));
     }
 
     [RedisFact]

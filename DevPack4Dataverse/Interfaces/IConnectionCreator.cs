@@ -37,19 +37,19 @@ public interface IConnectionCreator
     bool IsValid { get; }
 
     /// <summary>
+    /// Number of connections this creator produces in one <see cref="Create"/> call.
+    /// </summary>
+    int ConnectionCount { get; }
+
+    /// <summary>
     ///  <para>
-    ///   In this method class which implements this interface should create
-    ///   <see
-    ///    cref="Connection" />
-    ///   object.
+    ///   Creates one or more <see cref="Connection"/> objects. The first connection wraps the
+    ///   validated client; the rest are clones of it.
     ///  </para>
     ///  <para>
-    ///   Class should also check if connection is active, while adding connection
-    ///   <see
-    ///    cref="WhoAmIRequest" />
-    ///   is executed to finally confirm that connection was established.
+    ///   The first connection is checked with <see cref="WhoAmIRequest"/> before any clone is made.
     ///  </para>
     /// </summary>
-    /// <returns><see cref="IConnection" /> as instance of <see cref="Connection" /></returns>
-    IConnection Create(ILogger logger);
+    /// <returns>Connections created from the validated client.</returns>
+    IReadOnlyList<IConnection> Create(ILogger logger);
 }

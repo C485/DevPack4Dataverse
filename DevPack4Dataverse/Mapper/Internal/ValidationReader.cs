@@ -20,7 +20,10 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse.Mapper.Internal;
 
-internal sealed class ValidationReader(SdkProxy sdkProxy)
+internal sealed class ValidationReader(
+    SdkProxy sdkProxy,
+    PrimaryKeyAttributeProvider primaryKeys
+)
 {
     private const int MaxIdsPerQuery = 1000;
 
@@ -153,6 +156,9 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray() ?? Array.Empty<string>();
             Guid[] ids = group.Select(p => p.Reference.Id).Distinct().ToArray();
+            string primaryIdAttribute = await primaryKeys
+                .GetAsync(group.Key, cancellationToken)
+                .ConfigureAwait(false);
             for (int offset = 0; offset < ids.Length; offset += MaxIdsPerQuery)
             {
                 Guid[] chunk = ids.Skip(offset).Take(MaxIdsPerQuery).ToArray();
@@ -162,7 +168,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
                     ColumnSet = columns.Length == 0 ? new ColumnSet(false) : new ColumnSet(columns)
                 };
                 query.Criteria.AddCondition(
-                    group.Key.ToLowerInvariant() + "id",
+                    primaryIdAttribute,
                     ConditionOperator.In,
                     chunk.Cast<object>().ToArray()
                 );

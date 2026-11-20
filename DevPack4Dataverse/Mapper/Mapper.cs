@@ -221,6 +221,13 @@ public sealed class Mapper<TSource, TTarget> : IMapper
                 .ConfigureAwait(false);
         }
 
+        if (key.IsEmpty)
+        {
+            throw new MapperException(
+                $"The mapping key for table '{entity.LogicalName}' is empty. Provide an id or a non-empty alternate key."
+            );
+        }
+
         using IEntityLockHandle lockHandle = await _entityLock
             .AcquireAsync(key, state.LockTimeout, cancellationToken)
             .ConfigureAwait(false);
@@ -285,6 +292,16 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         );
     }
 
+    private static void ApplyAlternateKey(Entity entity, EntityKey key)
+    {
+        foreach (KeyValuePair<string, object> pair in key.AlternateKey)
+        {
+            entity.KeyAttributes[pair.Key] = pair.Value;
+            // Dataverse uses the body value on create when the key column is also in Attributes.
+            entity.Attributes.Remove(pair.Key);
+        }
+    }
+
     private async Task<MappedRecord<TTarget>> CreateAsync(
         MappingContext<TSource, TTarget> context,
         Entity entity,
@@ -296,10 +313,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         bool created = true;
         if (key != null && key.IsAlternateKey)
         {
-            foreach (KeyValuePair<string, object> pair in key.AlternateKey)
-            {
-                entity.KeyAttributes[pair.Key] = pair.Value;
-            }
+            ApplyAlternateKey(entity, key);
 
             UpsertResponse response = (await _sdkProxy
                 .ExecuteAsync<UpsertResponse>(

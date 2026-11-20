@@ -20,7 +20,10 @@ using Microsoft.Xrm.Sdk;
 namespace DevPack4Dataverse.Interfaces;
 
 /// <summary>
-/// Combines predicate expressions into a single predicate with AND/OR blocks.
+/// Combines predicate expressions into a single predicate. <c>AddAnd</c> and <c>AddOr</c>
+/// combine the new expression with the whole accumulated predicate, left to right.
+/// To build <c>tenant AND (a OR b)</c>, put <c>a</c> and <c>b</c> in a separate builder and
+/// pass that builder to <c>AddAnd</c>.
 /// </summary>
 /// <remarks>
 /// Builders are mutable and not thread-safe. Create one builder per query and use it from a single thread.
@@ -84,6 +87,9 @@ public interface ILinqExpressionBuilder<U> where U : Entity, new()
     /// </param>
     /// <remarks>
     /// A top-level constant <c>false</c> is the OR identity and is ignored.
+    /// The result is <c>(everything added before) OR (this expression)</c>. It does not
+    /// start a nested block; use a separate builder with <see cref="AddAnd(ILinqExpressionBuilder{U})"/>
+    /// for <c>a AND (b OR c)</c>.
     /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="expressionToAdd"/> is null or its <see cref="Result"/> is null.
@@ -100,6 +106,9 @@ public interface ILinqExpressionBuilder<U> where U : Entity, new()
     /// <param name="expressionToAdd">Expression to add. Cannot be null.</param>
     /// <remarks>
     /// A top-level constant <c>false</c> is the OR identity and is ignored.
+    /// The result is <c>(everything added before) OR (this expression)</c>. It does not
+    /// start a nested block; use a separate builder with <see cref="AddAnd(ILinqExpressionBuilder{U})"/>
+    /// for <c>a AND (b OR c)</c>.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="expressionToAdd"/> is null.</exception>
     /// <exception cref="ArgumentException">

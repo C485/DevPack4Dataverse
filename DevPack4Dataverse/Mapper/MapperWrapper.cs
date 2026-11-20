@@ -47,7 +47,10 @@ public sealed class MapperWrapper
         Options = options ?? new MapperWrapperOptions();
         Cache = cache ?? new InMemoryEntityCache();
         Lock = entityLock ?? new InMemoryEntityLock();
-        _validationReader = new ValidationReader(_sdkProxy);
+        _validationReader = new ValidationReader(
+            _sdkProxy,
+            new PrimaryKeyAttributeProvider(_sdkProxy)
+        );
     }
 
     public MapperWrapperOptions Options { get; }
@@ -129,7 +132,8 @@ public sealed class MapperWrapper
 
         List<MappingError> errors = new(result.Errors);
         if (
-            Options.ValidateAfterSave
+            runOptions?.ValidateAfterSave != false
+            && Options.ValidateAfterSave
             && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
         )
         {
@@ -174,7 +178,10 @@ public sealed class MapperWrapper
             results.Add(result);
             errors.AddRange(result.Errors);
 
-            if (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+            if (
+                execution.RunOptions?.ValidateAfterSave != false
+                && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+            )
             {
                 referencesToValidate.AddRange(result.SavedReferences);
             }

@@ -48,7 +48,6 @@ public sealed class ExecuteTransactionRequestBuilder
     /// </param>
     public ExecuteTransactionRequestBuilder(ILogger logger, bool returnResponses = true)
     {
-        using EntryExitLogger logGuard = new(logger);
         _requests = new();
         _logger = Guard.Against.Null(logger);
         _returnResponses = returnResponses;
@@ -119,6 +118,21 @@ public sealed class ExecuteTransactionRequestBuilder
             throw new ArgumentException(
                 "An ExecuteTransactionRequest cannot contain ExecuteMultipleRequest or ExecuteTransactionRequest.",
                 nameof(request)
+            );
+        }
+
+        if (requestSettings?.HasImpersonation == true)
+        {
+            throw new ArgumentException(
+                "Per-request impersonation is not supported in a transaction. Set it on the execute request settings.",
+                nameof(requestSettings)
+            );
+        }
+
+        if (_requests.Count >= 1000)
+        {
+            throw new InvalidOperationException(
+                "A transaction cannot contain more than 1,000 requests."
             );
         }
 

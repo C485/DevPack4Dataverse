@@ -26,6 +26,9 @@ public sealed class RedisEntityLock : IEntityLock
     private const string ReleaseScript =
         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+    private const string RenewScript =
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end";
+
     private readonly StackExchange.Redis.IDatabase _database;
     private readonly TimeSpan _lockTimeToLive;
     private readonly string _prefix;
@@ -36,6 +39,7 @@ public sealed class RedisEntityLock : IEntityLock
         TimeSpan? lockTimeToLive = null
     )
     {
+        // Use a unique prefix per environment when several environments share one Redis.
         if (connection == null)
         {
             throw new ArgumentNullException(nameof(connection));
@@ -76,18 +80,33 @@ public sealed class RedisEntityLock : IEntityLock
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (
-                await _database
+            bool acquired;
+            try
+            {
+                acquired = await _database
                     .StringSetAsync(
                         redisKey,
                         token,
                         _lockTimeToLive,
                         StackExchange.Redis.When.NotExists
                     )
-                    .ConfigureAwait(false)
-            )
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
             {
-                return new RedisLockHandle(_database, redisKey, token);
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new MapperLockException(
+                    $"Redis lock acquisition failed for {key}.",
+                    exception
+                );
+            }
+
+            if (acquired)
+            {
+                return new RedisLockHandle(_database, redisKey, token, _lockTimeToLive);
             }
 
             await Task.Delay(25, cancellationToken).ConfigureAwait(false);
@@ -96,13 +115,36 @@ public sealed class RedisEntityLock : IEntityLock
         throw new MapperLockException($"Could not acquire a Redis lock for {key} within {timeout}.");
     }
 
-    private sealed class RedisLockHandle(
-        StackExchange.Redis.IDatabase database,
-        StackExchange.Redis.RedisKey key,
-        string token
-    ) : IEntityLockHandle
+    private sealed class RedisLockHandle : IEntityLockHandle
     {
+        private readonly StackExchange.Redis.IDatabase _database;
+        private readonly StackExchange.Redis.RedisKey _key;
+        private readonly Timer _renewTimer;
+        private readonly long _timeToLiveMilliseconds;
+        private readonly string _token;
         private int _released;
+
+        public RedisLockHandle(
+            StackExchange.Redis.IDatabase database,
+            StackExchange.Redis.RedisKey key,
+            string token,
+            TimeSpan timeToLive
+        )
+        {
+            _database = database;
+            _key = key;
+            _token = token;
+            _timeToLiveMilliseconds = Math.Max(1, (long)timeToLive.TotalMilliseconds);
+            double renewMilliseconds = Math.Max(50, _timeToLiveMilliseconds / 3.0);
+            RenewalState state = new(this);
+            _renewTimer = new Timer(
+                static renewalState => Renew(renewalState),
+                state,
+                TimeSpan.FromMilliseconds(renewMilliseconds),
+                TimeSpan.FromMilliseconds(renewMilliseconds)
+            );
+            state.Timer = _renewTimer;
+        }
 
         public void Dispose()
         {
@@ -111,11 +153,63 @@ public sealed class RedisEntityLock : IEntityLock
                 return;
             }
 
-            database.ScriptEvaluate(
-                ReleaseScript,
-                new[] { key },
-                new StackExchange.Redis.RedisValue[] { token }
-            );
+            _renewTimer.Dispose();
+            try
+            {
+                _database.ScriptEvaluate(
+                    ReleaseScript,
+                    new[] { _key },
+                    new StackExchange.Redis.RedisValue[] { _token }
+                );
+            }
+            catch (Exception)
+            {
+                // The lock expires on its own; a failed release must not mask a successful save.
+            }
+        }
+
+        private void Renew()
+        {
+            if (Volatile.Read(ref _released) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _database.ScriptEvaluate(
+                    RenewScript,
+                    new[] { _key },
+                    new StackExchange.Redis.RedisValue[]
+                    {
+                        _token,
+                        _timeToLiveMilliseconds
+                    }
+                );
+            }
+            catch (Exception)
+            {
+                // A failed renewal leaves the current TTL in place.
+            }
+        }
+
+        private static void Renew(object? state)
+        {
+            RenewalState renewal = (RenewalState)state!;
+            if (!renewal.Handle.TryGetTarget(out RedisLockHandle? handle))
+            {
+                // A leaked handle must not keep the lock alive forever.
+                renewal.Timer?.Dispose();
+                return;
+            }
+
+            handle.Renew();
+        }
+
+        private sealed class RenewalState(RedisLockHandle handle)
+        {
+            public WeakReference<RedisLockHandle> Handle { get; } = new(handle);
+            public Timer? Timer { get; set; }
         }
     }
 }

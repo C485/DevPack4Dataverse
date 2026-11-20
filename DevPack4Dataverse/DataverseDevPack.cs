@@ -21,7 +21,7 @@ using DevPack4Dataverse.FieldMethods;
 using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Mapper;
 using DevPack4Dataverse.Sequential;
-using DevPack4Dataverse.Utils;
+using Ardalis.GuardClauses;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
@@ -41,7 +41,7 @@ public sealed class DataverseDevPack : IDisposable
         params IConnectionCreator[] connectionCreators
     )
     {
-        using EntryExitLogger logGuard = new(logger);
+        Guard.Against.Null(logger);
         SdkProxy = new SdkProxy(logger, applyConnectionOptimalization, connectionCreators);
         ExecuteMultiple = new ExecuteMultipleLogic(SdkProxy, logger);
         FieldDrill = new FieldDrill(SdkProxy, logger);

@@ -138,6 +138,49 @@ public class MapperValidationTests
     }
 
     [Fact]
+    public async Task WrapperValidation_SkipsWhenRunOptionDisablesIt()
+    {
+        Guid id = Guid.NewGuid();
+        int validationReads = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ => id,
+            RetrieveMultipleHandler = _ =>
+            {
+                validationReads++;
+                return new[] { new Entity("account", id) { ["name"] = "Saved" } };
+            }
+        };
+        var wrapperOptions = new MapperWrapperOptions
+        {
+            ValidateAfterSave = true,
+            Validator = (entity, context) => new[] { "wrapper-error" }
+        };
+        wrapperOptions.ValidationFields.Add("name");
+        var (proxy, wrapper) = Create(fake, wrapperOptions);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders-skip")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            Assert.True(wrapper.Register("orders-skip", mapper));
+
+            MapperWrapperResult result = await wrapper.ExecuteAsync(
+                "orders-skip",
+                new OrderSource { Name = "One" },
+                new MappingRunOptions { ValidateAfterSave = false }
+            );
+
+            Assert.False(result.HasErrors);
+            Assert.Equal(0, validationReads);
+        }
+    }
+
+    [Fact]
     public async Task WrapperValidation_UsesPerEntityFieldSets()
     {
         Guid accountId = Guid.NewGuid();

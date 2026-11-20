@@ -47,7 +47,6 @@ public sealed class SequentialRequestBuilder
     /// <exception cref="ArgumentNullException">A dependency is null.</exception>
     public SequentialRequestBuilder(SdkProxy sdkProxy, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
         _sdkProxy = Guard.Against.Null(sdkProxy);
         _logger = Guard.Against.Null(logger);
     }
@@ -369,9 +368,11 @@ public sealed class SequentialRequestBuilder
     /// <remarks>
     /// Execution stops at the first exception and that exception propagates to the caller.
     /// </remarks>
-    public SequentialRequestContext Execute()
+    public SequentialRequestContext Execute() =>
+        OperationLogger.RunLogged(_logger, nameof(Execute), ExecuteCore);
+
+    private SequentialRequestContext ExecuteCore()
     {
-        using EntryExitLogger logGuard = new(_logger);
         SequentialStep[] steps = _steps.ToArray();
         EnsureHasSteps(steps);
 
@@ -405,11 +406,19 @@ public sealed class SequentialRequestBuilder
     /// <remarks>
     /// Execution stops at the first exception and that exception propagates to the caller.
     /// </remarks>
-    public async Task<SequentialRequestContext> ExecuteAsync(
+    public Task<SequentialRequestContext> ExecuteAsync(
         CancellationToken cancellationToken = default
+    ) =>
+        OperationLogger.RunLoggedAsync(
+            _logger,
+            nameof(ExecuteAsync),
+            () => ExecuteCoreAsync(cancellationToken)
+        );
+
+    private async Task<SequentialRequestContext> ExecuteCoreAsync(
+        CancellationToken cancellationToken
     )
     {
-        using EntryExitLogger logGuard = new(_logger);
         SequentialStep[] steps = _steps.ToArray();
         EnsureHasSteps(steps);
 

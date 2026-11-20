@@ -45,11 +45,15 @@ public interface IDataverseConnectionLayer
 
     Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings? requestSettings = null
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
     );
 
-    Task<T?> ExecuteAsync<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
-        where T : OrganizationResponse;
+    Task<T?> ExecuteAsync<T>(
+        OrganizationRequest request,
+        RequestSettings? requestSettings = null,
+        CancellationToken cancellationToken = default
+    ) where T : OrganizationResponse;
 
     Entity RefreshRecord(Entity record, RequestSettings? requestSettings = null);
 

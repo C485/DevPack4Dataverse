@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ServiceModel;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -194,12 +195,81 @@ public class ExecuteMultipleLogicTests
         {
             ExecuteMultipleRequestBuilder builder = BuilderWith("req");
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(
                 () => logic.ExecuteAsync(
                     builder,
                     new ExecuteMultipleRequestSimpleSettings { RequestSize = 1 }
                 )
             );
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SplitsBatchWhenServiceMaxBatchSizeIsLower()
+    {
+        List<int> batchSizes = new();
+        var (proxy, logic) = Create(request =>
+        {
+            ExecuteMultipleRequest executeMultiple = (ExecuteMultipleRequest)request;
+            batchSizes.Add(executeMultiple.Requests.Count);
+            if (executeMultiple.Requests.Count > 2)
+            {
+                OrganizationServiceFault detail = new();
+                detail.ErrorDetails["MaxBatchSize"] = 2;
+                throw new FaultException<OrganizationServiceFault>(detail);
+            }
+
+            return Response(
+                executeMultiple
+                    .Requests.Select((item, index) => Success(index, item.RequestName))
+                    .ToArray()
+            );
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("a", "b", "c", "d", "e");
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSimpleSettings
+                {
+                    RequestSize = 100,
+                    MaxDegreeOfParallelism = 1
+                }
+            );
+
+            Assert.Equal(5, result.Results.Count);
+            Assert.Equal(new[] { 5, 2, 2, 1 }, batchSizes);
+        }
+    }
+
+    [Fact]
+    public async Task SimpleExecuteAsync_FaultCarriesPartialResult()
+    {
+        int calls = 0;
+        var (proxy, logic) = Create(_ =>
+        {
+            calls++;
+            return calls == 1 ? Response(Success(0, "first")) : Response(Failure(0));
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("first", "second");
+
+            ExecuteMultipleException exception =
+                await Assert.ThrowsAsync<ExecuteMultipleException>(
+                    () =>
+                        logic.ExecuteAsync(
+                            builder,
+                            new ExecuteMultipleRequestSimpleSettings { RequestSize = 1 }
+                        )
+                );
+
+            ExecuteMultipleResponseItem first = exception.Result.Results.First();
+            Assert.Equal("first", ((MarkerResponse)first.Response).Marker);
+            Assert.NotNull(exception.Fault);
         }
     }
 
@@ -242,7 +312,7 @@ public class ExecuteMultipleLogicTests
         {
             ExecuteMultipleRequestBuilder builder = BuilderWith("first", "second");
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(
                 () =>
                     logic.ExecuteAsync(
                         builder,

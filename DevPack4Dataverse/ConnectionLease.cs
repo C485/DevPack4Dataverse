@@ -23,9 +23,9 @@ namespace DevPack4Dataverse;
 
 public sealed class ConnectionLease : IDisposable
 {
-    private bool _disposedValue;
+    private int _disposedValue;
 
-    public ConnectionLease(IConnection connection)
+    internal ConnectionLease(IConnection connection)
     {
         Connection = Guard.Against.Null(connection);
     }
@@ -45,22 +45,20 @@ public sealed class ConnectionLease : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public OrganizationServiceContext GetOrganizationServiceContext() => new(PureServiceClient);
+    internal OrganizationServiceContext GetOrganizationServiceContext() => new(PureServiceClient);
 
-    public T GetOrganizationServiceContext<T>() where T : OrganizationServiceContext
+    internal T GetOrganizationServiceContext<T>() where T : OrganizationServiceContext
     {
         return (T)Activator.CreateInstance(typeof(T), PureServiceClient)!;
     }
 
     private void DisposeConnection()
     {
-        if (_disposedValue)
+        if (Interlocked.Exchange(ref _disposedValue, 1) != 0)
         {
             return;
         }
 
         Connection?.ReleaseLock();
-
-        _disposedValue = true;
     }
 }

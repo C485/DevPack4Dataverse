@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 using DevPack4Dataverse.ExecuteMultiple;
-using DevPack4Dataverse.Utils;
+using Ardalis.GuardClauses;
 using Microsoft.Extensions.Logging;
 
 namespace DevPack4Dataverse.FieldMethods;
@@ -30,7 +30,7 @@ public sealed class FieldMethodsPack
 
     public FieldMethodsPack(SdkProxy sdkProxy, ExecuteMultipleLogic executeMultipleLogic, ILogger logger)
     {
-        using EntryExitLogger logGuard = new(logger);
+        Guard.Against.Null(logger);
         ChoiceFieldTypeMethods = new OptionSetFieldTypeMethods(sdkProxy, logger);
         FileOrImageFieldTypeMethods = new FileOrImageFieldTypeMethods(sdkProxy, executeMultipleLogic, logger);
         MoneyFieldTypeMethods = new MoneyFieldTypeMethods(sdkProxy, logger);

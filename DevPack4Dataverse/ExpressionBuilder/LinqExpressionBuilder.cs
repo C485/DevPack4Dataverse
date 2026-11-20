@@ -17,7 +17,6 @@ limitations under the License.
 using System.Linq.Expressions;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
-using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 
@@ -39,7 +38,7 @@ public static class LinqExpressionBuilder
     /// <exception cref="ArgumentNullException"><paramref name="logger"/> is null.</exception>
     public static ILinqExpressionBuilder<U> Create<U>(ILogger logger) where U : Entity, new()
     {
-        using EntryExitLogger logGuard = new(logger);
+        Guard.Against.Null(logger);
         return new LinqExpressionBuilderInner<U>(logger);
     }
 
@@ -52,8 +51,7 @@ public static class LinqExpressionBuilder
 
         public LinqExpressionBuilderInner(ILogger logger)
         {
-            using EntryExitLogger logGuard = new(logger);
-            _logger = logger;
+            _logger = Guard.Against.Null(logger);
         }
 
         public uint ExpressionsAdded => _expressionsAdded;
@@ -76,7 +74,7 @@ public static class LinqExpressionBuilder
             }
 
             EnsureExpressionLimit(1, nameof(expressionToAdd));
-            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.And(expressionToAdd, _logger);
+            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.And(expressionToAdd);
             _expressionsAdded++;
         }
 
@@ -100,7 +98,7 @@ public static class LinqExpressionBuilder
                 return;
             }
 
-            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.And(innerExpression, _logger);
+            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.And(innerExpression);
             _expressionsAdded += expressionsToAdd;
         }
 
@@ -115,7 +113,7 @@ public static class LinqExpressionBuilder
             }
 
             EnsureExpressionLimit(1, nameof(expressionToAdd));
-            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.Or(expressionToAdd, _logger);
+            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.Or(expressionToAdd);
             _expressionsAdded++;
         }
 
@@ -139,7 +137,7 @@ public static class LinqExpressionBuilder
                 return;
             }
 
-            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.Or(innerExpression, _logger);
+            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.Or(innerExpression);
             _expressionsAdded += expressionsToAdd;
         }
 
