@@ -37,7 +37,22 @@ internal static class Program
             .CreateLogger();
 
         var microsoftLogger = new SerilogLoggerFactory(Log.Logger).CreateLogger("");
-        await new AdvancedMultipleRequest(microsoftLogger).Execute().ConfigureAwait(false);
+        string example = args.Length == 0 ? "advanced" : args[0].Trim().ToLowerInvariant();
+
+        switch (example)
+        {
+            case "drill":
+            case "field-drill":
+                await new FieldDrillExample(microsoftLogger).Execute().ConfigureAwait(false);
+                break;
+            case "advanced":
+                await new AdvancedMultipleRequest(microsoftLogger).Execute().ConfigureAwait(false);
+                break;
+            default:
+                Console.WriteLine("Usage: dotnet run -- [advanced|drill]");
+                break;
+        }
+
         Log.CloseAndFlush();
     }
 }
