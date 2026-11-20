@@ -9,6 +9,10 @@ DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on to
 
 The optional Redis mapper adapters live in the separate `DevPack4Dataverse.Mapper.Redis` project.
 
+## Nullable reference types
+
+All projects enable nullable reference types and treat nullable warnings as errors. Optional values are annotated (`RequestSettings?`, `CachedEntity?`, `EntityKey?`, and similar). See [nullable-breaking-changes.md](nullable-breaking-changes.md) for the annotation changes that can add warnings in NRT-enabled consumers.
+
 ## License
 
 [Apache License 2.0](https://github.com/C485/DevPack4Dataverse/blob/master/LICENSE.md)
