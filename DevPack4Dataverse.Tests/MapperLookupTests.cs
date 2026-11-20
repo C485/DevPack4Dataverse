@@ -73,6 +73,13 @@ public class MapperLookupTests
             Assert.Equal(id, result.Records[0].Target.Account.Id);
             Assert.Contains("name", captured.ColumnSet.Columns);
             Assert.DoesNotContain("email", captured.ColumnSet.Columns);
+            Assert.Contains(
+                captured.Criteria.Conditions,
+                condition =>
+                    condition.AttributeName == "accountid"
+                    && Equals(condition.Values[0], id)
+            );
+            Assert.Null(captured.TopCount);
         }
     }
 

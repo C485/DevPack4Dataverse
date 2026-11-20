@@ -25,7 +25,9 @@ public class MapperValidationTests
             {
                 Assert.Contains(
                     query.Criteria.Conditions,
-                    condition => condition.Operator == ConditionOperator.In
+                    condition =>
+                        condition.Operator == ConditionOperator.In
+                        && condition.AttributeName == "accountid"
                 );
                 return createdIds
                     .Select(id => new Entity("account", id) { ["name"] = "Saved" })

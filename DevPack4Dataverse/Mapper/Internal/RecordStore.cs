@@ -249,8 +249,7 @@ internal sealed class RecordStore
         QueryExpression query = new()
         {
             EntityName = key.LogicalName,
-            ColumnSet = CreateColumnSet(columns),
-            TopCount = 1
+            ColumnSet = CreateColumnSet(columns)
         };
 
         if (key.IsAlternateKey)
@@ -262,7 +261,11 @@ internal sealed class RecordStore
         }
         else
         {
-            query.Criteria.AddCondition("entityid", ConditionOperator.Equal, key.Id.Value);
+            query.Criteria.AddCondition(
+                key.LogicalName.ToLowerInvariant() + "id",
+                ConditionOperator.Equal,
+                key.Id.Value
+            );
         }
 
         Entity[] records = await _sdkProxy
