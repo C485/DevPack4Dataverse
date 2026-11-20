@@ -277,6 +277,9 @@ Choice label metadata is cached for five minutes per table and column. Recreate 
 
 ### SdkProxy
 Gives ability to quickly execute any type of request to dataverse endpoint.
+
+`SdkProxy.ApplyProcessWideOptimizations()` is an opt-in static method for the legacy process-wide HTTP and thread-pool tuning. The library does not call it; call it once at host startup if you want those settings.
+
 ### CreateLinqExpressionBuilder
 Gives ability to build expression that later can be used in Where method of early or late bound in OrganizationServiceContext class. In this example we'll try to retrieve 100 records by name. Maximum limit of expressions is 500, it's hard limit specified by SDK.
 ```C#
@@ -325,7 +328,7 @@ This pass addressed the findings below and validated the library against a live 
 - Option-set metadata is cached for five minutes per table and column using a case-insensitive tuple key; label lookup no longer uses LINQ per cell.
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the cache TTL expires; `ForceRefresh` still reloads.
 - Redis preload writes run with bounded parallelism; reference parsing avoids `string.Split` and DTO lists are pre-sized.
-- `SdkProxy` no longer changes process-wide `ThreadPool` and `ServicePointManager` settings.
+- `SdkProxy` does not change process-wide `ThreadPool` and `ServicePointManager` settings by default; `SdkProxy.ApplyProcessWideOptimizations()` is the explicit opt-in.
 - Entry/exit logging is limited to batch and creation boundaries; per-record mapper and field-helper paths no longer allocate the logger guard and stopwatch.
 - Mapper per-record collections are reduced: lazy error lists, a single required-column pass, shared loaded-column sets, and no per-record LINQ in the cache and field paths.
 - The in-memory cache reuses its completed read task instead of allocating a `Task` per hit.

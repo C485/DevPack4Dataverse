@@ -16,6 +16,7 @@ limitations under the License.
 
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Net;
 using System.Security;
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.ExecuteMultiple;
@@ -76,6 +77,18 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             _logger
         );
         _connectionCreator.Start();
+    }
+
+    /// <summary>
+    /// Applies the legacy process-wide HTTP and thread-pool tuning.
+    /// This affects the whole process; call it once at startup. The library does not call it.
+    /// </summary>
+    public static void ApplyProcessWideOptimizations()
+    {
+        ServicePointManager.DefaultConnectionLimit = 65000;
+        ServicePointManager.Expect100Continue = false;
+        ServicePointManager.UseNagleAlgorithm = false;
+        ThreadPool.SetMinThreads(100, 100);
     }
 
     /// <summary>
