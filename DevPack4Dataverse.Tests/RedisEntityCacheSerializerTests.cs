@@ -31,7 +31,7 @@ public class RedisEntityCacheSerializerTests
         CachedEntity cached = new(record, new[] { "name", "createdon", "creditlimit" });
 
         string json = RedisEntityCache.Serialize(cached);
-        CachedEntity restored = RedisEntityCache.Deserialize(json);
+        CachedEntity restored = RedisEntityCache.Deserialize(json)!;
 
         Assert.Equal("account", restored.Record.LogicalName);
         Assert.Equal(id, restored.Record.Id);

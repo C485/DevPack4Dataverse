@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -33,7 +33,7 @@ public class SdkProxyTests
     [Fact]
     public void ExecuteTransaction_BuilderSendsRequest()
     {
-        OrganizationRequest captured = null;
+        OrganizationRequest? captured = null;
         var fake = new FakeConnection
         {
             ExecuteHandler = request =>
@@ -58,7 +58,7 @@ public class SdkProxyTests
     [Fact]
     public async Task ExecuteTransactionAsync_BuilderSendsRequest()
     {
-        OrganizationRequest captured = null;
+        OrganizationRequest? captured = null;
         var fake = new FakeConnection
         {
             ExecuteHandler = request =>

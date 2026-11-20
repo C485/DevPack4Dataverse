@@ -54,7 +54,7 @@ public class FileOrImageFieldTypeMethodsTests
     public async Task Delete_WhenFieldIsPresent_DeletesTheFile()
     {
         Guid fileId = Guid.NewGuid();
-        DeleteFileRequest captured = null;
+        DeleteFileRequest? captured = null;
         var connection = new FakeConnection
         {
             RetrieveHandler = (entityName, id, _) =>

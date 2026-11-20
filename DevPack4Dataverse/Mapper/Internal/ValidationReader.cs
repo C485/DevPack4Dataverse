@@ -26,10 +26,10 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
     public async Task<IReadOnlyList<MappingError>> ValidateAsync(
         IReadOnlyList<ValidationTarget> targets,
-        Func<string, ISet<string>> fieldsProvider,
-        Func<Entity, MappingValidationContext, IEnumerable<string>> validator,
-        string mapperName,
-        RequestSettings requestSettings,
+        Func<string, ISet<string>>? fieldsProvider,
+        Func<Entity, MappingValidationContext, IEnumerable<string>>? validator,
+        string? mapperName,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -69,7 +69,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
         foreach (ValidationTarget target in validTargets)
         {
             string key = ValidationKey(target.Reference.LogicalName, target.Reference.Id);
-            if (!records.TryGetValue(key, out Entity record))
+            if (!records.TryGetValue(key, out Entity? record))
             {
                 errors.Add(
                     new MappingError(
@@ -131,8 +131,8 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
     private async Task<Dictionary<string, Entity>> RetrieveAsync(
         IReadOnlyList<ValidationTarget> targets,
-        Func<string, ISet<string>> fieldsProvider,
-        RequestSettings requestSettings,
+        Func<string, ISet<string>>? fieldsProvider,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -146,7 +146,7 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
             )
         )
         {
-            ISet<string> fields = fieldsProvider?.Invoke(group.Key);
+            ISet<string>? fields = fieldsProvider?.Invoke(group.Key);
             columns =
                 fields?
                     .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -187,16 +187,16 @@ internal sealed class ValidationReader(SdkProxy sdkProxy)
 
 internal sealed class ValidationTarget(
     EntityReference reference,
-    object source,
-    object target,
-    Entity savedEntity
+    object? source,
+    object? target,
+    Entity? savedEntity
 )
 {
     public EntityReference Reference { get; } = reference;
 
-    public object Source { get; } = source;
+    public object? Source { get; } = source;
 
-    public object Target { get; } = target;
+    public object? Target { get; } = target;
 
-    public Entity SavedEntity { get; } = savedEntity;
+    public Entity? SavedEntity { get; } = savedEntity;
 }

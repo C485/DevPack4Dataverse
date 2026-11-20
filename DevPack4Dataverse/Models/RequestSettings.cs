@@ -33,13 +33,13 @@ public sealed class RequestSettings : RequestImpersonateSettings
     /// <summary>
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#passing-optional-parameters-with-a-request
     /// </summary>
-    public string PartitionId { private get; set; }
+    public string? PartitionId { private get; set; }
 
     /// <summary>
     /// Known as 'tag'.
     /// https://github.com/MicrosoftDocs/powerapps-docs/blob/main/powerapps-docs/developer/data-platform/org-service/use-messages.md#add-a-shared-variable-from-the-organization-service
     /// </summary>
-    public string SharedVariable { private get; set; }
+    public string? SharedVariable { private get; set; }
 
     /// <summary>
     /// Bypasses custom plug-ins when included in a request sent by someone with the prvBypassCustomPlugins privilege.

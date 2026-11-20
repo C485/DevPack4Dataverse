@@ -78,9 +78,9 @@ public sealed class FileOrImageFieldTypeMethods
         InitializeFileBlocksDownloadRequest fileBlocksRequest =
             new() { Target = Guard.Against.Null(recordId), FileAttributeName = Guard.Against.NullOrEmpty(fieldName) };
 
-        InitializeFileBlocksDownloadResponse fileBlockResponse = await _sdkProxy
+        InitializeFileBlocksDownloadResponse fileBlockResponse = (await _sdkProxy
             .ExecuteAsync<InitializeFileBlocksDownloadResponse>(fileBlocksRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
 
         Guard.Against.Negative(fileBlockResponse.FileSizeInBytes);
         Guard.Against.OutOfRange(
@@ -164,9 +164,9 @@ public sealed class FileOrImageFieldTypeMethods
                 Target = Guard.Against.Null(recordId),
                 FileAttributeName = Guard.Against.NullOrEmpty(fieldName),
             };
-        InitializeFileBlocksUploadResponse fileBlockResponse = await _sdkProxy
+        InitializeFileBlocksUploadResponse fileBlockResponse = (await _sdkProxy
             .ExecuteAsync<InitializeFileBlocksUploadResponse>(fileBlocksRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
 
         ExecuteMultipleRequestBuilder requestBuilder = _executeMultipleLogic.CreateRequestBuilder();
         BinaryReader dataBinaryReader = new(Guard.Against.Null(dataStream));
@@ -199,9 +199,9 @@ public sealed class FileOrImageFieldTypeMethods
                 MimeType = MimeMapping.MimeUtility.GetMimeMapping(fileName),
                 BlockList = GetBlockIds(requestBuilder)
             };
-        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse = await _sdkProxy
+        CommitFileBlocksUploadResponse commitFileBlocksUploadResponse = (await _sdkProxy
             .ExecuteAsync<CommitFileBlocksUploadResponse>(commitFileBlocksUploadRequest)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
         return new UploadFileFieldResult
         {
             SavedBytes = commitFileBlocksUploadResponse.FileSizeInBytes,
@@ -250,8 +250,8 @@ public sealed class FileOrImageFieldTypeMethods
 
     public sealed class FileData
     {
-        public byte[] Data { get; set; }
-        public string Name { get; set; }
+        public byte[] Data { get; set; } = null!;
+        public string Name { get; set; } = null!;
         public long Size { get; set; }
     }
 

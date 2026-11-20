@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Xunit;
 using DevPack4Dataverse.ExpressionBuilder;
@@ -7,7 +7,7 @@ namespace DevPack4Dataverse.Tests;
 
 public class LinqExpressionBuilderTests
 {
-    private static Entity Account(Guid id, string name = null)
+    private static Entity Account(Guid id, string? name = null)
     {
         var entity = new Entity("account") { Id = id };
         if (name != null)

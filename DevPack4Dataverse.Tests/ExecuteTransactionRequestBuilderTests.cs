@@ -142,6 +142,6 @@ public class ExecuteTransactionRequestBuilderTests
     {
         var builder = Create();
 
-        Assert.NotNull(Record.Exception(() => builder.AddRequest(null)));
+        Assert.NotNull(Record.Exception(() => builder.AddRequest(null!)));
     }
 }

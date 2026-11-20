@@ -30,7 +30,7 @@ public sealed class RepeatedTask
 #endif
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly object _sync = new();
-    private Task _task;
+    private Task? _task;
     private bool _started;
     private bool _stopped;
 

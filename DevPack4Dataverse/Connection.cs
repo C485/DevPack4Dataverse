@@ -62,7 +62,7 @@ public sealed class Connection : IConnection
 
     public void ApplyConnectionOptimalization() => PureServiceClient.EnableAffinityCookie = false;
 
-    public Guid CreateRecord(Entity record, RequestSettings requestSettings = null)
+    public Guid CreateRecord(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -73,10 +73,10 @@ public sealed class Connection : IConnection
 
         CreateRequest createRequest = new() { Target = record };
 
-        return Execute<CreateResponse>(createRequest, requestSettings).id;
+        return Execute<CreateResponse>(createRequest, requestSettings)!.id;
     }
 
-    public async Task<Entity> CreateRecordAndGetAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<Entity> CreateRecordAndGetAsync(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guid createdRecordId = await CreateRecordAsync(record, requestSettings).ConfigureAwait(false);
@@ -87,7 +87,7 @@ public sealed class Connection : IConnection
             .ConfigureAwait(false);
     }
 
-    public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<Guid> CreateRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -98,11 +98,11 @@ public sealed class Connection : IConnection
 
         CreateRequest createRequest = new() { Target = record };
 
-        CreateResponse createResponse = await ExecuteAsync<CreateResponse>(createRequest, requestSettings).ConfigureAwait(false);
+        CreateResponse createResponse = (await ExecuteAsync<CreateResponse>(createRequest, requestSettings).ConfigureAwait(false))!;
         return Guard.Against.Null(createResponse).id;
     }
 
-    public void DeleteRecord(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void DeleteRecord(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
 
         DeleteRequest deleteRequest =
@@ -111,7 +111,7 @@ public sealed class Connection : IConnection
         _ = Execute<DeleteResponse>(deleteRequest, requestSettings);
     }
 
-    public void DeleteRecord(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void DeleteRecord(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(entityReference);
@@ -119,7 +119,7 @@ public sealed class Connection : IConnection
         DeleteRecord(entityReference.LogicalName, entityReference.Id, requestSettings);
     }
 
-    public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public async Task DeleteRecordAsync(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
 
         DeleteRequest deleteRequest =
@@ -128,7 +128,7 @@ public sealed class Connection : IConnection
         _ = await ExecuteAsync<DeleteResponse>(deleteRequest, requestSettings).ConfigureAwait(false);
     }
 
-    public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings requestSettings = null)
+    public async Task DeleteRecordAsync(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(entityReference);
@@ -136,7 +136,7 @@ public sealed class Connection : IConnection
         await DeleteRecordAsync(entityReference.LogicalName, entityReference.Id, requestSettings).ConfigureAwait(false);
     }
 
-    public T Execute<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+    public T? Execute<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
         where T : OrganizationResponse
     {
 
@@ -167,16 +167,16 @@ public sealed class Connection : IConnection
 
     public ExecuteMultipleResponse Execute(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
 
         Guard.Against.Null(executeMultipleRequestBuilder);
 
-        return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings);
+        return Execute<ExecuteMultipleResponse>(executeMultipleRequestBuilder.RequestWithResults, requestSettings)!;
     }
 
-    public async Task<T> ExecuteAsync<T>(OrganizationRequest request, RequestSettings requestSettings = null)
+    public async Task<T?> ExecuteAsync<T>(OrganizationRequest request, RequestSettings? requestSettings = null)
         where T : OrganizationResponse
     {
 
@@ -207,21 +207,21 @@ public sealed class Connection : IConnection
 
     public async Task<ExecuteMultipleResponse> ExecuteAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
 
         Guard.Against.Null(executeMultipleRequestBuilder);
 
-        return await ExecuteAsync<ExecuteMultipleResponse>(
+        return (await ExecuteAsync<ExecuteMultipleResponse>(
             executeMultipleRequestBuilder.RequestWithResults,
             requestSettings
-        ).ConfigureAwait(false);
+        ).ConfigureAwait(false))!;
     }
 
     public ulong GetConnectionWeight() => _usageStatistics.UsageWeightFromLastMinutes(2);
 
-    public Entity RefreshRecord(Entity record, RequestSettings requestSettings = null)
+    public Entity RefreshRecord(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -235,7 +235,7 @@ public sealed class Connection : IConnection
         return Retrieve(record.LogicalName, record.Id, columns, requestSettings);
     }
 
-    public T RefreshRecord<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    public T RefreshRecord<T>(T record, RequestSettings? requestSettings = null) where T : Entity
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -249,7 +249,7 @@ public sealed class Connection : IConnection
         return Retrieve<T>(record.LogicalName, record.Id, columns, requestSettings);
     }
 
-    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings requestSettings = null) where T : Entity
+    public async Task<T> RefreshRecordAsync<T>(T record, RequestSettings? requestSettings = null) where T : Entity
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -263,7 +263,7 @@ public sealed class Connection : IConnection
         return await RetrieveAsync<T>(record.LogicalName, record.Id, columns, requestSettings).ConfigureAwait(false);
     }
 
-    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<Entity> RefreshRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -282,7 +282,7 @@ public sealed class Connection : IConnection
         _semaphoreSlim.Release();
     }
 
-    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(columnSet);
@@ -294,35 +294,35 @@ public sealed class Connection : IConnection
                 Target = EntityReferenceUtils.CreateEntityReference(id, entityName, _logger)
             },
             requestSettings
-        );
+        )!;
         return Guard.Against.Null(retrieveResponse).Entity;
     }
 
-    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings requestSettings = null)
+    public T Retrieve<T>(string entityName, Guid id, ColumnSet columnSet, RequestSettings? requestSettings = null)
         where T : Entity
     {
 
-        return Retrieve(entityName, id, columnSet, requestSettings)?.ToEntity<T>();
+        return Retrieve(entityName, id, columnSet, requestSettings)?.ToEntity<T>()!;
     }
 
     public async Task<Entity> RetrieveAsync(
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
 
         Guard.Against.Null(columnSet);
 
-        RetrieveResponse retrieveResponse = await ExecuteAsync<RetrieveResponse>(
+        RetrieveResponse retrieveResponse = (await ExecuteAsync<RetrieveResponse>(
             new RetrieveRequest
             {
                 ColumnSet = columnSet,
                 Target = EntityReferenceUtils.CreateEntityReference(id, entityName, _logger)
             },
             requestSettings
-        ).ConfigureAwait(false);
+        ).ConfigureAwait(false))!;
         return Guard.Against.Null(retrieveResponse).Entity;
     }
 
@@ -330,16 +330,16 @@ public sealed class Connection : IConnection
         string entityName,
         Guid id,
         ColumnSet columnSet,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     ) where T : Entity
     {
 
         Entity entity = await RetrieveAsync(entityName, id, columnSet, requestSettings)
             .ConfigureAwait(false);
-        return entity?.ToEntity<T>();
+        return entity?.ToEntity<T>()!;
     }
 
-    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    public Entity[] RetrieveMultiple(QueryExpression queryExpression, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(queryExpression);
@@ -360,7 +360,7 @@ public sealed class Connection : IConnection
                 RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
                     new RetrieveMultipleRequest { Query = queryExpression },
                     requestSettings
-                );
+                )!;
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
@@ -379,7 +379,7 @@ public sealed class Connection : IConnection
         }
     }
 
-    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings requestSettings = null)
+    public T[] RetrieveMultiple<T>(QueryExpression queryExpression, RequestSettings? requestSettings = null)
         where T : Entity
     {
 
@@ -401,7 +401,7 @@ public sealed class Connection : IConnection
                 RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
                     new RetrieveMultipleRequest { Query = queryExpression },
                     requestSettings
-                );
+                )!;
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity entity in retrieveMultipleResult.Entities)
@@ -422,7 +422,7 @@ public sealed class Connection : IConnection
 
     public async Task<Entity[]> RetrieveMultipleAsync(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
 
@@ -441,10 +441,10 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(
+                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
                     new RetrieveMultipleRequest { Query = queryExpression },
                     requestSettings
-                ).ConfigureAwait(false);
+                ).ConfigureAwait(false))!;
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity record in retrieveMultipleResult.Entities)
@@ -465,7 +465,7 @@ public sealed class Connection : IConnection
 
     public async Task<T[]> RetrieveMultipleAsync<T>(
         QueryExpression queryExpression,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     ) where T : Entity
     {
 
@@ -484,10 +484,10 @@ public sealed class Connection : IConnection
 
             while (true)
             {
-                RetrieveMultipleResponse retrieveMultipleResponse = await ExecuteAsync<RetrieveMultipleResponse>(
+                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
                     new RetrieveMultipleRequest { Query = queryExpression },
                     requestSettings
-                ).ConfigureAwait(false);
+                ).ConfigureAwait(false))!;
                 EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
 
                 foreach (Entity entity in retrieveMultipleResult.Entities)
@@ -548,7 +548,7 @@ public sealed class Connection : IConnection
         return await _semaphoreSlim.WaitAsync(0).ConfigureAwait(false);
     }
 
-    public void UpdateRecord(Entity record, RequestSettings requestSettings = null)
+    public void UpdateRecord(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -562,7 +562,7 @@ public sealed class Connection : IConnection
         _ = Execute<UpdateResponse>(request, requestSettings);
     }
 
-    public async Task UpdateRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task UpdateRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -576,7 +576,7 @@ public sealed class Connection : IConnection
         _ = await ExecuteAsync<UpdateResponse>(request, requestSettings).ConfigureAwait(false);
     }
 
-    public EntityReference UpsertRecord(Entity record, RequestSettings requestSettings = null)
+    public EntityReference UpsertRecord(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -589,12 +589,12 @@ public sealed class Connection : IConnection
 
         UpsertRequest request = new() { Target = record };
 
-        UpsertResponse executeResponse = Execute<UpsertResponse>(request, requestSettings);
+        UpsertResponse executeResponse = Execute<UpsertResponse>(request, requestSettings)!;
 
         return Guard.Against.Null(executeResponse).Target;
     }
 
-    public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings requestSettings = null)
+    public async Task<EntityReference> UpsertRecordAsync(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -607,7 +607,7 @@ public sealed class Connection : IConnection
 
         UpsertRequest request = new() { Target = record };
 
-        UpsertResponse executeResponse = await ExecuteAsync<UpsertResponse>(request, requestSettings).ConfigureAwait(false);
+        UpsertResponse executeResponse = (await ExecuteAsync<UpsertResponse>(request, requestSettings).ConfigureAwait(false))!;
 
         return Guard.Against.Null(executeResponse).Target;
     }

@@ -27,7 +27,7 @@ public sealed class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpl
     ///   Called each time when error occurs, please have in mind that thread may vary between errors.
     ///  </para>
     /// </summary>
-    public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };
+    public Action<OrganizationRequest, string>? ErrorReport { get; set; } = (_, _) => { };
 
     /// <summary>
     ///  <para>Optional.</para>
@@ -35,7 +35,7 @@ public sealed class ExecuteMultipleRequestSettings : ExecuteMultipleRequestSimpl
     ///  <para>It's executed every <see cref="ReportProgressInterval" /> from separate thread.</para>
     ///  <para>Any access to objects from other threads needs to be atomic/locked.</para>
     /// </summary>
-    public Action<int, int> ReportProgress { get; set; } = (_, _) => { };
+    public Action<int, int>? ReportProgress { get; set; } = (_, _) => { };
 
     /// <summary>
     ///  <para>Optional.</para>

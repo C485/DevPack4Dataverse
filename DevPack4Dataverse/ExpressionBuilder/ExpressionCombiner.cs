@@ -32,10 +32,10 @@ internal static class ExpressionCombiner
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
         ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter, logger);
-        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
+        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body)!;
 
         ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
-        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
+        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body)!;
 
         return Expression.Lambda<Func<T, bool>>(
             Expression.AndAlso(visitedMainExpression, visitedExpressionToAdd),
@@ -54,10 +54,10 @@ internal static class ExpressionCombiner
         ParameterExpression parameter = Expression.Parameter(typeof(T));
 
         ReplaceExpressionVisitor mainExpressionVisitor = new(mainExpression.Parameters[0], parameter, logger);
-        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body);
+        Expression visitedMainExpression = mainExpressionVisitor.Visit(mainExpression.Body)!;
 
         ReplaceExpressionVisitor expressionToAddVisitor = new(expressionToAdd.Parameters[0], parameter, logger);
-        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body);
+        Expression visitedExpressionToAdd = expressionToAddVisitor.Visit(expressionToAdd.Body)!;
 
         return Expression.Lambda<Func<T, bool>>(
             Expression.OrElse(visitedMainExpression, visitedExpressionToAdd),
@@ -77,7 +77,7 @@ internal static class ExpressionCombiner
             _newValue = newValue;
         }
 
-        public override Expression Visit(Expression node)
+        public override Expression? Visit(Expression? node)
         {
             return node == _oldValue ? _newValue : base.Visit(node);
         }

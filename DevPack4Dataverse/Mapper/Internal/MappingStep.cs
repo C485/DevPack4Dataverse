@@ -57,7 +57,7 @@ internal sealed class LookupMappingStep<TSource, TTarget>(
     string targetMember,
     Action<TTarget, EntityReference> setter,
     Func<MappingContext<TSource, TTarget>, EntityKey> keyFactory,
-    Func<MappingContext<TSource, TTarget>, Entity> createFactory,
+    Func<MappingContext<TSource, TTarget>, Entity>? createFactory,
     LookupMappingOptions options,
     LookupResolver resolver
 ) : IMappingStep<TSource, TTarget>
@@ -85,7 +85,7 @@ internal sealed class LookupMappingStep<TSource, TTarget>(
             return;
         }
 
-        EntityReference reference = await resolver
+        EntityReference? reference = await resolver
             .ResolveAsync(
                 key,
                 options,

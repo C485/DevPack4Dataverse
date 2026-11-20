@@ -54,7 +54,7 @@ public class MapperLookupTests
     public async Task BasicKey_ResolvesLookupAndRequestsOnlyConfiguredColumns()
     {
         Guid id = Guid.NewGuid();
-        QueryExpression captured = null;
+        QueryExpression? captured = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = query =>
@@ -84,10 +84,10 @@ public class MapperLookupTests
 
             Assert.False(result.HasErrors);
             Assert.Equal(id, result.Records[0].Target.Account.Id);
-            Assert.Contains("name", captured.ColumnSet.Columns);
-            Assert.DoesNotContain("email", captured.ColumnSet.Columns);
+            Assert.Contains("name", captured!.ColumnSet.Columns);
+            Assert.DoesNotContain("email", captured!.ColumnSet.Columns);
             Assert.Contains(
-                captured.Criteria.Conditions,
+                captured!.Criteria.Conditions,
                 condition =>
                     condition.AttributeName == "accountid"
                     && Equals(condition.Values[0], id)
@@ -100,7 +100,7 @@ public class MapperLookupTests
     public async Task AlternateKey_ResolvesLookup()
     {
         Guid id = Guid.NewGuid();
-        QueryExpression captured = null;
+        QueryExpression? captured = null;
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = query =>
@@ -141,7 +141,7 @@ public class MapperLookupTests
 
             Assert.Equal(id, result.Records[0].Target.Account.Id);
             Assert.Contains(
-                captured.Criteria.Conditions,
+                captured!.Criteria.Conditions,
                 condition =>
                     condition.AttributeName == "accountnumber"
                     && Equals(condition.Values[0], "A-1")
@@ -499,7 +499,7 @@ public class MapperLookupTests
                 .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
                 .MapLookup(
                     target => target.Account,
-                    _ => null,
+                    _ => null!,
                     new LookupMappingOptions { ThrowIfEmpty = true }
                 )
                 .Build();
@@ -587,7 +587,7 @@ public class MapperLookupTests
                 .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
                 .MapLookup(
                     target => target.Account,
-                    _ => null,
+                    _ => null!,
                     new LookupMappingOptions { ThrowIfEmpty = false }
                 )
                 .Build();
@@ -688,7 +688,7 @@ public class MapperLookupTests
 
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        IEntityCache cache = null
+        IEntityCache? cache = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
@@ -700,29 +700,29 @@ public class MapperLookupTests
     {
         public Guid AccountId { get; set; }
         public Guid OtherAccountId { get; set; }
-        public string AccountNumber { get; set; }
+        public string AccountNumber { get; set; } = null!;
     }
 
     public sealed class LookupTarget
     {
-        public EntityReference Account { get; set; }
+        public EntityReference Account { get; set; } = null!;
     }
 
     public sealed class LookupPairs
     {
-        public EntityReference First { get; set; }
-        public EntityReference Second { get; set; }
+        public EntityReference First { get; set; } = null!;
+        public EntityReference Second { get; set; } = null!;
     }
 
     public sealed class AlternateLookupSource
     {
-        public string FirstNumber { get; set; }
-        public string SecondNumber { get; set; }
+        public string FirstNumber { get; set; } = null!;
+        public string SecondNumber { get; set; } = null!;
     }
 
     private sealed class ThrowingReadCache : IEntityCache
     {
-        public Task<CachedEntity> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
+        public Task<CachedEntity?> GetAsync(EntityKey key, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("cache unavailable");
 
         public Task SetAsync(

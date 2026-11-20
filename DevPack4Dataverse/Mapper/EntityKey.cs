@@ -33,7 +33,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
     private EntityKey(
         string logicalName,
         Guid? id,
-        IEnumerable<KeyValuePair<string, object>> alternateKey
+        IEnumerable<KeyValuePair<string, object>>? alternateKey
     )
     {
         if (string.IsNullOrWhiteSpace(logicalName))
@@ -72,7 +72,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
     private EntityKey(
         string logicalName,
         Guid? id,
-        IReadOnlyDictionary<string, object> alternateKey
+        IReadOnlyDictionary<string, object>? alternateKey
     )
     {
         if (string.IsNullOrWhiteSpace(logicalName))
@@ -230,7 +230,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
         return new EntityKey(logicalName, null, values);
     }
 
-    public static EntityKey FromEntityReference(EntityReference reference)
+    public static EntityKey? FromEntityReference(EntityReference? reference)
     {
         if (reference == null)
         {
@@ -245,7 +245,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
         return reference.Id == Guid.Empty ? null : ById(reference.LogicalName, reference.Id);
     }
 
-    public static EntityKey FromEntity(Entity entity)
+    public static EntityKey? FromEntity(Entity? entity)
     {
         if (entity == null)
         {
@@ -284,10 +284,10 @@ public sealed class EntityKey : IEquatable<EntityKey>
         return new EntityReference(LogicalName, Id!.Value);
     }
 
-    public bool Equals(EntityKey other) =>
+    public bool Equals(EntityKey? other) =>
         other != null && string.Equals(_normalized, other._normalized, StringComparison.Ordinal);
 
-    public override bool Equals(object obj) => Equals(obj as EntityKey);
+    public override bool Equals(object? obj) => Equals(obj as EntityKey);
 
     public override int GetHashCode() => _normalized.GetHashCode();
 

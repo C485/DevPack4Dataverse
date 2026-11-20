@@ -38,10 +38,10 @@ internal sealed class LookupResolver
         _recordStore = recordStore ?? throw new ArgumentNullException(nameof(recordStore));
     }
 
-    public async Task<EntityReference> ResolveAsync(
+    public async Task<EntityReference?> ResolveAsync(
         EntityKey key,
         LookupMappingOptions options,
-        Func<Entity> createFactory,
+        Func<Entity>? createFactory,
         MappingExecutionState state,
         CancellationToken cancellationToken
     )
@@ -70,7 +70,7 @@ internal sealed class LookupResolver
             forceRefresh = false;
         }
 
-        Entity record = await _recordStore
+        Entity? record = await _recordStore
             .GetAsync(
                 key,
                 options.Fields,
@@ -134,7 +134,7 @@ internal sealed class LookupResolver
         CancellationToken cancellationToken
     )
     {
-        if (state.Preloads.TryGetValue(logicalName, out Task existing))
+        if (state.Preloads.TryGetValue(logicalName, out Task? existing))
         {
             await existing.ConfigureAwait(false);
             return;
@@ -187,12 +187,12 @@ internal sealed class LookupResolver
                 entity.KeyAttributes[pair.Key] = pair.Value;
             }
 
-            UpsertResponse response = await _sdkProxy
+            UpsertResponse response = (await _sdkProxy
                 .ExecuteAsync<UpsertResponse>(
                     new UpsertRequest { Target = entity },
                     state.RequestSettings
                 )
-                .ConfigureAwait(false);
+                .ConfigureAwait(false))!;
 
             if (response?.Target == null)
             {

@@ -41,7 +41,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         _prefix = string.IsNullOrWhiteSpace(keyPrefix) ? "devpack:mapper:entity:" : keyPrefix;
     }
 
-    public async Task<CachedEntity> GetAsync(
+    public async Task<CachedEntity?> GetAsync(
         EntityKey key,
         CancellationToken cancellationToken = default
     )
@@ -55,7 +55,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             return null;
         }
 
-        return Deserialize(value);
+        return Deserialize(value.ToString()!);
     }
 
     public async Task SetAsync(
@@ -93,7 +93,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             .ConfigureAwait(false);
         if (!value.IsNull)
         {
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+            CachedEntityDto? dto = JsonConvert.DeserializeObject<CachedEntityDto>(
                 value.ToString()
             );
             if (dto != null && dto.Id != Guid.Empty)
@@ -141,7 +141,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 continue;
             }
 
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+            CachedEntityDto? dto = JsonConvert.DeserializeObject<CachedEntityDto>(
                 value.ToString()
             );
             if (dto?.Id == id)
@@ -175,7 +175,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     internal static string Serialize(CachedEntity entry) =>
         JsonConvert.SerializeObject(CachedEntityDto.From(entry));
 
-    internal static CachedEntity Deserialize(string json) =>
+    internal static CachedEntity? Deserialize(string json) =>
         JsonConvert.DeserializeObject<CachedEntityDto>(json)?.ToCachedEntity();
 
     private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeys(
@@ -215,7 +215,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private sealed class CachedEntityDto
     {
-        public string LogicalName { get; set; }
+        public string LogicalName { get; set; } = null!;
         public Guid Id { get; set; }
         public List<string> LoadedColumns { get; set; } = new();
         public List<CachedAttributeDto> Attributes { get; set; } = new();
@@ -234,7 +234,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
             foreach (KeyValuePair<string, object> attribute in entry.Record.Attributes)
             {
-                CachedAttributeDto value = CachedAttributeDto.From(attribute.Key, attribute.Value);
+                CachedAttributeDto? value = CachedAttributeDto.From(attribute.Key, attribute.Value);
                 if (value != null)
                 {
                     dto.Attributes.Add(value);
@@ -243,7 +243,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
             foreach (KeyValuePair<string, object> attribute in entry.Record.KeyAttributes)
             {
-                CachedAttributeDto value = CachedAttributeDto.From(attribute.Key, attribute.Value);
+                CachedAttributeDto? value = CachedAttributeDto.From(attribute.Key, attribute.Value);
                 if (value != null)
                 {
                     dto.KeyAttributes.Add(value);
@@ -272,13 +272,13 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private sealed class CachedAttributeDto
     {
-        public string Name { get; set; }
-        public string Type { get; set; }
-        public string Value { get; set; }
-        public string ReferenceName { get; set; }
+        public string Name { get; set; } = null!;
+        public string Type { get; set; } = null!;
+        public string Value { get; set; } = null!;
+        public string? ReferenceName { get; set; }
         public List<CachedAttributeDto> ReferenceKeyAttributes { get; set; } = new();
 
-        public static CachedAttributeDto From(string name, object value)
+        public static CachedAttributeDto? From(string name, object? value)
         {
             if (value == null)
             {
@@ -349,7 +349,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                             KeyValuePair<string, object> keyAttribute in reference.KeyAttributes
                         )
                         {
-                            CachedAttributeDto keyDto = From(
+                            CachedAttributeDto? keyDto = From(
                                 keyAttribute.Key,
                                 keyAttribute.Value
                             );

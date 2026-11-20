@@ -47,12 +47,12 @@ internal sealed class RecordStore
         _wrapperOptions = wrapperOptions ?? throw new ArgumentNullException(nameof(wrapperOptions));
     }
 
-    public async Task<Entity> GetAsync(
+    public async Task<Entity?> GetAsync(
         EntityKey key,
         IEnumerable<string> requiredColumns,
         bool useCache,
         bool forceRefresh,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -70,7 +70,7 @@ internal sealed class RecordStore
 
         if (useCache && !forceRefresh)
         {
-            CachedEntity cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
+            CachedEntity? cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
             if (cached != null)
             {
                 string[] missing = columns
@@ -82,7 +82,7 @@ internal sealed class RecordStore
                     return cached.Record;
                 }
 
-                Entity missingValues = await RetrieveAsync(
+                Entity? missingValues = await RetrieveAsync(
                         key,
                         missing,
                         requestSettings,
@@ -96,7 +96,7 @@ internal sealed class RecordStore
                     return null;
                 }
 
-                Entity merged = EntityCopy.Clone(cached.Record);
+                Entity merged = EntityCopy.Clone(cached.Record)!;
                 EntityCopy.Merge(merged, missingValues);
                 HashSet<string> loadedColumns = new(
                     cached.LoadedColumns,
@@ -113,7 +113,7 @@ internal sealed class RecordStore
             }
         }
 
-        Entity record = await RetrieveAsync(key, columns, requestSettings, cancellationToken)
+        Entity? record = await RetrieveAsync(key, columns, requestSettings, cancellationToken)
             .ConfigureAwait(false);
         if (record == null)
         {
@@ -193,7 +193,7 @@ internal sealed class RecordStore
                             .ConfigureAwait(false);
                     }
 
-                    EntityKey alternateKey = TryCreateAlternateKey(
+                    EntityKey? alternateKey = TryCreateAlternateKey(
                         logicalName,
                         record,
                         alternateAttributes
@@ -217,7 +217,7 @@ internal sealed class RecordStore
             return;
         }
 
-        EntityKey key = EntityKey.FromEntity(entity);
+        EntityKey? key = EntityKey.FromEntity(entity);
         if (key == null)
         {
             return;
@@ -235,10 +235,10 @@ internal sealed class RecordStore
         await CacheRecordAsync(entity, key, columns, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Entity> RetrieveAsync(
+    private async Task<Entity?> RetrieveAsync(
         EntityKey key,
         IEnumerable<string> columns,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -280,7 +280,7 @@ internal sealed class RecordStore
         CancellationToken cancellationToken
     )
     {
-        CachedEntity entry = new(EntityCopy.Clone(record), loadedColumns);
+        CachedEntity entry = new(EntityCopy.Clone(record)!, loadedColumns);
         await CacheEntryAsync(requestedKey, entry, cancellationToken).ConfigureAwait(false);
 
         if (record.Id != Guid.Empty)
@@ -317,7 +317,7 @@ internal sealed class RecordStore
                 .ConfigureAwait(false);
         }
 
-        EntityKey key = EntityKey.FromEntity(entity);
+        EntityKey? key = EntityKey.FromEntity(entity);
         if (key != null)
         {
             await RemoveCacheKeyAsync(key, cancellationToken).ConfigureAwait(false);
@@ -362,7 +362,7 @@ internal sealed class RecordStore
         }
     }
 
-    private async Task<CachedEntity> GetCacheEntryAsync(
+    private async Task<CachedEntity?> GetCacheEntryAsync(
         EntityKey key,
         CancellationToken cancellationToken
     )
@@ -453,7 +453,7 @@ internal sealed class RecordStore
         }
     }
 
-    private static EntityKey TryCreateAlternateKey(
+    private static EntityKey? TryCreateAlternateKey(
         string logicalName,
         Entity record,
         string[] attributes
@@ -470,7 +470,7 @@ internal sealed class RecordStore
         );
         foreach (string attribute in attributes)
         {
-            if (!record.Attributes.TryGetValue(attribute, out object value) || value == null)
+            if (!record.Attributes.TryGetValue(attribute, out object? value) || value == null)
             {
                 return null;
             }

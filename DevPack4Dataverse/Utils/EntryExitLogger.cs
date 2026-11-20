@@ -31,16 +31,16 @@ public sealed class EntryExitLogger : IDisposable
     private readonly Stopwatch _stopwatch;
 
     public EntryExitLogger(
-        ILogger logger = null,
-        [CallerFilePath] string callerFilePath = null,
-        [CallerMemberName] string caller = null
+        ILogger? logger = null,
+        [CallerFilePath] string? callerFilePath = null,
+        [CallerMemberName] string? caller = null
     )
     {
         _logger = Guard.Against.Null(logger);
         _entrenceThreadId = Environment.CurrentManagedThreadId;
-        _callerObjectName = Path.GetFileNameWithoutExtension(callerFilePath);
+        _callerObjectName = Path.GetFileNameWithoutExtension(callerFilePath!);
         _stopwatch = Stopwatch.StartNew();
-        _callerMethod = caller;
+        _callerMethod = caller!;
     }
 
     public void Dispose()

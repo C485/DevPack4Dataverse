@@ -476,6 +476,6 @@ public class ExecuteMultipleLogicTests
 
     private sealed class MarkerResponse : OrganizationResponse
     {
-        public string Marker { get; set; }
+        public string Marker { get; set; } = null!;
     }
 }

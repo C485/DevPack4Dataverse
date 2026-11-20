@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,7 +119,7 @@ public sealed class DataverseDevPack : IDisposable
     /// </summary>
     /// <param name="options">Global cache, lock, and validation options.</param>
     /// <returns>A new mapper wrapper.</returns>
-    public MapperWrapper CreateMapperWrapper(MapperWrapperOptions options = null) =>
+    public MapperWrapper CreateMapperWrapper(MapperWrapperOptions? options = null) =>
         new(SdkProxy, _logger, options);
 
     /// <summary>

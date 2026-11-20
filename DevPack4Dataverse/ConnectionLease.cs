@@ -49,7 +49,7 @@ public sealed class ConnectionLease : IDisposable
 
     public T GetOrganizationServiceContext<T>() where T : OrganizationServiceContext
     {
-        return (T)Activator.CreateInstance(typeof(T), PureServiceClient);
+        return (T)Activator.CreateInstance(typeof(T), PureServiceClient)!;
     }
 
     private void DisposeConnection()

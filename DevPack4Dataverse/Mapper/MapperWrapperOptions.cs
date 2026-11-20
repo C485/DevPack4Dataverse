@@ -41,7 +41,7 @@ public sealed class MapperWrapperOptions
     /// Validates every saved record. When set, validation fields must be supplied either in
     /// <see cref="ValidationFields"/> or in <see cref="ValidationFieldsByEntity"/>.
     /// </summary>
-    public Func<Entity, MappingValidationContext, IEnumerable<string>> Validator { get; set; }
+    public Func<Entity, MappingValidationContext, IEnumerable<string>>? Validator { get; set; }
 
     /// <summary>Fallback validation fields used when no per-table fields are configured.</summary>
     public ISet<string> ValidationFields { get; } =
@@ -62,7 +62,7 @@ public sealed class MapperWrapperOptions
     {
         if (
             !string.IsNullOrWhiteSpace(logicalName)
-            && ValidationFieldsByEntity.TryGetValue(logicalName, out ISet<string> fields)
+            && ValidationFieldsByEntity.TryGetValue(logicalName, out ISet<string>? fields)
             && fields != null
         )
         {

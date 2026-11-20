@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,10 +36,10 @@ public class AdvancedMultipleRequest(ILogger microsoftLogger) : IExecute
         DataverseDevPack connectionManager = new(
             microsoftLogger,
             true,
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString(""), 6)
+            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
+            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
+            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
+            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6)
         );
         await DeleteRecords(connectionManager).ConfigureAwait(false);
 

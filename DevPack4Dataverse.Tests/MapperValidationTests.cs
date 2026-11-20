@@ -47,7 +47,7 @@ public class MapperValidationTests
                     {
                         options.ValidateAfterSave = true;
                         options.Validator = (entity, context) =>
-                            new[] { $"validation:{((OrderSource)context.Source).Name}" };
+                            new[] { $"validation:{((OrderSource)context.Source!).Name}" };
                     }
                 )
                 .Build();
@@ -316,7 +316,7 @@ public class MapperValidationTests
 
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
-        MapperWrapperOptions options = null
+        MapperWrapperOptions? options = null
     )
     {
         SdkProxy proxy = new(NullLogger.Instance, false, new FakeConnectionCreator(fake));
@@ -326,6 +326,6 @@ public class MapperValidationTests
 
     public sealed class OrderSource
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
     }
 }

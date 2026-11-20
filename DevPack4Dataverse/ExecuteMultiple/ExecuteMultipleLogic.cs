@@ -82,7 +82,7 @@ public sealed class ExecuteMultipleLogic
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -203,7 +203,7 @@ public sealed class ExecuteMultipleLogic
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
         ExecuteMultipleRequestSimpleSettings executeMultipleRequestSettings,
         CancellationToken cancellationToken = default,
-        RequestSettings requestSettings = null
+        RequestSettings? requestSettings = null
     )
     {
         using EntryExitLogger logGuard = new(_logger);
@@ -272,7 +272,7 @@ public sealed class ExecuteMultipleLogic
     private async Task<ExecuteMultipleResponse> ExecutePackAsync(
         OrganizationRequest[] packOfRequests,
         bool continueOnError,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -289,9 +289,9 @@ public sealed class ExecuteMultipleLogic
 
         requestWithResults.Requests.AddRange(packOfRequests);
 
-        ExecuteMultipleResponse response = await _sdkProxy
+        ExecuteMultipleResponse response = (await _sdkProxy
             .ExecuteAsync<ExecuteMultipleResponse>(requestWithResults, requestSettings)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))!;
 
         return Guard.Against.Null(response);
     }
@@ -301,7 +301,7 @@ public sealed class ExecuteMultipleLogic
         OrganizationRequest[] packOfRequests,
         int startIndex,
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex,
-        Action<OrganizationRequest, string> errorReport,
+        Action<OrganizationRequest, string>? errorReport,
         bool throwOnFault
     )
     {
@@ -345,8 +345,8 @@ public sealed class ExecuteMultipleLogic
     /// <returns>Execution statistics and responses ordered by the original request order.</returns>
     public async Task<ExecuteMultipleLogicResult> ExecuteAdaptiveAsync(
         ExecuteMultipleRequestBuilder executeMultipleRequestBuilder,
-        AdaptiveRequesterSettings settings = null,
-        RequestSettings requestSettings = null,
+        AdaptiveRequesterSettings? settings = null,
+        RequestSettings? requestSettings = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -574,7 +574,7 @@ public sealed class ExecuteMultipleLogic
         List<ExecuteMultipleResponseItem> orderedResponses = new(responsesByIndex.Count);
         for (int index = 0; index < requestCount; index++)
         {
-            if (responsesByIndex.TryGetValue(index, out ExecuteMultipleResponseItem response))
+            if (responsesByIndex.TryGetValue(index, out ExecuteMultipleResponseItem? response))
             {
                 orderedResponses.Add(response);
             }

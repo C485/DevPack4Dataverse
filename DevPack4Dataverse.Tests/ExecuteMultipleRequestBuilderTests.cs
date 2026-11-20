@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Xunit;
 using DevPack4Dataverse.ExecuteMultiple;
@@ -103,6 +103,6 @@ public class ExecuteMultipleRequestBuilderTests
     {
         var builder = Create();
 
-        Assert.NotNull(Record.Exception(() => builder.AddRequest(null)));
+        Assert.NotNull(Record.Exception(() => builder.AddRequest(null!)));
     }
 }

@@ -55,7 +55,7 @@ public sealed class SequentialStepResult
     /// <summary>
     /// Entity returned by a <see cref="RetrieveRequest"/>, or null when the step did not retrieve a record.
     /// </summary>
-    public Entity RetrievedEntity =>
+    public Entity? RetrievedEntity =>
         Response is RetrieveResponse retrieveResponse ? retrieveResponse.Entity : null;
 
     /// <summary>

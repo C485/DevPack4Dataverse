@@ -231,7 +231,7 @@ public sealed class FieldDrill
                 );
             }
 
-            return default;
+            return default!;
         }
 
         throw new InvalidOperationException(

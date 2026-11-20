@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
@@ -48,7 +48,7 @@ public class RequestSettingsTests
     public void AddToOrganizationRequest_NullRequest_Throws()
     {
         Assert.Throws<ArgumentNullException>(
-            () => new RequestSettings().AddToOrganizationRequest(null, NullLogger.Instance)
+            () => new RequestSettings().AddToOrganizationRequest(null!, NullLogger.Instance)
         );
     }
 

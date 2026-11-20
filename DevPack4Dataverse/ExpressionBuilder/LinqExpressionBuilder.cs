@@ -47,7 +47,7 @@ public static class LinqExpressionBuilder
     {
         private readonly ILogger _logger;
         private readonly int _maximumExpressions = 500;
-        private Expression<Func<U, bool>> _expression;
+        private Expression<Func<U, bool>>? _expression;
         private uint _expressionsAdded = 0;
 
         public LinqExpressionBuilderInner(ILogger logger)
@@ -76,7 +76,7 @@ public static class LinqExpressionBuilder
             }
 
             EnsureExpressionLimit(1, nameof(expressionToAdd));
-            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression.And(expressionToAdd, _logger);
+            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.And(expressionToAdd, _logger);
             _expressionsAdded++;
         }
 
@@ -100,7 +100,7 @@ public static class LinqExpressionBuilder
                 return;
             }
 
-            _expression = _expressionsAdded == 0 ? innerExpression : _expression.And(innerExpression, _logger);
+            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.And(innerExpression, _logger);
             _expressionsAdded += expressionsToAdd;
         }
 
@@ -115,7 +115,7 @@ public static class LinqExpressionBuilder
             }
 
             EnsureExpressionLimit(1, nameof(expressionToAdd));
-            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression.Or(expressionToAdd, _logger);
+            _expression = _expressionsAdded == 0 ? expressionToAdd : _expression!.Or(expressionToAdd, _logger);
             _expressionsAdded++;
         }
 
@@ -139,7 +139,7 @@ public static class LinqExpressionBuilder
                 return;
             }
 
-            _expression = _expressionsAdded == 0 ? innerExpression : _expression.Or(innerExpression, _logger);
+            _expression = _expressionsAdded == 0 ? innerExpression : _expression!.Or(innerExpression, _logger);
             _expressionsAdded += expressionsToAdd;
         }
 

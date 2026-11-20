@@ -29,10 +29,10 @@ namespace DevPack4Dataverse.Mapper;
 public sealed class Mapper<TSource, TTarget> : IMapper
     where TTarget : class, new()
 {
-    private readonly IModelEntityConverter<TTarget> _converter;
-    private readonly Func<MappingContext<TSource, TTarget>, EntityKey> _entityKeyFactory;
+    private readonly IModelEntityConverter<TTarget>? _converter;
+    private readonly Func<MappingContext<TSource, TTarget>, EntityKey>? _entityKeyFactory;
     private readonly IEntityLock _entityLock;
-    private readonly string _logicalName;
+    private readonly string? _logicalName;
     private readonly MapperOptions<TSource, TTarget> _options;
     private readonly IReadOnlyList<IMappingStep<TSource, TTarget>> _steps;
     private readonly RecordStore _recordStore;
@@ -45,9 +45,9 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         SdkProxy sdkProxy,
         IReadOnlyList<IMappingStep<TSource, TTarget>> steps,
         MapperOptions<TSource, TTarget> options,
-        IModelEntityConverter<TTarget> converter,
-        Func<MappingContext<TSource, TTarget>, EntityKey> entityKeyFactory,
-        string logicalName,
+        IModelEntityConverter<TTarget>? converter,
+        Func<MappingContext<TSource, TTarget>, EntityKey>? entityKeyFactory,
+        string? logicalName,
         RecordStore recordStore,
         ValidationReader validationReader,
         MapperWrapperOptions wrapperOptions,
@@ -75,7 +75,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
     public Task<MappingResult<TTarget>> ExecuteAsync(
         TSource source,
-        MappingRunOptions runOptions = null,
+        MappingRunOptions? runOptions = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -89,7 +89,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
     public async Task<MappingResult<TTarget>> ExecuteAsync(
         IEnumerable<TSource> sources,
-        MappingRunOptions runOptions = null,
+        MappingRunOptions? runOptions = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -127,7 +127,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
             _options.PreSave?.Invoke(context);
 
-            Entity mappedEntity = ConvertToEntity(target);
+            Entity? mappedEntity = ConvertToEntity(target);
             if (mappedEntity != null && _entityKeyFactory != null)
             {
                 ApplyEntityKey(mappedEntity, _entityKeyFactory(context));
@@ -176,7 +176,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
     async Task<IMappingResult> IMapper.ExecuteAsync(
         object source,
-        MappingRunOptions runOptions,
+        MappingRunOptions? runOptions,
         CancellationToken cancellationToken
     )
     {
@@ -214,7 +214,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             throw new MapperConfigurationException("Mapped entity has no logical name.");
         }
 
-        EntityKey key = EntityKey.FromEntity(entity);
+        EntityKey? key = EntityKey.FromEntity(entity);
         if (key == null)
         {
             return await CreateAsync(context, entity, null, state, cancellationToken)
@@ -227,7 +227,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
         IEnumerable<string> requiredColumns = entity.Attributes.Keys;
         bool useCacheForChangeDetection = _options.UseCacheForChangeDetection;
-        Entity current = await _recordStore
+        Entity? current = await _recordStore
             .GetAsync(
                 key,
                 requiredColumns,
@@ -288,7 +288,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
     private async Task<MappedRecord<TTarget>> CreateAsync(
         MappingContext<TSource, TTarget> context,
         Entity entity,
-        EntityKey key,
+        EntityKey? key,
         MappingExecutionState state,
         CancellationToken cancellationToken
     )
@@ -301,12 +301,12 @@ public sealed class Mapper<TSource, TTarget> : IMapper
                 entity.KeyAttributes[pair.Key] = pair.Value;
             }
 
-            UpsertResponse response = await _sdkProxy
+            UpsertResponse response = (await _sdkProxy
                 .ExecuteAsync<UpsertResponse>(
                     new UpsertRequest { Target = entity },
                     state.RequestSettings
                 )
-                .ConfigureAwait(false);
+                .ConfigureAwait(false))!;
             if (response?.Target == null)
             {
                 throw new MapperException(
@@ -319,12 +319,12 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         }
         else if (entity.Id != Guid.Empty)
         {
-            CreateResponse response = await _sdkProxy
+            CreateResponse response = (await _sdkProxy
                 .ExecuteAsync<CreateResponse>(
                     new CreateRequest { Target = entity },
                     state.RequestSettings
                 )
-                .ConfigureAwait(false);
+                .ConfigureAwait(false))!;
             if (response != null && response.id != Guid.Empty)
             {
                 entity.Id = response.id;
@@ -352,7 +352,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         );
     }
 
-    private Entity ConvertToEntity(TTarget target)
+    private Entity? ConvertToEntity(TTarget target)
     {
         if (target is Entity entity)
         {
@@ -423,7 +423,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
     private async Task<IReadOnlyList<MappingError>> ValidateAsync(
         IEnumerable<MappedRecord<TTarget>> records,
-        RequestSettings requestSettings,
+        RequestSettings? requestSettings,
         CancellationToken cancellationToken
     )
     {
@@ -454,7 +454,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         List<ValidationTarget> targets = records
             .Where(p => p.Reference != null)
             .Select(
-                p => new ValidationTarget(p.Reference, p.Source, p.Target, p.SavedEntity)
+                p => new ValidationTarget(p.Reference!, p.Source, p.Target, p.SavedEntity!)
             )
             .ToList();
 

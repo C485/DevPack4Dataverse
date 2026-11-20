@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
@@ -14,7 +14,7 @@ namespace DevPack4Dataverse.Tests;
 public class MoneyFieldTypeMethodsTests
 {
     private static (SdkProxy Proxy, MoneyFieldTypeMethods Methods) Create(
-        Func<string, Guid, ColumnSet, Entity> retrieve = null
+        Func<string, Guid, ColumnSet, Entity>? retrieve = null
     )
     {
         var connection = new FakeConnection { RetrieveHandler = retrieve };

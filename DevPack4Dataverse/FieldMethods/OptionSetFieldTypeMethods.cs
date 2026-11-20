@@ -100,7 +100,7 @@ public sealed class OptionSetFieldTypeMethods
 
         OptionMetadataCollection metadataResponse = await DownloadMetadataForField(logicalName, fieldName).ConfigureAwait(false);
 
-        OptionMetadata mappedFieldValueMetadata = FindOptionByValue(
+        OptionMetadata? mappedFieldValueMetadata = FindOptionByValue(
             metadataResponse,
             valueToMap
         );
@@ -113,7 +113,7 @@ public sealed class OptionSetFieldTypeMethods
             return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
         }
 
-        LocalizedLabel languageDependentLabel = FindLocalizedLabel(
+        LocalizedLabel? languageDependentLabel = FindLocalizedLabel(
             mappedFieldValueMetadata.Label,
             languageCode
         );
@@ -179,7 +179,7 @@ public sealed class OptionSetFieldTypeMethods
 
         if (languageCode == NoLanguageFilter)
         {
-            OptionMetadata mappedFieldValueMetadata = FindOptionByLabel(
+            OptionMetadata? mappedFieldValueMetadata = FindOptionByLabel(
                 metadataResponse,
                 valueToMap,
                 compareIgnoreCase
@@ -230,14 +230,14 @@ public sealed class OptionSetFieldTypeMethods
             fieldName ?? string.Empty
         );
         if (
-            _metadataCache.TryGetValue(cacheKey, out MetadataCacheEntry cached)
+            _metadataCache.TryGetValue(cacheKey, out MetadataCacheEntry? cached)
             && cached.ExpiresUtc > DateTime.UtcNow
         )
         {
             return cached.Metadata;
         }
 
-        RetrieveAttributeResponse metadataInfo = await _sdkProxy
+        RetrieveAttributeResponse? metadataInfo = await _sdkProxy
             .ExecuteAsync<RetrieveAttributeResponse>(
                 new RetrieveAttributeRequest
                 {
@@ -293,7 +293,7 @@ public sealed class OptionSetFieldTypeMethods
         return metadata;
     }
 
-    private static OptionMetadata FindOptionByValue(
+    private static OptionMetadata? FindOptionByValue(
         OptionMetadataCollection options,
         int value
     )
@@ -309,7 +309,7 @@ public sealed class OptionSetFieldTypeMethods
         return null;
     }
 
-    private static OptionMetadata FindOptionByLabel(
+    private static OptionMetadata? FindOptionByLabel(
         OptionMetadataCollection options,
         string label,
         bool compareIgnoreCase
@@ -320,7 +320,7 @@ public sealed class OptionSetFieldTypeMethods
             : StringComparison.Ordinal;
         foreach (OptionMetadata option in options)
         {
-            string optionLabel = option.Label?.UserLocalizedLabel?.Label;
+            string? optionLabel = option.Label?.UserLocalizedLabel?.Label;
             if (optionLabel != null && string.Equals(label, optionLabel, comparison))
             {
                 return option;
@@ -330,7 +330,7 @@ public sealed class OptionSetFieldTypeMethods
         return null;
     }
 
-    private static LocalizedLabel FindLocalizedLabel(Label label, int languageCode)
+    private static LocalizedLabel? FindLocalizedLabel(Label? label, int languageCode)
     {
         if (label?.LocalizedLabels == null)
         {

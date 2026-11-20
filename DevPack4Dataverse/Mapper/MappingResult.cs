@@ -43,5 +43,5 @@ public sealed class MappingResult<TTarget> : IValidationAwareMappingResult
     public bool ValidationWasRun { get; }
 
     public IReadOnlyList<EntityReference> SavedReferences =>
-        Records.Where(p => p.Reference != null).Select(p => p.Reference).ToArray();
+        Records.Select(p => p.Reference).OfType<EntityReference>().ToArray();
 }

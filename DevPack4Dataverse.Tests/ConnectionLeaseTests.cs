@@ -8,7 +8,7 @@ public class ConnectionLeaseTests
     [Fact]
     public void Constructor_NullConnection_DoesNotCrashOnFinalization()
     {
-        Assert.Throws<ArgumentNullException>(() => new ConnectionLease(null));
+        Assert.Throws<ArgumentNullException>(() => new ConnectionLease(null!));
 
         GC.Collect();
         GC.WaitForPendingFinalizers();

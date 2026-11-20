@@ -66,7 +66,7 @@ public sealed class ExecuteTransactionRequestBuilder
     public ExecuteTransactionRequest Request =>
         new() { Requests = GetOrganizationRequests(), ReturnResponses = _returnResponses };
 
-    public void AddCreate(Entity record, RequestSettings requestSettings = null)
+    public void AddCreate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -80,7 +80,7 @@ public sealed class ExecuteTransactionRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void AddDelete(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -94,7 +94,7 @@ public sealed class ExecuteTransactionRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void AddDelete(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
 
         AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
@@ -109,7 +109,7 @@ public sealed class ExecuteTransactionRequestBuilder
     /// <paramref name="request"/> is an <see cref="ExecuteMultipleRequest"/> or
     /// <see cref="ExecuteTransactionRequest"/>.
     /// </exception>
-    public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
+    public void AddRequest(OrganizationRequest request, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(request);
@@ -127,7 +127,7 @@ public sealed class ExecuteTransactionRequestBuilder
         _requests.Enqueue(request);
     }
 
-    public void AddUpdate(Entity record, RequestSettings requestSettings = null)
+    public void AddUpdate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -141,7 +141,7 @@ public sealed class ExecuteTransactionRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddUpsert(Entity record, RequestSettings requestSettings = null)
+    public void AddUpsert(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));

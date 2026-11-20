@@ -66,7 +66,7 @@ public sealed class ExecuteMultipleRequestBuilder
             Requests = GetOrganizationRequests()
         };
 
-    public void AddCreate(Entity record, RequestSettings requestSettings = null)
+    public void AddCreate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -80,7 +80,7 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(EntityReference entityReference, RequestSettings requestSettings = null)
+    public void AddDelete(EntityReference entityReference, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -94,13 +94,13 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddDelete(string logicalName, Guid id, RequestSettings requestSettings = null)
+    public void AddDelete(string logicalName, Guid id, RequestSettings? requestSettings = null)
     {
 
         AddDelete(EntityReferenceUtils.CreateEntityReference(id, logicalName, _logger), requestSettings);
     }
 
-    public void AddRequest(OrganizationRequest request, RequestSettings requestSettings = null)
+    public void AddRequest(OrganizationRequest request, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.Null(request);
@@ -110,7 +110,7 @@ public sealed class ExecuteMultipleRequestBuilder
         _requests.Enqueue(request);
     }
 
-    public void AddUpdate(Entity record, RequestSettings requestSettings = null)
+    public void AddUpdate(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(
@@ -124,7 +124,7 @@ public sealed class ExecuteMultipleRequestBuilder
         AddRequest(request, requestSettings);
     }
 
-    public void AddUpsert(Entity record, RequestSettings requestSettings = null)
+    public void AddUpsert(Entity record, RequestSettings? requestSettings = null)
     {
 
         Guard.Against.NullOrInvalidInput(record, nameof(record), p => !string.IsNullOrEmpty(p.LogicalName));
