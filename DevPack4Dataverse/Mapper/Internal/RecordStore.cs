@@ -262,7 +262,7 @@ internal sealed class RecordStore
             query.Criteria.AddCondition(
                 key.LogicalName + "id",
                 ConditionOperator.Equal,
-                key.Id.Value
+                key.Id!.Value
             );
         }
 

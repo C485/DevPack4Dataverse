@@ -203,7 +203,8 @@ internal sealed class LookupResolver
         }
         else
         {
-            entity.Id = key.Id.Value;
+            // A non-alternate EntityKey always has a non-empty id.
+            entity.Id = key.Id!.Value;
             _ = await _sdkProxy
                 .ExecuteAsync<CreateResponse>(
                     new CreateRequest { Target = entity },

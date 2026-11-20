@@ -281,7 +281,7 @@ public sealed class EntityKey : IEquatable<EntityKey>
             return reference;
         }
 
-        return new EntityReference(LogicalName, Id.Value);
+        return new EntityReference(LogicalName, Id!.Value);
     }
 
     public bool Equals(EntityKey other) =>

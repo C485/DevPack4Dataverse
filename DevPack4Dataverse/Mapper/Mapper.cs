@@ -416,7 +416,8 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         }
         else
         {
-            entity.Id = key.Id.Value;
+            // A non-alternate EntityKey always has a non-empty id.
+            entity.Id = key.Id!.Value;
         }
     }
 

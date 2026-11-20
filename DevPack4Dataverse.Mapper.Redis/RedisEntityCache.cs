@@ -93,7 +93,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             .ConfigureAwait(false);
         if (!value.IsNull)
         {
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+                value.ToString()
+            );
             if (dto != null && dto.Id != Guid.Empty)
             {
                 await _database
@@ -139,7 +141,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 continue;
             }
 
-            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(value);
+            CachedEntityDto dto = JsonConvert.DeserializeObject<CachedEntityDto>(
+                value.ToString()
+            );
             if (dto?.Id == id)
             {
                 await _database.KeyDeleteAsync(key).ConfigureAwait(false);
