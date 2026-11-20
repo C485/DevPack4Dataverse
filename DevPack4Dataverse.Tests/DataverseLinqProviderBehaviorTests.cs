@@ -7,6 +7,9 @@ using Microsoft.Xrm.Sdk.Query;
 using Xunit;
 using DevPack4Dataverse.ExpressionBuilder;
 
+// Late-bound attribute access returns object; these tests intentionally compare it with string constants.
+#pragma warning disable CS0252
+
 namespace DevPack4Dataverse.Tests;
 
 /// <summary>
@@ -251,3 +254,5 @@ public class DataverseLinqProviderBehaviorTests
         ) => throw new NotSupportedException();
     }
 }
+
+#pragma warning restore CS0252
