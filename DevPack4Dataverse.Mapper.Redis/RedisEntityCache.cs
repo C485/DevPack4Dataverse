@@ -69,13 +69,19 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         cancellationToken.ThrowIfCancellationRequested();
         if (timeToLive <= TimeSpan.Zero)
         {
-            // A non-positive TTL means the entry must not be cached.
+            // A non-positive TTL means the entry must not be cached. Remove an older value so
+            // changing the configured TTL at runtime cannot leave stale data behind.
+            await RemoveAsync(key, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         string json = Serialize(entry);
         TimeSpan expiry = timeToLive;
         await _database.StringSetAsync(Key(key), json, expiry).ConfigureAwait(false);
+
+        StackExchange.Redis.RedisKey tableKey = TableKey(entry.Record.LogicalName);
+        await _database.SetAddAsync(tableKey, Key(key).ToString()).ConfigureAwait(false);
+        await _database.KeyExpireAsync(tableKey, expiry).ConfigureAwait(false);
 
         if (entry.Record.Id != Guid.Empty)
         {
@@ -84,7 +90,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
                 entry.Record.Id
             );
             await _database.SetAddAsync(indexKey, Key(key).ToString()).ConfigureAwait(false);
+            await _database.SetAddAsync(tableKey, indexKey.ToString()).ConfigureAwait(false);
             await _database.KeyExpireAsync(indexKey, expiry).ConfigureAwait(false);
+            await _database.KeyExpireAsync(tableKey, expiry).ConfigureAwait(false);
         }
     }
 
@@ -160,20 +168,19 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         CancellationToken cancellationToken = default
     )
     {
-        foreach (StackExchange.Redis.RedisKey key in EnumerateKeys(logicalName, cancellationToken))
+        cancellationToken.ThrowIfCancellationRequested();
+        StackExchange.Redis.RedisKey tableKey = TableKey(logicalName);
+        StackExchange.Redis.RedisValue[] keys = await _database
+            .SetMembersAsync(tableKey)
+            .ConfigureAwait(false);
+
+        foreach (StackExchange.Redis.RedisValue key in keys)
         {
-            await _database.KeyDeleteAsync(key).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            await _database.KeyDeleteAsync(key.ToString()).ConfigureAwait(false);
         }
 
-        foreach (
-            StackExchange.Redis.RedisKey key in EnumerateKeysByPattern(
-                _prefix + "id:" + logicalName.ToLowerInvariant() + "|*",
-                cancellationToken
-            )
-        )
-        {
-            await _database.KeyDeleteAsync(key).ConfigureAwait(false);
-        }
+        await _database.KeyDeleteAsync(tableKey).ConfigureAwait(false);
     }
 
     internal static string Serialize(CachedEntity entry) =>
@@ -221,6 +228,9 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     private StackExchange.Redis.RedisKey IndexKey(string logicalName, Guid id) =>
         _prefix + "id:" + logicalName.ToLowerInvariant() + "|" + id.ToString("N");
 
+    private StackExchange.Redis.RedisKey TableKey(string logicalName) =>
+        _prefix + "table:" + logicalName.ToLowerInvariant();
+
     private string KeyPrefix(string logicalName) =>
         _prefix + logicalName.ToLowerInvariant() + "|";
 
@@ -229,6 +239,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         public string LogicalName { get; set; } = null!;
         public Guid Id { get; set; }
         public List<string> LoadedColumns { get; set; } = new();
+        public string? RowVersion { get; set; }
         public List<CachedAttributeDto> Attributes { get; set; } = new();
         public List<CachedAttributeDto> KeyAttributes { get; set; } = new();
         public List<KeyValuePair<string, string>> FormattedValues { get; set; } = new();
@@ -239,6 +250,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             {
                 LogicalName = entry.Record.LogicalName,
                 Id = entry.Record.Id,
+                RowVersion = entry.Record.RowVersion,
                 LoadedColumns = new List<string>(entry.LoadedColumns),
                 Attributes = new List<CachedAttributeDto>(entry.Record.Attributes.Count),
                 KeyAttributes = new List<CachedAttributeDto>(entry.Record.KeyAttributes.Count),
@@ -267,7 +279,10 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
         public CachedEntity ToCachedEntity()
         {
-            Entity record = new(LogicalName, Id);
+            Entity record = new(LogicalName, Id)
+            {
+                RowVersion = RowVersion
+            };
             foreach (CachedAttributeDto attribute in Attributes)
             {
                 record[attribute.Name] = attribute.ToValue();

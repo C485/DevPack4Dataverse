@@ -51,6 +51,33 @@ public class FileOrImageFieldTypeMethodsTests
     }
 
     [Fact]
+    public async Task Delete_WhenFieldIsImage_ClearsTheColumn()
+    {
+        Entity? update = null;
+        var connection = new FakeConnection
+        {
+            RetrieveHandler = (entityName, id, _) =>
+                new Entity(entityName, id) { ["new_image"] = new byte[] { 1, 2, 3 } },
+            UpdateRecordHandler = entity => update = entity
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            bool deleted = await methods.Delete(
+                new EntityReference("account", Guid.NewGuid()),
+                "new_image"
+            );
+
+            Assert.True(deleted);
+        }
+
+        Assert.NotNull(update);
+        Assert.True(update!.Contains("new_image"));
+        Assert.Null(update["new_image"]);
+    }
+
+    [Fact]
     public async Task Delete_WhenFieldIsPresent_DeletesTheFile()
     {
         Guid fileId = Guid.NewGuid();

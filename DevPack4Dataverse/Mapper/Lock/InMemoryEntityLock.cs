@@ -67,9 +67,11 @@ public sealed class InMemoryEntityLock : IEntityLock
     private static int GetStripe(EntityKey key) =>
         (key.ToString().GetHashCode() & int.MaxValue) % StripeCount;
 
-    private sealed class LockHandle(SemaphoreSlim semaphore) : IEntityLockHandle
+    private sealed class LockHandle(SemaphoreSlim semaphore) : IEntityLockHandle, IEntityLockState
     {
         private int _released;
+
+        public bool IsLost => false;
 
         public void Dispose()
         {

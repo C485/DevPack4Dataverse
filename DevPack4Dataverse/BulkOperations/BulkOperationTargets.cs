@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 using Ardalis.GuardClauses;
+using DevPack4Dataverse.Mapper;
 using Microsoft.Xrm.Sdk;
 
 namespace DevPack4Dataverse.BulkOperations;
@@ -57,6 +58,7 @@ internal static class BulkOperationTargets
             );
         }
 
+        HashSet<string> identities = new(StringComparer.Ordinal);
         foreach (Entity entity in targets.Entities)
         {
             if (entity == null)
@@ -72,16 +74,30 @@ internal static class BulkOperationTargets
                 );
             }
 
-            if (
-                requireIdentity
-                && entity.Id == Guid.Empty
-                && (entity.KeyAttributes == null || entity.KeyAttributes.Count == 0)
-            )
+            if (requireIdentity)
             {
-                throw new ArgumentException(
-                    $"Target '{entityName}' must have an id or alternate-key values.",
-                    parameterName
-                );
+                if (
+                    entity.Id == Guid.Empty
+                    && (entity.KeyAttributes == null || entity.KeyAttributes.Count == 0)
+                )
+                {
+                    throw new ArgumentException(
+                        $"Target '{entityName}' must have an id or alternate-key values.",
+                        parameterName
+                    );
+                }
+
+                // A single UpdateMultiple applies only the first duplicate target and an
+                // UpsertMultiple rejects duplicates. Without this guard, chunking the payload
+                // turns those documented rules into a parallel last-writer-wins race.
+                EntityKey identityKey = EntityKey.FromEntity(entity)!;
+                if (!identities.Add(identityKey.ToString()))
+                {
+                    throw new ArgumentException(
+                        $"Targets must not contain duplicate record identities. Duplicate: '{identityKey}'.",
+                        parameterName
+                    );
+                }
             }
         }
 

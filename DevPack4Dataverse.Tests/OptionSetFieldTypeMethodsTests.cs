@@ -65,6 +65,74 @@ public class OptionSetFieldTypeMethodsTests
         Assert.Equal(1, metadataCalls);
     }
 
+    [Fact]
+    public async Task MapOptionSetToString_MissingLanguage_FallsBackToBase()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = _ => MetadataResponseWithTranslations()
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            string label = await methods.MapOptionSetToString(
+                "account",
+                "industrycode",
+                1,
+                languageCode: 1036
+            );
+
+            Assert.Equal("Red", label);
+        }
+    }
+
+    [Fact]
+    public async Task MapStringToOptionSet_MissingLanguage_FallsBackToBase()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = _ => MetadataResponseWithTranslations()
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            OptionSetValue value = await methods.MapStringToOptionSet(
+                "account",
+                "industrycode",
+                "Red",
+                languageCode: 1036
+            );
+
+            Assert.Equal(1, value.Value);
+        }
+    }
+
+    [Fact]
+    public async Task MapStringToEnum_NonIntEnum_Works()
+    {
+        var connection = new FakeConnection { ExecuteHandler = _ => MetadataResponse() };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            ShortIndustry value = await methods.MapStringToEnum<ShortIndustry>(
+                "account",
+                "industrycode",
+                "Finance",
+                languageCode: 1033
+            );
+
+            Assert.Equal(ShortIndustry.Finance, value);
+        }
+    }
+
+    private enum ShortIndustry : short
+    {
+        Finance = 1
+    }
+
     private static RetrieveAttributeResponse MetadataResponse()
     {
         var metadata = new PicklistAttributeMetadata("industrycode")
@@ -74,6 +142,21 @@ public class OptionSetFieldTypeMethodsTests
         metadata.OptionSet.Options.Add(
             new OptionMetadata(new Label("Finance", 1033), 1)
         );
+
+        var response = new RetrieveAttributeResponse();
+        response.Results["AttributeMetadata"] = metadata;
+        return response;
+    }
+
+    private static RetrieveAttributeResponse MetadataResponseWithTranslations()
+    {
+        var metadata = new PicklistAttributeMetadata("industrycode")
+        {
+            OptionSet = new OptionSetMetadata()
+        };
+        var label = new Label("Czerwony", 1045);
+        label.LocalizedLabels.Add(new LocalizedLabel("Red", 1033));
+        metadata.OptionSet.Options.Add(new OptionMetadata(label, 1));
 
         var response = new RetrieveAttributeResponse();
         response.Results["AttributeMetadata"] = metadata;

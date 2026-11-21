@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Models;
@@ -105,6 +106,27 @@ public class ExecuteMultipleRequestBuilderTests
         var builder = Create();
 
         Assert.NotNull(Record.Exception(() => builder.AddRequest(null!)));
+    }
+
+    [Fact]
+    public void AddRequest_AllowsNestedTransaction()
+    {
+        var builder = Create();
+
+        builder.AddRequest(new ExecuteTransactionRequest());
+
+        Assert.Equal(1, builder.Count);
+    }
+
+    [Fact]
+    public void AddRequest_RejectsNestedExecuteMultiple()
+    {
+        var builder = Create();
+
+        Assert.Throws<ArgumentException>(
+            () => builder.AddRequest(new ExecuteMultipleRequest())
+        );
+        Assert.Equal(0, builder.Count);
     }
 
     [Fact]

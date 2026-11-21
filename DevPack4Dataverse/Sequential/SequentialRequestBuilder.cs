@@ -35,6 +35,13 @@ namespace DevPack4Dataverse.Sequential;
 /// </remarks>
 public sealed class SequentialRequestBuilder
 {
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with the steps completed before the failure.
+    /// The value is a <see cref="SequentialRequestContext"/>.
+    /// </summary>
+    public const string PartialResultsDataKey =
+        "DevPack4Dataverse.Sequential.PartialResults";
+
     private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
     private readonly List<SequentialStep> _steps = new();
@@ -379,16 +386,24 @@ public sealed class SequentialRequestBuilder
         var results = new List<SequentialStepResult>(steps.Length);
         foreach (SequentialStep step in steps)
         {
-            SequentialRequestContext context = new(results);
-            OrganizationRequest request = Guard.Against.Null(
-                step.RequestFactory(context),
-                nameof(step)
-            );
-            OrganizationResponse response = Guard.Against.Null(
-                _sdkProxy.Execute<OrganizationResponse>(request, step.RequestSettings),
-                message: "The Dataverse service returned a null response."
-            );
-            results.Add(new SequentialStepResult(results.Count, request, response));
+            try
+            {
+                SequentialRequestContext context = new(results);
+                OrganizationRequest request = Guard.Against.Null(
+                    step.RequestFactory(context),
+                    nameof(step)
+                );
+                OrganizationResponse response = Guard.Against.Null(
+                    _sdkProxy.Execute<OrganizationResponse>(request, step.RequestSettings),
+                    message: "The Dataverse service returned a null response."
+                );
+                results.Add(new SequentialStepResult(results.Count, request, response));
+            }
+            catch (Exception exception)
+            {
+                exception.Data[PartialResultsDataKey] = new SequentialRequestContext(results);
+                throw;
+            }
         }
 
         return new SequentialRequestContext(results);
@@ -425,19 +440,27 @@ public sealed class SequentialRequestBuilder
         var results = new List<SequentialStepResult>(steps.Length);
         foreach (SequentialStep step in steps)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            SequentialRequestContext context = new(results);
-            OrganizationRequest request = Guard.Against.Null(
-                step.RequestFactory(context),
-                nameof(step)
-            );
-            OrganizationResponse response = Guard.Against.Null(
-                await _sdkProxy
-                    .ExecuteAsync<OrganizationResponse>(request, step.RequestSettings)
-                    .ConfigureAwait(false),
-                message: "The Dataverse service returned a null response."
-            );
-            results.Add(new SequentialStepResult(results.Count, request, response));
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                SequentialRequestContext context = new(results);
+                OrganizationRequest request = Guard.Against.Null(
+                    step.RequestFactory(context),
+                    nameof(step)
+                );
+                OrganizationResponse response = Guard.Against.Null(
+                    await _sdkProxy
+                        .ExecuteAsync<OrganizationResponse>(request, step.RequestSettings)
+                        .ConfigureAwait(false),
+                    message: "The Dataverse service returned a null response."
+                );
+                results.Add(new SequentialStepResult(results.Count, request, response));
+            }
+            catch (Exception exception)
+            {
+                exception.Data[PartialResultsDataKey] = new SequentialRequestContext(results);
+                throw;
+            }
         }
 
         return new SequentialRequestContext(results);

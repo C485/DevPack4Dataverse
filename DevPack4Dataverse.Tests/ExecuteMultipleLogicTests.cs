@@ -245,6 +245,219 @@ public class ExecuteMultipleLogicTests
     }
 
     [Fact]
+    public async Task SimpleExecuteAsync_SplitBatch_StopsAfterFault()
+    {
+        var batchSizes = new List<int>();
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            batchSizes.Add(executeMultiple.Requests.Count);
+            if (executeMultiple.Requests.Count > 2)
+            {
+                throw MaxBatchSizeFault(2);
+            }
+
+            return batchSizes.Count == 3
+                ? Response(Failure(0))
+                : Response(
+                    executeMultiple
+                        .Requests.Select((item, index) => Success(index, item.RequestName))
+                        .ToArray()
+                );
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("a", "b", "c", "d", "e", "f");
+
+            ExecuteMultipleException exception =
+                await Assert.ThrowsAsync<ExecuteMultipleException>(
+                    () =>
+                        logic.ExecuteAsync(
+                            builder,
+                            new ExecuteMultipleRequestSimpleSettings { RequestSize = 6 }
+                        )
+                );
+
+            Assert.Equal(new[] { 6, 2, 2 }, batchSizes);
+            Assert.Equal(2, exception.Fault?.RequestIndex);
+            Assert.Equal(3, exception.Result.Results.Count);
+        }
+    }
+
+    [Fact]
+    public async Task SimpleExecuteAsync_RecordsProcessedStopsAtFault()
+    {
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            return Response(
+                executeMultiple
+                    .Requests.Select(
+                        (item, index) =>
+                            index == 1 ? Failure(index) : Success(index, item.RequestName)
+                    )
+                    .ToArray()
+            );
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("a", "b", "c");
+
+            ExecuteMultipleException exception =
+                await Assert.ThrowsAsync<ExecuteMultipleException>(
+                    () =>
+                        logic.ExecuteAsync(
+                            builder,
+                            new ExecuteMultipleRequestSimpleSettings { RequestSize = 3 }
+                        )
+                );
+
+            Assert.Equal(2, exception.Result.RecordsProcessed);
+            Assert.Equal(3, exception.Result.RecordsRequested);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SplitBatch_KeepsSuccessfulPartsWhenLaterPartThrows()
+    {
+        int reported = 0;
+        var batchSizes = new List<int>();
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            batchSizes.Add(executeMultiple.Requests.Count);
+            if (executeMultiple.Requests.Count > 2)
+            {
+                throw MaxBatchSizeFault(2);
+            }
+
+            if (batchSizes.Count == 3)
+            {
+                throw new InvalidOperationException("transport failure");
+            }
+
+            return Response(
+                executeMultiple
+                    .Requests.Select((item, index) => Success(index, item.RequestName))
+                    .ToArray()
+            );
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("a", "b", "c", "d", "e", "f");
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSettings
+                {
+                    RequestSize = 6,
+                    MaxDegreeOfParallelism = 1,
+                    ErrorReport = (_, _) => reported++,
+                }
+            );
+
+            Assert.Equal(new[] { 6, 2, 2, 2 }, batchSizes);
+            Assert.Equal(2, reported);
+            Assert.Equal(
+                new[] { "a", "b", "e", "f" },
+                result.Results.Select(item => ((MarkerResponse)item.Response).Marker).ToArray()
+            );
+        }
+    }
+
+    private static FaultException<OrganizationServiceFault> MaxBatchSizeFault(int maxBatchSize)
+    {
+        var detail = new OrganizationServiceFault();
+        detail.ErrorDetails["MaxBatchSize"] = maxBatchSize;
+        return new FaultException<OrganizationServiceFault>(detail);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AppliesBatchSettingsToInnerRequests()
+    {
+        var captured = new List<OrganizationRequest>();
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            captured.AddRange(executeMultiple.Requests);
+            return Response(
+                executeMultiple
+                    .Requests.Select((item, index) => Success(index, item.RequestName))
+                    .ToArray()
+            );
+        });
+
+        using (proxy)
+        {
+            var builder = new ExecuteMultipleRequestBuilder(NullLogger.Instance);
+            builder.AddUpdate(new Entity("account") { Id = Guid.NewGuid() });
+            builder.AddUpdate(new Entity("account") { Id = Guid.NewGuid() });
+
+            await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSettings { RequestSize = 10 },
+                requestSettings: new RequestSettings
+                {
+                    ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches,
+                    SkipPluginExecution = true,
+                    SuppressDuplicateDetection = true,
+                    PartitionId = "partition",
+                    SharedVariable = "tag-value",
+                }
+            );
+
+            Assert.Equal(2, captured.Count);
+            Assert.All(
+                captured,
+                request =>
+                {
+                    Assert.Equal(
+                        ConcurrencyBehavior.IfRowVersionMatches,
+                        request["ConcurrencyBehavior"]
+                    );
+                    Assert.Equal(true, request["BypassCustomPluginExecution"]);
+                    Assert.Equal(true, request["SuppressDuplicateDetection"]);
+                    Assert.Equal("partition", request["PartitionId"]);
+                    Assert.Equal("tag-value", request["tag"]);
+                }
+            );
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DoesNotOverwritePerMessageSettings()
+    {
+        var captured = new List<OrganizationRequest>();
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            captured.AddRange(executeMultiple.Requests);
+            return Response(Success(0, executeMultiple.Requests[0].RequestName));
+        });
+
+        using (proxy)
+        {
+            var builder = new ExecuteMultipleRequestBuilder(NullLogger.Instance);
+            builder.AddRequest(
+                new OrganizationRequest("a"),
+                new RequestSettings { SkipPluginExecution = true }
+            );
+
+            await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSettings { RequestSize = 10 },
+                requestSettings: new RequestSettings()
+            );
+
+            OrganizationRequest inner = Assert.Single(captured);
+            Assert.Equal(true, inner["BypassCustomPluginExecution"]);
+        }
+    }
+
+    [Fact]
     public async Task SimpleExecuteAsync_FaultCarriesPartialResult()
     {
         int calls = 0;

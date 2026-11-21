@@ -70,14 +70,20 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
             throw new ArgumentNullException(nameof(entry));
         }
 
+        string cacheKey = key.ToString();
         if (timeToLive <= TimeSpan.Zero)
         {
-            // A non-positive TTL means the entry must not be cached.
+            // A non-positive TTL means the entry must not be cached. Remove an older value so
+            // changing the configured TTL at runtime cannot leave stale data behind.
+            if (_entries.TryRemove(cacheKey, out CacheEntry? stale))
+            {
+                UnindexEntry(cacheKey, stale.Value);
+            }
+
             return Task.CompletedTask;
         }
 
         DateTime expiresUtc = DateTime.UtcNow.Add(timeToLive);
-        string cacheKey = key.ToString();
         if (_entries.TryGetValue(cacheKey, out CacheEntry? previous))
         {
             UnindexEntry(cacheKey, previous.Value);

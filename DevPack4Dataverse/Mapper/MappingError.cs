@@ -19,6 +19,7 @@ namespace DevPack4Dataverse.Mapper;
 /// <summary>
 /// One mapping or validation problem.
 /// </summary>
+[Serializable]
 public sealed class MappingError
 {
     public MappingError(

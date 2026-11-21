@@ -357,6 +357,60 @@ public class MapperValidationTests
         }
     }
 
+    [Fact]
+    public async Task ExecuteAllAsync_Failure_AttachesCompletedMapperResults()
+    {
+        Guid id = Guid.NewGuid();
+        int creates = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ =>
+                Interlocked.Increment(ref creates) == 1
+                    ? id
+                    : throw new InvalidOperationException("second mapper failed")
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var first = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("first")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+            var second = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("second")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+            wrapper.Register("first", first);
+            wrapper.Register("second", second);
+
+            InvalidOperationException exception =
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () =>
+                        wrapper.ExecuteAllAsync(
+                            new[]
+                            {
+                                new MapperExecution(
+                                    "first",
+                                    new OrderSource { Name = "One" }
+                                ),
+                                new MapperExecution(
+                                    "second",
+                                    new OrderSource { Name = "Two" }
+                                )
+                            }
+                        )
+                );
+
+            var partial = Assert.IsType<MapperBatchResult>(
+                exception.Data[MapperBatchResult.PartialResultsDataKey]
+            );
+            Assert.Single(partial.MapperResults);
+        }
+    }
+
     private static (SdkProxy Proxy, MapperWrapper Wrapper) Create(
         FakeConnection fake,
         MapperWrapperOptions? options = null

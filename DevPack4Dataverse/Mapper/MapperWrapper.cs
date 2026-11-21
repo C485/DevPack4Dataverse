@@ -137,10 +137,19 @@ public sealed class MapperWrapper
             && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
         )
         {
-            errors.AddRange(
-                await ValidateAsync(result.SavedReferences, cancellationToken)
-                    .ConfigureAwait(false)
-            );
+            try
+            {
+                errors.AddRange(
+                    await ValidateAsync(result.SavedReferences, cancellationToken)
+                        .ConfigureAwait(false)
+                );
+            }
+            catch (Exception exception)
+            {
+                exception.Data[MapperWrapperResult.PartialResultsDataKey] =
+                    new MapperWrapperResult(result, errors.ToArray());
+                throw;
+            }
         }
 
         return new MapperWrapperResult(result, errors);
@@ -172,27 +181,49 @@ public sealed class MapperWrapper
         for (int index = 0; index < executionList.Count; index++)
         {
             MapperExecution execution = executionList[index];
-            IMappingResult result = await mappers[index]
-                .ExecuteAsync(execution.Source, execution.RunOptions, cancellationToken)
-                .ConfigureAwait(false);
-            results.Add(result);
-            errors.AddRange(result.Errors);
-
-            if (
-                execution.RunOptions?.ValidateAfterSave != false
-                && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
-            )
+            try
             {
-                referencesToValidate.AddRange(result.SavedReferences);
+                IMappingResult result = await mappers[index]
+                    .ExecuteAsync(execution.Source, execution.RunOptions, cancellationToken)
+                    .ConfigureAwait(false);
+                results.Add(result);
+                errors.AddRange(result.Errors);
+
+                if (
+                    execution.RunOptions?.ValidateAfterSave != false
+                    && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+                )
+                {
+                    referencesToValidate.AddRange(result.SavedReferences);
+                }
+            }
+            catch (Exception exception)
+            {
+                exception.Data[MapperBatchResult.PartialResultsDataKey] = new MapperBatchResult(
+                    results.ToArray(),
+                    errors.ToArray()
+                );
+                throw;
             }
         }
 
         if (Options.ValidateAfterSave)
         {
-            errors.AddRange(
-                await ValidateAsync(referencesToValidate, cancellationToken)
-                    .ConfigureAwait(false)
-            );
+            try
+            {
+                errors.AddRange(
+                    await ValidateAsync(referencesToValidate, cancellationToken)
+                        .ConfigureAwait(false)
+                );
+            }
+            catch (Exception exception)
+            {
+                exception.Data[MapperBatchResult.PartialResultsDataKey] = new MapperBatchResult(
+                    results.ToArray(),
+                    errors.ToArray()
+                );
+                throw;
+            }
         }
 
         return new MapperBatchResult(results, errors);

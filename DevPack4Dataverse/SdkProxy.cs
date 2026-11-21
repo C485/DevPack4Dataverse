@@ -25,6 +25,7 @@ using DevPack4Dataverse.Interfaces;
 using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
@@ -105,6 +106,9 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             return _connections.Count;
         }
     }
+
+    /// <summary>Test seam: overrides the disposal wait derived from the service timeout.</summary>
+    internal TimeSpan? DisposeWaitTimeoutOverride { get; set; }
 
     /// <summary>
     /// Blocks until at least <paramref name="count"/> connections have been created.
@@ -393,24 +397,46 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
         finally
         {
+            TimeSpan serviceTimeout = ServiceClient.MaxConnectionTimeout;
+            if (serviceTimeout <= TimeSpan.Zero)
+            {
+                serviceTimeout = TimeSpan.FromMinutes(4);
+            }
+
+            TimeSpan waitTimeout =
+                DisposeWaitTimeoutOverride ?? serviceTimeout + TimeSpan.FromSeconds(30);
+            if (waitTimeout <= TimeSpan.Zero)
+            {
+                waitTimeout = TimeSpan.FromSeconds(1);
+            }
+
+            DateTime deadline = DateTime.UtcNow.Add(waitTimeout);
             foreach (IConnection connection in _connections)
             {
                 try
                 {
-                    if (connection is Connection concreteConnection)
+                    if (connection is IConnectionIdleWaiter waiter)
                     {
-                        using CancellationTokenSource waitTimeout = new(TimeSpan.FromSeconds(30));
+                        TimeSpan remaining = deadline - DateTime.UtcNow;
+                        if (remaining <= TimeSpan.Zero)
+                        {
+                            _logger.LogWarning(
+                                "Skipped disposing a Dataverse connection because it is still busy."
+                            );
+                            continue;
+                        }
+
+                        using CancellationTokenSource waitToken = new(remaining);
                         try
                         {
-                            await concreteConnection
-                                .WaitForIdleAsync(waitTimeout.Token)
-                                .ConfigureAwait(false);
+                            await waiter.WaitForIdleAsync(waitToken.Token).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException)
                         {
                             _logger.LogWarning(
-                                "Timed out waiting for a Dataverse connection to become idle before disposal."
+                                "Timed out waiting for a Dataverse connection to become idle; skipping its disposal."
                             );
+                            continue;
                         }
                     }
 
@@ -507,9 +533,11 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         Guard.Against.Null(executeTransactionRequestBuilder);
         using ConnectionLease connectionLease = GetConnection();
+        ExecuteTransactionRequest request = executeTransactionRequestBuilder.Request;
+        requestSettings?.ApplyToInnerRequests(request.Requests);
 
         return connectionLease.Connection.Execute<ExecuteTransactionResponse>(
-            executeTransactionRequestBuilder.Request,
+            request,
             requestSettings
         )!;
     }
@@ -539,10 +567,12 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     {
         Guard.Against.Null(executeTransactionRequestBuilder);
         using ConnectionLease connectionLease = await GetConnectionAsync().ConfigureAwait(false);
+        ExecuteTransactionRequest request = executeTransactionRequestBuilder.Request;
+        requestSettings?.ApplyToInnerRequests(request.Requests);
 
         return (await connectionLease
             .Connection.ExecuteAsync<ExecuteTransactionResponse>(
-                executeTransactionRequestBuilder.Request,
+                request,
                 requestSettings
             )
             .ConfigureAwait(false))!;

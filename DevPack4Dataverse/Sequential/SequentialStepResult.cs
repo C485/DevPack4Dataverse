@@ -22,6 +22,7 @@ namespace DevPack4Dataverse.Sequential;
 /// <summary>
 /// Result of one completed step in a sequential request.
 /// </summary>
+[Serializable]
 public sealed class SequentialStepResult
 {
     internal SequentialStepResult(

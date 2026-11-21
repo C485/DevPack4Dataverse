@@ -49,12 +49,25 @@ public sealed class FileOrImageFieldTypeMethods
         Entity fileFieldData = await _sdkProxy
             .RetrieveAsync(recordId.LogicalName, recordId.Id, new ColumnSet(fieldName))
             .ConfigureAwait(false);
-        if (!fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) || fileId == Guid.Empty)
+        if (fileFieldData.TryGetAttributeValue(fieldName, out Guid fileId) && fileId != Guid.Empty)
         {
-            return false;
+            await Delete(fileId).ConfigureAwait(false);
+            return true;
         }
-        await Delete(fileId).ConfigureAwait(false);
-        return true;
+
+        if (fileFieldData.TryGetAttributeValue<byte[]>(fieldName, out byte[]? image) && image != null)
+        {
+            // An image column returns the thumbnail, not a file id. The documented delete
+            // for an image is to set the column to null and update the record.
+            Entity update = new(recordId.LogicalName, recordId.Id)
+            {
+                [fieldName] = null
+            };
+            await _sdkProxy.UpdateRecordAsync(update).ConfigureAwait(false);
+            return true;
+        }
+
+        return false;
     }
 
     public async Task Delete(Guid fileId)

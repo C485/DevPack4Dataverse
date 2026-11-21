@@ -5,6 +5,7 @@ using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.ExecuteTransaction;
 using DevPack4Dataverse.Interfaces;
+using DevPack4Dataverse.Models;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -78,6 +79,38 @@ public class SdkProxyTests
         var request = Assert.IsType<ExecuteTransactionRequest>(captured);
         Assert.Single(request.Requests);
         Assert.False(request.ReturnResponses);
+    }
+
+    [Fact]
+    public void ExecuteTransaction_AppliesBatchSettingsToInnerRequests()
+    {
+        OrganizationRequest? captured = null;
+        var fake = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                captured = request;
+                return new ExecuteTransactionResponse();
+            }
+        };
+        using var proxy = new SdkProxy(NullLogger.Instance, false, new FakeConnectionCreator(fake));
+        proxy.WaitForConnections(1);
+        var builder = new ExecuteTransactionRequestBuilder(NullLogger.Instance);
+        builder.AddUpdate(new Entity("account") { Id = Guid.NewGuid() });
+
+        proxy.Execute(
+            builder,
+            new RequestSettings
+            {
+                ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches,
+                SkipPluginExecution = true,
+            }
+        );
+
+        var request = Assert.IsType<ExecuteTransactionRequest>(captured);
+        var update = Assert.IsType<UpdateRequest>(Assert.Single(request.Requests));
+        Assert.Equal(ConcurrencyBehavior.IfRowVersionMatches, update.ConcurrencyBehavior);
+        Assert.Equal(true, update["BypassCustomPluginExecution"]);
     }
 
     [Fact]

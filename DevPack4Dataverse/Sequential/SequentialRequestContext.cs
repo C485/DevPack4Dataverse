@@ -26,6 +26,7 @@ namespace DevPack4Dataverse.Sequential;
 /// The same context type is passed to step factories (containing only previous steps)
 /// and returned by execution (containing all steps).
 /// </remarks>
+[Serializable]
 public sealed class SequentialRequestContext
 {
     internal SequentialRequestContext(IReadOnlyList<SequentialStepResult> results)

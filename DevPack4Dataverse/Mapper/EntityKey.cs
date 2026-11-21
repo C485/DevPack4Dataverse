@@ -132,15 +132,22 @@ public sealed class EntityKey : IEquatable<EntityKey>
                 return false;
             }
 
+            if (_alternateKey.Count == 0)
+            {
+                return true;
+            }
+
+            // Every part of a composite alternate key is required. One null or blank part
+            // makes the whole key unusable; querying with it would match the wrong rows.
             foreach (object value in _alternateKey.Values)
             {
-                if (value != null && !(value is string text && text.Length == 0))
+                if (value == null || (value is string text && string.IsNullOrWhiteSpace(text)))
                 {
-                    return false;
+                    return true;
                 }
             }
 
-            return true;
+            return false;
         }
     }
 
@@ -237,12 +244,17 @@ public sealed class EntityKey : IEquatable<EntityKey>
             return null;
         }
 
+        if (reference.Id != Guid.Empty)
+        {
+            return ById(reference.LogicalName, reference.Id);
+        }
+
         if (reference.KeyAttributes != null && reference.KeyAttributes.Count > 0)
         {
             return ByAlternateKey(reference.LogicalName, reference.KeyAttributes);
         }
 
-        return reference.Id == Guid.Empty ? null : ById(reference.LogicalName, reference.Id);
+        return null;
     }
 
     public static EntityKey? FromEntity(Entity? entity)
@@ -392,6 +404,12 @@ public sealed class EntityKey : IEquatable<EntityKey>
                 return "os:" + optionSetValue.Value.ToString(CultureInfo.InvariantCulture);
             case Money money:
                 return "m:" + money.Value.ToString(CultureInfo.InvariantCulture);
+            case decimal decimalValue:
+                return "d:" + decimalValue.ToString("G29", CultureInfo.InvariantCulture);
+            case double doubleValue:
+                return "db:" + doubleValue.ToString("R", CultureInfo.InvariantCulture);
+            case float floatValue:
+                return "f:" + floatValue.ToString("R", CultureInfo.InvariantCulture);
             case string text:
                 return "s:" + text.ToLowerInvariant();
             case IFormattable formattable:

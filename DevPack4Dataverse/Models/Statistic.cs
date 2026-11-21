@@ -25,16 +25,6 @@ public sealed class Statistic(TimeSpan startTimeSpan)
     public ulong ElapsedMinutes => _end.HasValue ? Convert.ToUInt64((_end.Value - startTimeSpan).TotalMinutes) : 0;
     public ulong ElapsedSeconds => _end.HasValue ? Convert.ToUInt64((_end.Value - startTimeSpan).TotalSeconds) : 0;
 
-    public bool IsFromLastNMinutes(TimeSpan currentTimeSpan, uint minutes)
-    {
-        if (ElapsedMilliseconds == 0)
-        {
-            return false;
-        }
-        TimeSpan minimalTimeSpan = currentTimeSpan - TimeSpan.FromMinutes(minutes);
-        return _end >= minimalTimeSpan && _end <= currentTimeSpan;
-    }
-
     public void SetEnd(TimeSpan endTimeSpan)
     {
         _end = endTimeSpan;
