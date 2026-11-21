@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
@@ -33,11 +34,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
     // The connection string creator adds RequireNewInstance=True.
     public async Task Execute()
     {
-        string connectionString = Environment.GetEnvironmentVariable(
-            "DEVPACK_DATAVERSE_CONNECTION"
-        ) ?? throw new InvalidOperationException(
-            "Set DEVPACK_DATAVERSE_CONNECTION to a ServiceClient connection string."
-        );
+        string connectionString = File.ReadAllText("D:\\Projekty\\DevPack4Dataverse\\auth_do_not_read.txt");
 
         using DataverseDevPack connectionManager = new(
             microsoftLogger,
@@ -59,6 +56,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
             executeMultipleRequestBuilder.AddCreate(et);
         }
 
+        var rate = new RateTracker();
         ExecuteMultipleLogicResult result = await connectionManager.ExecuteMultiple
             .ExecuteAdaptiveAsync(
                 executeMultipleRequestBuilder,
@@ -74,7 +72,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
                     EvaluationRecordCount = 500,
                     ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
                     ReportProgress = (cur, max) =>
-                        Console.Title = $"Adaptive progress[{cur}/{max}]"
+                        Console.Title = "Adaptive progress " + rate.Format(cur, max)
                 }
             )
             .ConfigureAwait(false);
@@ -99,6 +97,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
             return;
         }
 
+        var rate = new RateTracker();
         ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple
             .ExecuteAdaptiveAsync(
                 executeMultipleRequestBuilder,
@@ -114,11 +113,35 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
                     EvaluationRecordCount = 500,
                     ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
                     ReportProgress = (cur, max) =>
-                        Console.Title = $"Adaptive delete progress[{cur}/{max}]"
+                        Console.Title = "Adaptive delete " + rate.Format(cur, max)
                 }
             )
             .ConfigureAwait(false);
 
         Console.WriteLine(result.ToString());
+    }
+
+    private sealed class RateTracker
+    {
+        private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+        private int _lastCurrent;
+        private TimeSpan _lastElapsed;
+
+        public string Format(int current, int total)
+        {
+            TimeSpan elapsed = _stopwatch.Elapsed;
+            TimeSpan interval = elapsed - _lastElapsed;
+            int processed = current - _lastCurrent;
+            double currentRate = interval.TotalSeconds > 0
+                ? processed / interval.TotalSeconds
+                : 0;
+            double averageRate = elapsed.TotalSeconds > 0
+                ? current / elapsed.TotalSeconds
+                : 0;
+
+            _lastCurrent = current;
+            _lastElapsed = elapsed;
+            return $"[{current}/{total}] {currentRate:F0}/s (avg {averageRate:F0}/s)";
+        }
     }
 }
