@@ -29,7 +29,7 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse;
 
-public sealed class Connection : IConnection
+public sealed class Connection : IConnection, IConnectionIdleWaiter
 {
     private readonly SemaphoreSlim _semaphoreSlim;
     private readonly ILogger _logger;
@@ -295,8 +295,13 @@ public sealed class Connection : IConnection
         _callGate.Wait();
         try
         {
-            using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
+            using ReplaceAndRestoreCallerId _ = new(
+                new ServiceClientCallerIdAdapter(PureServiceClient),
+                _logger,
+                requestSettings
+            );
 
+            ApplyBatchSettingsToInnerRequests(request, requestSettings);
             requestSettings?.AddToOrganizationRequest(request, _logger);
 
             Statistic statisticEntry = _usageStatistics.StartNew();
@@ -339,8 +344,13 @@ public sealed class Connection : IConnection
 
         try
         {
-            using ReplaceAndRestoreCallerId _ = new(PureServiceClient, _logger, requestSettings);
+            using ReplaceAndRestoreCallerId _ = new(
+                new ServiceClientCallerIdAdapter(PureServiceClient),
+                _logger,
+                requestSettings
+            );
 
+            ApplyBatchSettingsToInnerRequests(request, requestSettings);
             requestSettings?.AddToOrganizationRequest(request, _logger);
             Statistic statisticEntry = _usageStatistics.StartNew();
             try
@@ -513,37 +523,27 @@ public sealed class Connection : IConnection
 
         IEnumerable<Entity> InnerRetrieveMultiple()
         {
-            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
-            try
+            QueryExpression query = PrepareQuery(queryExpression, out PagingInfo? autoPaging);
+            while (true)
             {
-                while (true)
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = query },
+                    requestSettings
+                )!;
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (Entity record in retrieveMultipleResult.Entities)
                 {
-                    RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
-                        new RetrieveMultipleRequest { Query = queryExpression },
-                        requestSettings
-                    )!;
-                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                    foreach (Entity record in retrieveMultipleResult.Entities)
-                    {
-                        yield return record;
-                    }
-
-                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
-                    {
-                        break;
-                    }
-
-                    autoPaging.PageNumber++;
-                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                    yield return record;
                 }
-            }
-            finally
-            {
-                if (autoPaging != null)
+
+                if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
                 {
-                    queryExpression.PageInfo = null;
+                    break;
                 }
+
+                autoPaging.PageNumber++;
+                autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -558,37 +558,27 @@ public sealed class Connection : IConnection
 
         IEnumerable<T> InnerRetrieveMultiple()
         {
-            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
-            try
+            QueryExpression query = PrepareQuery(queryExpression, out PagingInfo? autoPaging);
+            while (true)
             {
-                while (true)
+                RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = query },
+                    requestSettings
+                )!;
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (Entity entity in retrieveMultipleResult.Entities)
                 {
-                    RetrieveMultipleResponse retrieveMultipleResponse = Execute<RetrieveMultipleResponse>(
-                        new RetrieveMultipleRequest { Query = queryExpression },
-                        requestSettings
-                    )!;
-                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                    foreach (Entity entity in retrieveMultipleResult.Entities)
-                    {
-                        yield return entity.ToEntity<T>();
-                    }
-
-                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
-                    {
-                        break;
-                    }
-
-                    autoPaging.PageNumber++;
-                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                    yield return entity.ToEntity<T>();
                 }
-            }
-            finally
-            {
-                if (autoPaging != null)
+
+                if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
                 {
-                    queryExpression.PageInfo = null;
+                    break;
                 }
+
+                autoPaging.PageNumber++;
+                autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -605,37 +595,27 @@ public sealed class Connection : IConnection
 
         async IAsyncEnumerable<Entity> InnerRetrieveMultiple()
         {
-            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
-            try
+            QueryExpression query = PrepareQuery(queryExpression, out PagingInfo? autoPaging);
+            while (true)
             {
-                while (true)
+                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = query },
+                    requestSettings
+                ).ConfigureAwait(false))!;
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (Entity record in retrieveMultipleResult.Entities)
                 {
-                    RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
-                        new RetrieveMultipleRequest { Query = queryExpression },
-                        requestSettings
-                    ).ConfigureAwait(false))!;
-                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                    foreach (Entity record in retrieveMultipleResult.Entities)
-                    {
-                        yield return record;
-                    }
-
-                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
-                    {
-                        break;
-                    }
-
-                    autoPaging.PageNumber++;
-                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                    yield return record;
                 }
-            }
-            finally
-            {
-                if (autoPaging != null)
+
+                if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
                 {
-                    queryExpression.PageInfo = null;
+                    break;
                 }
+
+                autoPaging.PageNumber++;
+                autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
@@ -652,56 +632,102 @@ public sealed class Connection : IConnection
 
         async IAsyncEnumerable<T> InnerRetrieveMultiple()
         {
-            PagingInfo? autoPaging = EnsureAutoPaging(queryExpression);
-            try
+            QueryExpression query = PrepareQuery(queryExpression, out PagingInfo? autoPaging);
+            while (true)
             {
-                while (true)
+                RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
+                    new RetrieveMultipleRequest { Query = query },
+                    requestSettings
+                ).ConfigureAwait(false))!;
+                EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
+
+                foreach (Entity entity in retrieveMultipleResult.Entities)
                 {
-                    RetrieveMultipleResponse retrieveMultipleResponse = (await ExecuteAsync<RetrieveMultipleResponse>(
-                        new RetrieveMultipleRequest { Query = queryExpression },
-                        requestSettings
-                    ).ConfigureAwait(false))!;
-                    EntityCollection retrieveMultipleResult = Guard.Against.Null(retrieveMultipleResponse).EntityCollection;
-
-                    foreach (Entity entity in retrieveMultipleResult.Entities)
-                    {
-                        yield return entity.ToEntity<T>();
-                    }
-
-                    if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
-                    {
-                        break;
-                    }
-
-                    autoPaging.PageNumber++;
-                    autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
+                    yield return entity.ToEntity<T>();
                 }
-            }
-            finally
-            {
-                if (autoPaging != null)
+
+                if (!retrieveMultipleResult.MoreRecords || autoPaging == null)
                 {
-                    queryExpression.PageInfo = null;
+                    break;
                 }
+
+                autoPaging.PageNumber++;
+                autoPaging.PagingCookie = retrieveMultipleResult.PagingCookie;
             }
         }
     }
 
-    private static PagingInfo? EnsureAutoPaging(QueryExpression queryExpression)
+    /// <summary>
+    /// Builds the query used for one retrieve call. A query with caller paging is used as-is.
+    /// A <see cref="QueryExpression.TopCount"/> query is copied without the default empty
+    /// <see cref="PagingInfo"/>. Otherwise a private copy is paged so the caller's query is
+    /// never changed and concurrent calls cannot interfere.
+    /// </summary>
+    internal static QueryExpression PrepareQuery(
+        QueryExpression queryExpression,
+        out PagingInfo? autoPaging
+    )
     {
-        if (queryExpression.PageInfo != null)
+        autoPaging = null;
+        if (HasCallerPaging(queryExpression.PageInfo))
         {
-            return null;
+            return queryExpression;
         }
 
-        PagingInfo paging = new()
+        if (queryExpression.TopCount.HasValue)
+        {
+            // A new QueryExpression carries an empty PageInfo object. Dataverse rejects
+            // TopCount together with any PageInfo, so send a copy without it.
+            QueryExpression topQuery = CloneForPaging(queryExpression);
+            topQuery.PageInfo = null;
+            return topQuery;
+        }
+
+        QueryExpression query = CloneForPaging(queryExpression);
+        autoPaging = new PagingInfo
         {
             Count = 5000,
             PageNumber = 1,
             PagingCookie = null
         };
-        queryExpression.PageInfo = paging;
-        return paging;
+        query.PageInfo = autoPaging;
+        return query;
+    }
+
+    private static bool HasCallerPaging(PagingInfo? paging) =>
+        paging != null
+        && (
+            paging.Count > 0
+            || paging.PageNumber > 0
+            || !string.IsNullOrEmpty(paging.PagingCookie)
+        );
+
+    private static QueryExpression CloneForPaging(QueryExpression source)
+    {
+        QueryExpression clone = new(source.EntityName)
+        {
+            ColumnSet = source.ColumnSet,
+            Criteria = source.Criteria,
+            Distinct = source.Distinct,
+            NoLock = source.NoLock,
+            TopCount = source.TopCount,
+            QueryHints = source.QueryHints,
+            ForceSeek = source.ForceSeek,
+            DataSource = source.DataSource,
+            SubQueryExpression = source.SubQueryExpression,
+        };
+
+        foreach (OrderExpression order in source.Orders)
+        {
+            clone.Orders.Add(order);
+        }
+
+        foreach (LinkEntity link in source.LinkEntities)
+        {
+            clone.LinkEntities.Add(link);
+        }
+
+        return clone;
     }
 
     public bool Test()
@@ -824,6 +850,35 @@ public sealed class Connection : IConnection
         UpsertResponse executeResponse = (await ExecuteAsync<UpsertResponse>(request, requestSettings).ConfigureAwait(false))!;
 
         return Guard.Against.Null(executeResponse).Target;
+    }
+
+    private static void ApplyBatchSettingsToInnerRequests(
+        OrganizationRequest request,
+        RequestSettings? requestSettings
+    )
+    {
+        if (requestSettings == null)
+        {
+            return;
+        }
+
+        switch (request)
+        {
+            case ExecuteMultipleRequest executeMultiple:
+                foreach (OrganizationRequest inner in executeMultiple.Requests)
+                {
+                    requestSettings.ApplyToInnerRequest(inner);
+                }
+
+                break;
+            case ExecuteTransactionRequest executeTransaction:
+                foreach (OrganizationRequest inner in executeTransaction.Requests)
+                {
+                    requestSettings.ApplyToInnerRequest(inner);
+                }
+
+                break;
+        }
     }
 
     private static ColumnSet CreateColumnSet(IEnumerable<string> columns)

@@ -44,6 +44,54 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public void EntityKey_DecimalScale_DoesNotChangeIdentity()
+    {
+        EntityKey first = EntityKey.ByAlternateKey("account", "amount", 1.0m);
+        EntityKey second = EntityKey.ByAlternateKey("account", "amount", 1.00m);
+
+        Assert.Equal(first, second);
+        Assert.Equal(first.ToString(), second.ToString());
+    }
+
+    [Fact]
+    public void EntityKey_FromEntityReference_PrefersId()
+    {
+        Guid id = Guid.NewGuid();
+        var reference = new EntityReference("account", id);
+        reference.KeyAttributes["accountnumber"] = "A-1";
+
+        EntityKey? key = EntityKey.FromEntityReference(reference);
+
+        Assert.NotNull(key);
+        Assert.Equal(id, key!.Id);
+        Assert.False(key.IsAlternateKey);
+    }
+
+    [Fact]
+    public void EntityKey_CompositeWithEmptyPart_IsEmpty()
+    {
+        EntityKey nullPart = EntityKey.ByAlternateKey(
+            "account",
+            new Dictionary<string, object>
+            {
+                ["accountnumber"] = "A-1",
+                ["new_code"] = null!
+            }
+        );
+        EntityKey blankPart = EntityKey.ByAlternateKey(
+            "account",
+            new Dictionary<string, object>
+            {
+                ["accountnumber"] = "A-1",
+                ["new_code"] = ""
+            }
+        );
+
+        Assert.True(nullPart.IsEmpty);
+        Assert.True(blankPart.IsEmpty);
+    }
+
+    [Fact]
     public void EntityKey_TwoPairAlternateKeyOverload()
     {
         EntityKey key = EntityKey.ByAlternateKey(
@@ -582,10 +630,12 @@ public class MapperLookupTests
         Guid firstId = Guid.NewGuid();
         Guid secondId = Guid.NewGuid();
         int retrievals = 0;
+        QueryExpression? preloadQuery = null;
         var fake = new FakeConnection
         {
-            RetrieveMultipleHandler = _ =>
+            RetrieveMultipleHandler = query =>
             {
+                preloadQuery = query;
                 retrievals++;
                 return new[]
                 {
@@ -638,6 +688,8 @@ public class MapperLookupTests
             Assert.Equal(firstId, result.Records[0].Target.First.Id);
             Assert.Equal(secondId, result.Records[0].Target.Second.Id);
             Assert.Equal(1, retrievals);
+            Assert.NotNull(preloadQuery);
+            Assert.Equal("accountid", Assert.Single(preloadQuery!.Orders).AttributeName);
         }
     }
 

@@ -98,6 +98,8 @@ internal sealed class LookupResolver
                 )
                 .ConfigureAwait(false);
 
+            EntityLockGuard.EnsureHeld(lockHandle);
+
             if (record == null)
             {
                 if (createFactory == null)
@@ -134,6 +136,12 @@ internal sealed class LookupResolver
         CancellationToken cancellationToken
     )
     {
+        if (state.RequestSettings.HasImpersonation)
+        {
+            // Preloading under impersonation would cache another user's view of the table.
+            return;
+        }
+
         if (state.Preloads.TryGetValue(logicalName, out Task? existing))
         {
             await existing.ConfigureAwait(false);
@@ -215,8 +223,14 @@ internal sealed class LookupResolver
                 .ConfigureAwait(false);
         }
 
-        await _recordStore.RemoveRecordAsync(entity, cancellationToken).ConfigureAwait(false);
-        await _recordStore.CacheSavedAsync(entity, cancellationToken).ConfigureAwait(false);
+        Entity savedEntity = EntityCopy.Clone(entity) ?? entity;
+        AlternateKeyAttributes.Restore(savedEntity, key);
+        await _recordStore
+            .RemoveRecordAsync(savedEntity, cancellationToken)
+            .ConfigureAwait(false);
+        await _recordStore
+            .CacheSavedAsync(savedEntity, state.RequestSettings, cancellationToken)
+            .ConfigureAwait(false);
         return entity;
     }
 }

@@ -115,14 +115,17 @@ public sealed class RedisEntityLock : IEntityLock
         throw new MapperLockException($"Could not acquire a Redis lock for {key} within {timeout}.");
     }
 
-    private sealed class RedisLockHandle : IEntityLockHandle
+    private sealed class RedisLockHandle : IEntityLockHandle, IEntityLockState
     {
         private readonly StackExchange.Redis.IDatabase _database;
         private readonly StackExchange.Redis.RedisKey _key;
         private readonly Timer _renewTimer;
         private readonly long _timeToLiveMilliseconds;
         private readonly string _token;
+        private int _lost;
         private int _released;
+
+        public bool IsLost => Volatile.Read(ref _lost) != 0;
 
         public RedisLockHandle(
             StackExchange.Redis.IDatabase database,
@@ -177,7 +180,7 @@ public sealed class RedisEntityLock : IEntityLock
 
             try
             {
-                _database.ScriptEvaluate(
+                StackExchange.Redis.RedisResult result = _database.ScriptEvaluate(
                     RenewScript,
                     new[] { _key },
                     new StackExchange.Redis.RedisValue[]
@@ -186,10 +189,15 @@ public sealed class RedisEntityLock : IEntityLock
                         _timeToLiveMilliseconds
                     }
                 );
+                if (result.IsNull || (long)result == 0)
+                {
+                    Volatile.Write(ref _lost, 1);
+                }
             }
             catch (Exception)
             {
-                // A failed renewal leaves the current TTL in place.
+                // A renewal error means the lock may now belong to another process.
+                Volatile.Write(ref _lost, 1);
             }
         }
 

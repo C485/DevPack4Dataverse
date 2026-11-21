@@ -27,18 +27,26 @@ internal static class EntityCopy
             return null;
         }
 
-        Entity clone = new(entity.LogicalName, entity.Id);
+        Entity clone = new(entity.LogicalName, entity.Id)
+        {
+            RowVersion = entity.RowVersion
+        };
         foreach (KeyValuePair<string, object> attribute in entity.Attributes)
         {
-            clone[attribute.Key] = attribute.Value;
+            clone[attribute.Key] = CloneValue(attribute.Value);
         }
 
         if (entity.KeyAttributes != null)
         {
             foreach (KeyValuePair<string, object> key in entity.KeyAttributes)
             {
-                clone.KeyAttributes[key.Key] = key.Value;
+                clone.KeyAttributes[key.Key] = CloneValue(key.Value);
             }
+        }
+
+        foreach (KeyValuePair<string, string> formatted in entity.FormattedValues)
+        {
+            clone.FormattedValues[formatted.Key] = formatted.Value;
         }
 
         return clone;
@@ -53,7 +61,57 @@ internal static class EntityCopy
 
         foreach (KeyValuePair<string, object> attribute in source.Attributes)
         {
-            target[attribute.Key] = attribute.Value;
+            target[attribute.Key] = CloneValue(attribute.Value);
         }
+
+        foreach (KeyValuePair<string, string> formatted in source.FormattedValues)
+        {
+            target.FormattedValues[formatted.Key] = formatted.Value;
+        }
+
+        if (!string.IsNullOrEmpty(source.RowVersion))
+        {
+            target.RowVersion = source.RowVersion;
+        }
+    }
+
+    private static object? CloneValue(object? value)
+    {
+        switch (value)
+        {
+            case null:
+                return null;
+            case byte[] bytes:
+                return bytes.ToArray();
+            case EntityReference reference:
+                return CloneReference(reference);
+            case OptionSetValueCollection options:
+                OptionSetValueCollection clonedOptions = new();
+                foreach (OptionSetValue option in options)
+                {
+                    clonedOptions.Add(new OptionSetValue(option.Value));
+                }
+
+                return clonedOptions;
+            default:
+                return value;
+        }
+    }
+
+    private static EntityReference CloneReference(EntityReference reference)
+    {
+        EntityReference clone = new(reference.LogicalName, reference.Id)
+        {
+            Name = reference.Name
+        };
+        if (reference.KeyAttributes != null)
+        {
+            foreach (KeyValuePair<string, object> key in reference.KeyAttributes)
+            {
+                clone.KeyAttributes[key.Key] = CloneValue(key.Value);
+            }
+        }
+
+        return clone;
     }
 }

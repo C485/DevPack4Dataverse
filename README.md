@@ -5,7 +5,7 @@ DevPack4Dataverse aka DevPack For Dataverse is a set of instructions built on to
 
 ## Supported frameworks
 
-`net462`, `net472`, `net48`, `net8.0`, `net10.0`
+`net462`, `net472`, `net48`, `net8.0`, `net10.0`, `net11.0`
 
 The optional Redis mapper adapters live in the separate `DevPack4Dataverse.Mapper.Redis` project.
 
@@ -97,7 +97,7 @@ Production notes:
 - The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and throws `ExecuteMultipleException`. Its `Result` property holds the responses collected before the fault and `Fault` holds the failed item, so the caller can resume instead of repeating successful work.
 - Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass. Per-message impersonation is rejected because Dataverse applies one caller id to the whole batch.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive. A throwing callback is logged and does not abort the run.
-- The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts. Nested `ExecuteMultipleRequest`/`ExecuteTransactionRequest` items are rejected.
+- The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts. A nested `ExecuteMultipleRequest` is rejected; a batch may contain `ExecuteTransactionRequest` items, as Dataverse allows.
 - Cancellation returns the partial result with `Cancelled = true` instead of throwing. The token also cancels the wait for a free connection and the request gate.
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
@@ -372,7 +372,7 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 316 tests (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 366 tests and runs on `net8.0`, `net11.0`, and `net48` (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
 - A failed connection pool fails fast instead of looping forever when every connection creator has errored.
@@ -407,10 +407,10 @@ This pass addressed the findings below and validated the library against a live 
 - Bulk operation messages `CreateMultiple`, `UpdateMultiple`, `UpsertMultiple` and `DeleteMultiple` are exposed on `SdkProxy` and `Connection`, with same-table and identity validation.
 - `BulkOperation` chunks records (default 1,000), runs chunks in parallel across the pool, merges ids/results in input order, reports progress and adds the failed chunk index/count to the exception.
 - A connection is always exclusive. `maximumConcurrentlyUsage` is gone; one creator can produce several cloned connections with `connectionCount`, so the pool gets real parallel clients instead of extra permits on one client.
-- `ExecuteMultiple` splits a chunk when the deployment returns `MaxBatchSize`, preserves partial results in `ExecuteMultipleException`, rejects nested batches and per-message impersonation, and ignores throwing progress callbacks.
+- `ExecuteMultiple` splits a chunk when the deployment returns `MaxBatchSize`, preserves partial results in `ExecuteMultipleException`, rejects nested `ExecuteMultipleRequest` items and per-message impersonation, and ignores throwing progress callbacks.
 - Cancellation reaches the connection wait and call gate; `Dispose` waits for active leases before closing clients.
 - `RetrieveMultiple` respects caller `PageInfo`; connection strings parse `RequireNewInstance` with spaces; `Test` is serialized with caller-id changes.
-- `ConnectionLease` construction and `GetOrganizationServiceContext` are internal; use the proxy methods instead of running an ungated LINQ context on a pooled client.
+- `ConnectionLease` construction is internal; use the proxy methods instead of running raw client calls on a pooled client.
 - Redis cache preserves date-only values, null attributes and formatted values; the lock renews its TTL and ignores release failures; zero TTL means no caching.
 - Statistics total usage accumulates milliseconds instead of whole seconds.
 

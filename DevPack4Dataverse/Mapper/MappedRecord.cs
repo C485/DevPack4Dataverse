@@ -21,6 +21,7 @@ namespace DevPack4Dataverse.Mapper;
 /// <summary>
 /// Result of mapping one source item.
 /// </summary>
+[Serializable]
 public sealed class MappedRecord<TTarget>
 {
     internal MappedRecord(

@@ -21,6 +21,35 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Utils;
 
+internal interface ICallerIdClient
+{
+    Guid CallerId { get; set; }
+
+    Guid? CallerAADObjectId { get; set; }
+
+    bool SupportsCallerId { get; }
+}
+
+internal sealed class ServiceClientCallerIdAdapter(ServiceClient client) : ICallerIdClient
+{
+    private readonly ServiceClient _client =
+        client ?? throw new ArgumentNullException(nameof(client));
+
+    public Guid CallerId
+    {
+        get => _client.CallerId;
+        set => _client.CallerId = value;
+    }
+
+    public Guid? CallerAADObjectId
+    {
+        get => _client.CallerAADObjectId;
+        set => _client.CallerAADObjectId = value;
+    }
+
+    public bool SupportsCallerId => _client.ActiveAuthenticationType != AuthenticationType.AD;
+}
+
 internal sealed class ReplaceAndRestoreCallerId : IDisposable
 {
     private readonly Guid? oldAADCallerId;
@@ -28,30 +57,40 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
     private bool _disposedValue;
 
     public ReplaceAndRestoreCallerId(
-        ServiceClient serviceClient,
+        ICallerIdClient serviceClient,
         ILogger logger,
         Guid? callerId = null,
         Guid? aadCallerId = null
     )
     {
-        ServiceClient = Guard.Against.Null(serviceClient);
-        oldCallerId = serviceClient.CallerId;
-        oldAADCallerId = serviceClient.CallerAADObjectId;
-        serviceClient.CallerId = callerId ?? Guid.Empty;
-        serviceClient.CallerAADObjectId = aadCallerId;
+        ICallerIdClient client = Guard.Against.Null(serviceClient);
+        Client = client;
+        EnsureCallerIdSupported(client, callerId, aadCallerId);
+
+        oldCallerId = client.CallerId;
+        oldAADCallerId = client.CallerAADObjectId;
+        client.CallerId = callerId ?? Guid.Empty;
+        client.CallerAADObjectId = aadCallerId;
+        EnsureApplied(client, callerId ?? Guid.Empty, aadCallerId);
     }
 
     public ReplaceAndRestoreCallerId(
-        ServiceClient serviceClient,
+        ICallerIdClient serviceClient,
         ILogger logger,
         RequestImpersonateSettings? requestSettings = null
     )
     {
-        ServiceClient = Guard.Against.Null(serviceClient);
-        oldCallerId = serviceClient.CallerId;
-        oldAADCallerId = serviceClient.CallerAADObjectId;
-        serviceClient.CallerAADObjectId = requestSettings?.ImpersonateAsUserByAADId;
-        serviceClient.CallerId = requestSettings?.ImpersonateAsUserByDataverseId ?? Guid.Empty;
+        ICallerIdClient client = Guard.Against.Null(serviceClient);
+        Client = client;
+        Guid? requestedCallerId = requestSettings?.ImpersonateAsUserByDataverseId;
+        Guid? requestedAADCallerId = requestSettings?.ImpersonateAsUserByAADId;
+        EnsureCallerIdSupported(client, requestedCallerId, requestedAADCallerId);
+
+        oldCallerId = client.CallerId;
+        oldAADCallerId = client.CallerAADObjectId;
+        client.CallerAADObjectId = requestedAADCallerId;
+        client.CallerId = requestedCallerId ?? Guid.Empty;
+        EnsureApplied(client, requestedCallerId ?? Guid.Empty, requestedAADCallerId);
     }
 
     ~ReplaceAndRestoreCallerId()
@@ -59,12 +98,54 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         InnerDispose();
     }
 
-    private ServiceClient? ServiceClient { get; set; }
+    private ICallerIdClient? Client { get; set; }
 
     public void Dispose()
     {
         InnerDispose();
         GC.SuppressFinalize(this);
+    }
+
+    private static void EnsureCallerIdSupported(
+        ICallerIdClient serviceClient,
+        Guid? callerId,
+        Guid? aadCallerId
+    )
+    {
+        if (callerId.HasValue || aadCallerId.HasValue)
+        {
+            if (!serviceClient.SupportsCallerId)
+            {
+                throw new NotSupportedException(
+                    "Impersonation is not supported by this connection type. "
+                        + "Use an OAuth, client-secret, or certificate connection."
+                );
+            }
+        }
+    }
+
+    private void EnsureApplied(
+        ICallerIdClient serviceClient,
+        Guid callerId,
+        Guid? aadCallerId
+    )
+    {
+        if (callerId == Guid.Empty && !aadCallerId.HasValue)
+        {
+            return;
+        }
+
+        if (serviceClient.CallerId == callerId && serviceClient.CallerAADObjectId == aadCallerId)
+        {
+            return;
+        }
+
+        serviceClient.CallerId = oldCallerId ?? Guid.Empty;
+        serviceClient.CallerAADObjectId = oldAADCallerId;
+        throw new NotSupportedException(
+            "The connection did not accept the requested caller id. "
+                + "The request was not executed as the impersonated user."
+        );
     }
 
     private void InnerDispose()
@@ -74,11 +155,11 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
             return;
         }
 
-        if (ServiceClient != null)
+        if (Client != null)
         {
-            ServiceClient.CallerId = oldCallerId ?? Guid.Empty;
-            ServiceClient.CallerAADObjectId = oldAADCallerId;
-            ServiceClient = null;
+            Client.CallerId = oldCallerId ?? Guid.Empty;
+            Client.CallerAADObjectId = oldAADCallerId;
+            Client = null;
         }
 
         _disposedValue = true;

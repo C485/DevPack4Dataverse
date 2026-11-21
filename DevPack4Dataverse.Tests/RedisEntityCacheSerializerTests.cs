@@ -1,5 +1,6 @@
 using Microsoft.Xrm.Sdk;
 using Xunit;
+using DevPack4Dataverse.Mapper;
 using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Mapper.Redis;
 
@@ -49,6 +50,43 @@ public class RedisEntityCacheSerializerTests
         Assert.Equal("A-1", restoredParent.KeyAttributes["accountnumber"]);
         Assert.Equal("A-1", restored.Record.KeyAttributes["accountnumber"]);
         Assert.Contains("name", restored.LoadedColumns);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesPrimitiveValueTypes()
+    {
+        Guid id = Guid.NewGuid();
+        Guid guidValue = Guid.NewGuid();
+        var record = new Entity("account", id)
+        {
+            ["int"] = 42,
+            ["long"] = 42L,
+            ["bool"] = true,
+            ["float"] = 1.5f,
+            ["double"] = 2.5d,
+            ["guid"] = guidValue
+        };
+        CachedEntity cached = new(record);
+
+        string json = RedisEntityCache.Serialize(cached);
+        CachedEntity restored = RedisEntityCache.Deserialize(json)!;
+
+        Assert.Equal(42, restored.Record.GetAttributeValue<int>("int"));
+        Assert.Equal(42L, restored.Record.GetAttributeValue<long>("long"));
+        Assert.True(restored.Record.GetAttributeValue<bool>("bool"));
+        Assert.Equal(1.5f, restored.Record.GetAttributeValue<float>("float"));
+        Assert.Equal(2.5d, restored.Record.GetAttributeValue<double>("double"));
+        Assert.Equal(guidValue, restored.Record.GetAttributeValue<Guid>("guid"));
+    }
+
+    [Fact]
+    public void Serialize_UnsupportedType_Throws()
+    {
+        var record = new Entity("account", Guid.NewGuid()) { ["bad"] = new object() };
+
+        Assert.Throws<MapperException>(
+            () => RedisEntityCache.Serialize(new CachedEntity(record))
+        );
     }
 
     [Fact]

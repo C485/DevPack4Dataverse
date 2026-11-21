@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2022 Kamil Skoracki / C485@GitHub
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,6 @@ limitations under the License.
 using Ardalis.GuardClauses;
 using DevPack4Dataverse.Interfaces;
 using Microsoft.PowerPlatform.Dataverse.Client;
-using Microsoft.Xrm.Sdk.Client;
 
 namespace DevPack4Dataverse;
 
@@ -43,13 +42,6 @@ public sealed class ConnectionLease : IDisposable
     {
         DisposeConnection();
         GC.SuppressFinalize(this);
-    }
-
-    internal OrganizationServiceContext GetOrganizationServiceContext() => new(PureServiceClient);
-
-    internal T GetOrganizationServiceContext<T>() where T : OrganizationServiceContext
-    {
-        return (T)Activator.CreateInstance(typeof(T), PureServiceClient)!;
     }
 
     private void DisposeConnection()

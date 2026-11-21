@@ -19,8 +19,15 @@ namespace DevPack4Dataverse.Mapper;
 /// <summary>
 /// Results of a wrapper batch execution.
 /// </summary>
+[Serializable]
 public sealed class MapperBatchResult
 {
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with the mapper results completed before a failure.
+    /// </summary>
+    public const string PartialResultsDataKey =
+        "DevPack4Dataverse.Mapper.BatchPartialResults";
+
     internal MapperBatchResult(
         IReadOnlyList<IMappingResult> mapperResults,
         IReadOnlyList<MappingError> errors

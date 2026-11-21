@@ -71,6 +71,21 @@ internal sealed class RecordStore
             }
         }
 
+        if (requestSettings?.HasImpersonation == true)
+        {
+            // The cache key does not contain the caller identity. Do not read a record
+            // cached under another user, and remove the unscoped entry so a later
+            // non-impersonated read cannot see it either.
+            Entity? fresh = await RetrieveAsync(key, columns, requestSettings, cancellationToken)
+                .ConfigureAwait(false);
+            if (fresh != null)
+            {
+                await RemoveRecordAsync(fresh, cancellationToken).ConfigureAwait(false);
+            }
+
+            return fresh;
+        }
+
         if (useCache && !forceRefresh)
         {
             CachedEntity? cached = await GetCacheEntryAsync(key, cancellationToken).ConfigureAwait(false);
@@ -146,6 +161,12 @@ internal sealed class RecordStore
         CancellationToken cancellationToken
     )
     {
+        if (requestSettings.HasImpersonation)
+        {
+            // A preload under impersonation would cache another user's view of the table.
+            return;
+        }
+
         DateTime now = DateTime.UtcNow;
         if (
             !forceRefresh
@@ -169,11 +190,15 @@ internal sealed class RecordStore
 
         await ClearCacheAsync(logicalName, cancellationToken).ConfigureAwait(false);
 
+        string primaryId = await _primaryKeys
+            .GetAsync(logicalName, cancellationToken)
+            .ConfigureAwait(false);
         QueryExpression query = new()
         {
             EntityName = logicalName,
             ColumnSet = CreateColumnSet(columns)
         };
+        query.Orders.Add(new OrderExpression(primaryId, OrderType.Ascending));
 
         Entity[] records = await _sdkProxy
             .RetrieveMultipleAsync(query, requestSettings)
@@ -222,9 +247,13 @@ internal sealed class RecordStore
         _preloadedAt[logicalName] = DateTime.UtcNow;
     }
 
-    public async Task CacheSavedAsync(Entity entity, CancellationToken cancellationToken)
+    public async Task CacheSavedAsync(
+        Entity entity,
+        RequestSettings? requestSettings,
+        CancellationToken cancellationToken
+    )
     {
-        if (entity == null)
+        if (entity == null || requestSettings?.HasImpersonation == true)
         {
             return;
         }

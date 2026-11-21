@@ -158,6 +158,7 @@ public sealed class ExecuteMultipleLogic
                                             packOfRequests,
                                             true,
                                             requestSettings,
+                                            executeMultipleRequestSettings.ErrorReport,
                                             token
                                         )
                                         .ConfigureAwait(false);
@@ -285,6 +286,7 @@ public sealed class ExecuteMultipleLogic
                         packOfRequests,
                         false,
                         requestSettings,
+                        null,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -298,12 +300,14 @@ public sealed class ExecuteMultipleLogic
                     true
                 );
 
-                Interlocked.Add(ref progress, packOfRequests.Length);
                 if (firstFault != null)
                 {
                     firstFaultIndex = chunk.StartIndex + firstFault.RequestIndex;
+                    Interlocked.Add(ref progress, firstFault.RequestIndex + 1);
                     break;
                 }
+
+                Interlocked.Add(ref progress, packOfRequests.Length);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -336,6 +340,7 @@ public sealed class ExecuteMultipleLogic
         OrganizationRequest[] packOfRequests,
         bool continueOnError,
         RequestSettings? requestSettings,
+        Action<OrganizationRequest, string>? errorReport,
         CancellationToken cancellationToken
     )
     {
@@ -361,13 +366,38 @@ public sealed class ExecuteMultipleLogic
                 OrganizationRequest[] part = new OrganizationRequest[count];
                 Array.Copy(packOfRequests, offset, part, 0, count);
 
-                List<ExecuteMultipleResponseItem> partResponse = await ExecutePackAsync(
-                        part,
-                        continueOnError,
-                        requestSettings,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                List<ExecuteMultipleResponseItem> partResponse;
+                try
+                {
+                    partResponse = await ExecutePackAsync(
+                            part,
+                            continueOnError,
+                            requestSettings,
+                            errorReport,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    if (!continueOnError)
+                    {
+                        throw;
+                    }
+
+                    // The split parts are separate requests. Report only this part
+                    // and keep the responses already collected from earlier parts.
+                    foreach (OrganizationRequest request in part)
+                    {
+                        InvokeErrorReport(errorReport, request, exception.ToString());
+                    }
+
+                    continue;
+                }
 
                 foreach (ExecuteMultipleResponseItem item in partResponse)
                 {
@@ -378,6 +408,11 @@ public sealed class ExecuteMultipleLogic
 
                     item.RequestIndex += offset;
                     combined.Add(item);
+                }
+
+                if (!continueOnError && partResponse.Any(item => item is { Fault: not null }))
+                {
+                    break;
                 }
             }
 
@@ -404,6 +439,7 @@ public sealed class ExecuteMultipleLogic
             };
 
         requestWithResults.Requests.AddRange(packOfRequests);
+        requestSettings?.ApplyToInnerRequests(requestWithResults.Requests);
 
         ExecuteMultipleResponse response = (await _sdkProxy
             .ExecuteAsync<ExecuteMultipleResponse>(
@@ -585,6 +621,7 @@ public sealed class ExecuteMultipleLogic
                                             packOfRequests,
                                             true,
                                             requestSettings,
+                                            settings.ErrorReport,
                                             token
                                         )
                                         .ConfigureAwait(false);

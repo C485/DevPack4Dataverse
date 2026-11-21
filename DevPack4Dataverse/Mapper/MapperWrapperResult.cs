@@ -19,8 +19,16 @@ namespace DevPack4Dataverse.Mapper;
 /// <summary>
 /// Result of executing a mapper through <see cref="MapperWrapper"/>.
 /// </summary>
+[Serializable]
 public sealed class MapperWrapperResult
 {
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with the mapper result saved before a wrapper
+    /// validation failure.
+    /// </summary>
+    public const string PartialResultsDataKey =
+        "DevPack4Dataverse.Mapper.WrapperPartialResults";
+
     internal MapperWrapperResult(IMappingResult mapperResult, IReadOnlyList<MappingError> errors)
     {
         MapperResult = mapperResult;

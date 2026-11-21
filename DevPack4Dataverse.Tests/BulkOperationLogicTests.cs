@@ -259,6 +259,124 @@ public class BulkOperationLogicTests
 
             Assert.Equal(2, exception.Data[BulkOperationLogic.FailedChunkStartIndexDataKey]);
             Assert.Equal(2, exception.Data[BulkOperationLogic.FailedChunkCountDataKey]);
+            Assert.Equal(
+                new[] { 0 },
+                (int[])exception.Data[BulkOperationLogic.CompletedChunkIndicesDataKey]!
+            );
+
+            var completed = (Dictionary<int, Guid[]>)exception.Data[
+                BulkOperationLogic.CompletedCreateIdsDataKey
+            ]!;
+            Assert.True(completed.ContainsKey(0));
+            Assert.Equal(2, completed[0].Length);
+            Assert.False(completed.ContainsKey(1));
+        }
+    }
+
+    [Fact]
+    public async Task UpdateMultipleAsync_RejectsDuplicateIdsBeforeChunking()
+    {
+        var fake = new FakeConnection
+        {
+            UpdateMultipleHandler = _ =>
+                throw new InvalidOperationException("should not be called")
+        };
+        var (proxy, logic) = Create(fake);
+
+        using (proxy)
+        {
+            Guid id = Guid.NewGuid();
+            Entity[] records =
+            {
+                new Entity("account", id),
+                new Entity("account", id)
+            };
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () =>
+                    logic.UpdateMultipleAsync(
+                        records,
+                        new BulkOperationSettings { BatchSize = 1 }
+                    )
+            );
+        }
+    }
+
+    [Fact]
+    public async Task UpsertMultipleAsync_RejectsDuplicateAlternateKeysBeforeChunking()
+    {
+        var fake = new FakeConnection
+        {
+            UpsertMultipleHandler = _ =>
+                throw new InvalidOperationException("should not be called")
+        };
+        var (proxy, logic) = Create(fake);
+
+        using (proxy)
+        {
+            var first = new Entity("account");
+            first.KeyAttributes["accountnumber"] = "A-1";
+            var second = new Entity("account");
+            second.KeyAttributes["accountnumber"] = "A-1";
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () =>
+                    logic.UpsertMultipleAsync(
+                        new[] { first, second },
+                        new BulkOperationSettings { BatchSize = 1 }
+                    )
+            );
+        }
+    }
+
+    [Fact]
+    public async Task UpsertMultipleAsync_FailedChunk_AddsCompletedResponses()
+    {
+        int calls = 0;
+        var fake = new FakeConnection
+        {
+            UpsertMultipleHandler = targets =>
+            {
+                if (Interlocked.Increment(ref calls) == 2)
+                {
+                    throw new InvalidOperationException("failed chunk");
+                }
+
+                return targets.Entities.Select(_ => new UpsertResponse()).ToArray();
+            }
+        };
+        var (proxy, logic) = Create(fake);
+
+        using (proxy)
+        {
+            Entity[] records = Enumerable
+                .Range(0, 2)
+                .Select(_ => new Entity("account", Guid.NewGuid()))
+                .ToArray();
+
+            InvalidOperationException exception =
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () =>
+                        logic.UpsertMultipleAsync(
+                            records,
+                            new BulkOperationSettings
+                            {
+                                BatchSize = 1,
+                                MaxDegreeOfParallelism = 1
+                            }
+                        )
+                );
+
+            Assert.Equal(
+                new[] { 0 },
+                (int[])exception.Data[BulkOperationLogic.CompletedChunkIndicesDataKey]!
+            );
+            var completed = (Dictionary<int, UpsertResponse[]>)exception.Data[
+                BulkOperationLogic.CompletedUpsertResponsesDataKey
+            ]!;
+            Assert.True(completed.ContainsKey(0));
+            Assert.Single(completed[0]);
+            Assert.False(completed.ContainsKey(1));
         }
     }
 
