@@ -575,6 +575,7 @@ public sealed class ExecuteMultipleLogic
 
         int batchSize = settings.InitialBatchSize;
         int degreeOfParallelism = settings.InitialDegreeOfParallelism;
+        settings.CurrentDegreeOfParallelism = degreeOfParallelism;
         ExecuteMultipleLogicResult logicResult = new()
         {
             Stopwatch = Stopwatch.StartNew(),
@@ -685,6 +686,7 @@ public sealed class ExecuteMultipleLogic
                 recordsSinceAdjustment = 0;
             }
 
+            settings.CurrentDegreeOfParallelism = degreeOfParallelism;
             ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         }
 
@@ -697,6 +699,7 @@ public sealed class ExecuteMultipleLogic
         );
         result.ThreadsUsed = degreeOfParallelism;
         result.BatchSizeUsed = batchSize;
+        settings.CurrentDegreeOfParallelism = degreeOfParallelism;
         ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         return result;
     }

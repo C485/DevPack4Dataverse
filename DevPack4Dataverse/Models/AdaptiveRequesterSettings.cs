@@ -48,6 +48,12 @@ public sealed class AdaptiveRequesterSettings
     /// <summary>Number of records processed before the next adjustment.</summary>
     public int EvaluationRecordCount { get; set; } = 40;
 
+    /// <summary>
+    /// Degree of parallelism selected by the adaptive run. It is updated as the run adjusts and
+    /// can be read from <see cref="ReportProgress"/> while the run is in progress.
+    /// </summary>
+    public int CurrentDegreeOfParallelism { get; internal set; }
+
     /// <summary>Optional callback for failed requests.</summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };
 

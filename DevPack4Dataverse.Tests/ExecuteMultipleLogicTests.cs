@@ -597,6 +597,49 @@ public class ExecuteMultipleLogicTests
     }
 
     [Fact]
+    public async Task AdaptiveExecuteAsync_ReportsCurrentDegreeOfParallelism()
+    {
+        var (proxy, logic) = Create(request =>
+        {
+            var batch = (ExecuteMultipleRequest)request;
+            return Response(
+                batch.Requests
+                    .Select((item, index) => Success(index, item.RequestName))
+                    .ToArray()
+            );
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 30).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 2,
+                MinBatchSize = 1,
+                MaxBatchSize = 10,
+                InitialDegreeOfParallelism = 3,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4,
+                TargetBatchDuration = TimeSpan.FromHours(1),
+                EvaluationRecordCount = 5
+            };
+            var observed = new List<int>();
+            settings.ReportProgress = (_, _) => observed.Add(settings.CurrentDegreeOfParallelism);
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.NotEmpty(observed);
+            Assert.All(observed, value => Assert.InRange(value, 1, 4));
+            Assert.Equal(settings.CurrentDegreeOfParallelism, result.ThreadsUsed);
+        }
+    }
+
+    [Fact]
     public async Task AdaptiveExecuteAsync_ReducesBatchAndThreadsWhenSlow()
     {
         var connection = new FakeConnection

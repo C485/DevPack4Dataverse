@@ -57,24 +57,25 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         }
 
         var rate = new RateTracker();
+        var settings = new AdaptiveRequesterSettings
+        {
+            InitialBatchSize = 50,
+            MinBatchSize = 1,
+            MaxBatchSize = 200,
+            InitialDegreeOfParallelism = 4,
+            MinDegreeOfParallelism = 1,
+            MaxDegreeOfParallelism = 16,
+            TargetBatchDuration = TimeSpan.FromSeconds(3),
+            EvaluationRecordCount = 500,
+            ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
+        };
+        settings.ReportProgress = (cur, max) =>
+            Console.Title = "Adaptive progress "
+                + rate.Format(cur, max)
+                + $" DOP={settings.CurrentDegreeOfParallelism}";
+
         ExecuteMultipleLogicResult result = await connectionManager.ExecuteMultiple
-            .ExecuteAdaptiveAsync(
-                executeMultipleRequestBuilder,
-                new AdaptiveRequesterSettings
-                {
-                    InitialBatchSize = 50,
-                    MinBatchSize = 1,
-                    MaxBatchSize = 200,
-                    InitialDegreeOfParallelism = 4,
-                    MinDegreeOfParallelism = 1,
-                    MaxDegreeOfParallelism = 16,
-                    TargetBatchDuration = TimeSpan.FromSeconds(3),
-                    EvaluationRecordCount = 500,
-                    ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
-                    ReportProgress = (cur, max) =>
-                        Console.Title = "Adaptive progress " + rate.Format(cur, max)
-                }
-            )
+            .ExecuteAdaptiveAsync(executeMultipleRequestBuilder, settings)
             .ConfigureAwait(false);
 
         Console.WriteLine(result.ToString());
@@ -98,24 +99,25 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         }
 
         var rate = new RateTracker();
+        var settings = new AdaptiveRequesterSettings
+        {
+            InitialBatchSize = 100,
+            MinBatchSize = 1,
+            MaxBatchSize = 500,
+            InitialDegreeOfParallelism = 4,
+            MinDegreeOfParallelism = 1,
+            MaxDegreeOfParallelism = 16,
+            TargetBatchDuration = TimeSpan.FromSeconds(3),
+            EvaluationRecordCount = 500,
+            ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
+        };
+        settings.ReportProgress = (cur, max) =>
+            Console.Title = "Adaptive delete "
+                + rate.Format(cur, max)
+                + $" DOP={settings.CurrentDegreeOfParallelism}";
+
         ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple
-            .ExecuteAdaptiveAsync(
-                executeMultipleRequestBuilder,
-                new AdaptiveRequesterSettings
-                {
-                    InitialBatchSize = 100,
-                    MinBatchSize = 1,
-                    MaxBatchSize = 500,
-                    InitialDegreeOfParallelism = 4,
-                    MinDegreeOfParallelism = 1,
-                    MaxDegreeOfParallelism = 16,
-                    TargetBatchDuration = TimeSpan.FromSeconds(3),
-                    EvaluationRecordCount = 500,
-                    ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
-                    ReportProgress = (cur, max) =>
-                        Console.Title = "Adaptive delete " + rate.Format(cur, max)
-                }
-            )
+            .ExecuteAdaptiveAsync(executeMultipleRequestBuilder, settings)
             .ConfigureAwait(false);
 
         Console.WriteLine(result.ToString());

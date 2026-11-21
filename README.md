@@ -114,7 +114,7 @@ ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple.Execu
         EvaluationRecordCount = 40
     });
 ```
-It starts with the configured batch size and parallel requests. Every `EvaluationRecordCount` records it compares the wave duration with `TargetBatchDuration`. Slow waves reduce the batch size first, then parallelism; fast waves increase the batch size first, then parallelism. `ErrorReport` and `ReportProgress` work as in the regular ExecuteMultiple path. Results remain ordered by the original request order. `BatchSizeUsed` and `ThreadsUsed` on the result show the final values.
+It starts with the configured batch size and parallel requests. Every `EvaluationRecordCount` records it compares the wave duration with `TargetBatchDuration`. Slow waves reduce the batch size first, then parallelism; fast waves increase the batch size first, then parallelism. `ErrorReport` and `ReportProgress` work as in the regular ExecuteMultiple path; the progress callback can read `AdaptiveRequesterSettings.CurrentDegreeOfParallelism` for the live value. Results remain ordered by the original request order. `BatchSizeUsed` and `ThreadsUsed` on the result show the final values.
 
 ### Bulk operation messages
 `SdkProxy` exposes the `CreateMultiple`, `UpdateMultiple`, `UpsertMultiple` and `DeleteMultiple` messages. Each call sends one request to Dataverse:
@@ -372,7 +372,7 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 366 tests and runs on `net8.0`, `net11.0`, and `net48` (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 367 tests and runs on `net8.0`, `net11.0`, and `net48` (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
 - A failed connection pool fails fast instead of looping forever when every connection creator has errored.
