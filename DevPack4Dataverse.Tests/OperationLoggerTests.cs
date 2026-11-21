@@ -85,7 +85,11 @@ public class OperationLoggerTests
     {
         public List<LogEntry> Entries { get; } = new();
 
+#if NET11_0_OR_GREATER
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => null!;
+#else
         public IDisposable BeginScope<TState>(TState state) => null!;
+#endif
 
         public bool IsEnabled(LogLevel logLevel) => true;
 

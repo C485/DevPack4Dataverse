@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Query;
 using Xunit;
 using DevPack4Dataverse.Mapper;
 using DevPack4Dataverse.Mapper.Cache;
+using DevPack4Dataverse.Mapper.Lock;
 using DevPack4Dataverse.Tests.TestDoubles;
 
 namespace DevPack4Dataverse.Tests;
@@ -392,7 +394,8 @@ public class MapperCoreTests
                 return response;
             }
         };
-        var (proxy, wrapper) = Create(fake);
+        var cache = new InMemoryEntityCache();
+        var (proxy, wrapper) = Create(fake, null, cache);
 
         using (proxy)
         {
@@ -420,6 +423,13 @@ public class MapperCoreTests
             Assert.NotNull(captured);
             Assert.False(captured!.Target.Attributes.Contains("accountnumber"));
             Assert.Equal("A-1", captured.Target.KeyAttributes["accountnumber"]);
+
+            CachedEntity? cached = await cache.GetAsync(
+                EntityKey.ByAlternateKey("account", "accountnumber", "A-1")
+            );
+            Assert.NotNull(cached);
+            Assert.Equal("A-1", cached!.Record["accountnumber"]);
+            Assert.Contains("accountnumber", cached.LoadedColumns);
         }
     }
 
@@ -524,6 +534,96 @@ public class MapperCoreTests
             Assert.False(result.Records[0].Skipped);
             Assert.NotNull(update);
             Assert.Equal("Cached", update!["name"]);
+        }
+    }
+
+    [Fact]
+    public async Task MapperBatch_Failure_AttachesCompletedRecords()
+    {
+        Guid id = Guid.NewGuid();
+        int creates = 0;
+        var fake = new FakeConnection
+        {
+            CreateRecordHandler = _ =>
+                Interlocked.Increment(ref creates) == 1
+                    ? id
+                    : throw new InvalidOperationException("second create failed")
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            InvalidOperationException exception =
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () =>
+                        mapper.ExecuteAsync(
+                            new[]
+                            {
+                                new OrderSource { Name = "One" },
+                                new OrderSource { Name = "Two" }
+                            }
+                        )
+                );
+
+            var partial = Assert.IsType<MappingResult<Entity>>(
+                exception.Data[IMappingResult.PartialResultsDataKey]
+            );
+            MappedRecord<Entity> record = Assert.Single(partial.Records);
+            Assert.Equal(id, record.Reference!.Id);
+        }
+    }
+
+    [Fact]
+    public async Task ExistingRecord_WithRowVersion_CopiesItToUpdate()
+    {
+        Guid id = Guid.NewGuid();
+        string rowVersion = Convert.ToBase64String(new byte[] { 1, 2, 3 });
+        var current = new Entity("account", id)
+        {
+            ["name"] = "Old",
+            RowVersion = rowVersion
+        };
+        Entity? update = null;
+        QueryExpression? capturedQuery = null;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = query =>
+            {
+                capturedQuery = query;
+                return new[] { current };
+            },
+            UpdateRecordHandler = entity => update = entity
+        };
+        var (proxy, wrapper) = Create(fake);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+                .WithLogicalName("account")
+                .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+                .Map("name", context => context.Source.Name)
+                .WithOptions(
+                    options =>
+                        options.RequestSettings.ConcurrencyBehavior =
+                            ConcurrencyBehavior.IfRowVersionMatches
+                )
+                .Build();
+
+            var result = await mapper.ExecuteAsync(
+                new AccountUpdate { Id = id, Name = "New" }
+            );
+
+            Assert.False(result.Records[0].Skipped);
+            Assert.NotNull(update);
+            Assert.Equal(rowVersion, update!.RowVersion);
+            Assert.DoesNotContain("rowversion", capturedQuery!.ColumnSet.Columns);
         }
     }
 
@@ -672,6 +772,62 @@ public class MapperCoreTests
 
             Assert.True(result.Records[0].Skipped);
             Assert.Equal(0, updates);
+        }
+    }
+
+    [Fact]
+    public async Task MapperLostLock_DoesNotSendUpdate()
+    {
+        Guid id = Guid.NewGuid();
+        bool updated = false;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => new[]
+            {
+                new Entity("account", id) { ["name"] = "Old" }
+            },
+            UpdateRecordHandler = _ => updated = true
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(fake)
+        );
+        proxy.WaitForConnections(1);
+        var wrapper = new MapperWrapper(
+            proxy,
+            NullLogger.Instance,
+            null,
+            null,
+            new LostEntityLock()
+        );
+        var mapper = wrapper
+            .CreateMapperBuilder<AccountUpdate, Entity>("account-update")
+            .WithLogicalName("account")
+            .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+            .Map("name", context => context.Source.Name)
+            .Build();
+
+        await Assert.ThrowsAsync<MapperLockException>(
+            () => mapper.ExecuteAsync(new AccountUpdate { Id = id, Name = "New" })
+        );
+
+        Assert.False(updated);
+    }
+
+    private sealed class LostEntityLock : IEntityLock
+    {
+        public Task<IEntityLockHandle> AcquireAsync(
+            EntityKey key,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<IEntityLockHandle>(new LostHandle());
+
+        private sealed class LostHandle : IEntityLockHandle, IEntityLockState
+        {
+            public bool IsLost => true;
+
+            public void Dispose() { }
         }
     }
 

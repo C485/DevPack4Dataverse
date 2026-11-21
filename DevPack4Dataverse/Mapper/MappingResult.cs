@@ -21,6 +21,7 @@ namespace DevPack4Dataverse.Mapper;
 /// <summary>
 /// Records and validation errors produced by one mapper execution.
 /// </summary>
+[Serializable]
 public sealed class MappingResult<TTarget> : IValidationAwareMappingResult
 {
     internal MappingResult(

@@ -9,13 +9,14 @@ using DevPack4Dataverse.Models;
 
 namespace DevPack4Dataverse.Tests.TestDoubles;
 
-public sealed class FakeConnection : IConnection
+public sealed class FakeConnection : IConnection, IConnectionIdleWaiter
 {
     public int ReleaseCount { get; private set; }
     public int TryLockCount { get; private set; }
     public bool TryLockResult { get; set; } = true;
     public ulong Weight { get; set; }
     public RequestSettings? LastRequestSettings { get; private set; }
+    public Func<CancellationToken, Task>? WaitForIdleHandler { get; set; }
     public Func<string, Guid, ColumnSet, Entity>? RetrieveHandler { get; set; }
     public Func<string, string>? PrimaryKeyHandler { get; set; }
     public Func<OrganizationRequest, OrganizationResponse>? ExecuteHandler { get; set; }
@@ -36,6 +37,9 @@ public sealed class FakeConnection : IConnection
     public void ReleaseLock() => ReleaseCount++;
     public bool Test() => true;
     public Task<bool> TestAsync() => Task.FromResult(true);
+
+    public Task WaitForIdleAsync(CancellationToken cancellationToken = default) =>
+        WaitForIdleHandler?.Invoke(cancellationToken) ?? Task.CompletedTask;
 
     public bool TryLock()
     {

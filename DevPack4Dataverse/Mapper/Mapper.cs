@@ -113,62 +113,81 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             cancellationToken.ThrowIfCancellationRequested();
 
             TTarget target = new();
-            if (target is Entity entityTarget)
-            {
-                ApplyLogicalName(entityTarget);
-            }
-
             MappingContext<TSource, TTarget> context = new(source, target);
-            foreach (IMappingStep<TSource, TTarget> step in _steps)
+            try
             {
-                context.Stage = step.Stage;
-                await step.ApplyAsync(context, state, cancellationToken).ConfigureAwait(false);
-            }
+                if (target is Entity entityTarget)
+                {
+                    ApplyLogicalName(entityTarget);
+                }
 
-            _options.PreSave?.Invoke(context);
+                foreach (IMappingStep<TSource, TTarget> step in _steps)
+                {
+                    context.Stage = step.Stage;
+                    await step.ApplyAsync(context, state, cancellationToken).ConfigureAwait(false);
+                }
 
-            Entity? mappedEntity = ConvertToEntity(target);
-            if (mappedEntity != null && _entityKeyFactory != null)
-            {
-                ApplyEntityKey(mappedEntity, _entityKeyFactory(context));
-            }
+                _options.PreSave?.Invoke(context);
 
-            if (mappedEntity == null)
-            {
-                records.Add(
-                    new MappedRecord<TTarget>(
-                        source,
-                        target,
-                        null,
-                        null,
-                        false,
-                        false,
-                        Array.Empty<string>()
+                Entity? mappedEntity = ConvertToEntity(target);
+                if (mappedEntity != null && _entityKeyFactory != null)
+                {
+                    ApplyEntityKey(mappedEntity, _entityKeyFactory(context));
+                }
+
+                if (mappedEntity == null)
+                {
+                    records.Add(
+                        new MappedRecord<TTarget>(
+                            source,
+                            target,
+                            null,
+                            null,
+                            false,
+                            false,
+                            Array.Empty<string>()
+                        )
+                    );
+                    errors.AddRange(context.Errors);
+                    continue;
+                }
+
+                MappedRecord<TTarget> record = await SaveAsync(
+                        context,
+                        mappedEntity,
+                        state,
+                        cancellationToken
                     )
-                );
+                    .ConfigureAwait(false);
+                records.Add(record);
                 errors.AddRange(context.Errors);
-                continue;
             }
-
-            MappedRecord<TTarget> record = await SaveAsync(
-                    context,
-                    mappedEntity,
-                    state,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            records.Add(record);
-            errors.AddRange(context.Errors);
+            catch (Exception exception)
+            {
+                errors.AddRange(context.Errors);
+                exception.Data[IMappingResult.PartialResultsDataKey] =
+                    new MappingResult<TTarget>(records.ToArray(), errors.ToArray());
+                throw;
+            }
         }
 
         bool validateAfterSave =
             runOptions?.ValidateAfterSave ?? _options.ValidateAfterSave;
         if (validateAfterSave)
         {
-            errors.AddRange(
-                await ValidateAsync(records, state.RequestSettings, cancellationToken)
-                    .ConfigureAwait(false)
-            );
+            try
+            {
+                errors.AddRange(
+                    await ValidateAsync(records, state.RequestSettings, cancellationToken)
+                        .ConfigureAwait(false)
+                );
+            }
+            catch (Exception exception)
+            {
+                exception.Data[IMappingResult.PartialResultsDataKey] =
+                    new MappingResult<TTarget>(records.ToArray(), errors.ToArray());
+                throw;
+            }
         }
 
         return new MappingResult<TTarget>(records, errors, validateAfterSave);
@@ -234,6 +253,10 @@ public sealed class Mapper<TSource, TTarget> : IMapper
 
         IEnumerable<string> requiredColumns = entity.Attributes.Keys;
         bool useCacheForChangeDetection = _options.UseCacheForChangeDetection;
+        // Retrieve and RetrieveMultiple populate Entity.RowVersion without a column request;
+        // "rowversion" is not a queryable attribute and adding it to the ColumnSet faults.
+        bool useRowVersion =
+            state.RequestSettings.ConcurrencyBehavior == ConcurrencyBehavior.IfRowVersionMatches;
         Entity? current = await _recordStore
             .GetAsync(
                 key,
@@ -252,6 +275,16 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         }
 
         entity.Id = current.Id;
+        if (useRowVersion && (current.RowVersion == null || current.RowVersion.Length == 0))
+        {
+            throw new MapperException(
+                $"The current record '{entity.LogicalName}:{current.Id}' has no row version. "
+                    + "Disable cached change detection or refresh the record with the rowversion column."
+            );
+        }
+
+        EntityLockGuard.EnsureHeld(lockHandle);
+
         IReadOnlyList<string> changed = EntityChangeDetector.GetChangedFields(
             current,
             entity,
@@ -276,6 +309,11 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         foreach (string attribute in changed)
         {
             update[attribute] = entity[attribute];
+        }
+
+        if (useRowVersion)
+        {
+            update.RowVersion = current.RowVersion!;
         }
 
         await _sdkProxy.UpdateRecordAsync(update, state.RequestSettings).ConfigureAwait(false);
@@ -352,17 +390,23 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             entity.Id = id;
         }
 
-        await _recordStore.RemoveRecordAsync(entity, cancellationToken).ConfigureAwait(false);
-        await _recordStore.CacheSavedAsync(entity, cancellationToken).ConfigureAwait(false);
+        Entity savedEntity = EntityCopy.Clone(entity) ?? entity;
+        AlternateKeyAttributes.Restore(savedEntity, key);
+        await _recordStore
+            .RemoveRecordAsync(savedEntity, cancellationToken)
+            .ConfigureAwait(false);
+        await _recordStore
+            .CacheSavedAsync(savedEntity, state.RequestSettings, cancellationToken)
+            .ConfigureAwait(false);
 
         return new MappedRecord<TTarget>(
             context.Source,
             context.Target,
-            new EntityReference(entity.LogicalName, entity.Id),
-            entity,
+            new EntityReference(savedEntity.LogicalName, savedEntity.Id),
+            savedEntity,
             created,
             false,
-            entity.Attributes.Keys.ToArray()
+            savedEntity.Attributes.Keys.ToArray()
         );
     }
 

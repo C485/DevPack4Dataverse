@@ -104,10 +104,10 @@ public sealed class ExecuteMultipleRequestBuilder
 
         Guard.Against.Null(request);
 
-        if (request is ExecuteMultipleRequest or ExecuteTransactionRequest)
+        if (request is ExecuteMultipleRequest)
         {
             throw new ArgumentException(
-                "An ExecuteMultipleRequest cannot contain ExecuteMultipleRequest or ExecuteTransactionRequest.",
+                "An ExecuteMultipleRequest cannot contain another ExecuteMultipleRequest.",
                 nameof(request)
             );
         }

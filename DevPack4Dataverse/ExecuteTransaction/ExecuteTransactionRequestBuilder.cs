@@ -35,6 +35,7 @@ namespace DevPack4Dataverse.ExecuteTransaction;
 /// </remarks>
 public sealed class ExecuteTransactionRequestBuilder
 {
+    private readonly object _addLock = new();
     private readonly ILogger _logger;
     private readonly ConcurrentQueue<OrganizationRequest> _requests;
     private readonly bool _returnResponses;
@@ -129,16 +130,18 @@ public sealed class ExecuteTransactionRequestBuilder
             );
         }
 
-        if (_requests.Count >= 1000)
+        lock (_addLock)
         {
-            throw new InvalidOperationException(
-                "A transaction cannot contain more than 1,000 requests."
-            );
+            if (_requests.Count >= 1000)
+            {
+                throw new InvalidOperationException(
+                    "A transaction cannot contain more than 1,000 requests."
+                );
+            }
+
+            requestSettings?.AddToOrganizationRequest(request, _logger);
+            _requests.Enqueue(request);
         }
-
-        requestSettings?.AddToOrganizationRequest(request, _logger);
-
-        _requests.Enqueue(request);
     }
 
     public void AddUpdate(Entity record, RequestSettings? requestSettings = null)

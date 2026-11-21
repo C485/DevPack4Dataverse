@@ -23,6 +23,12 @@ namespace DevPack4Dataverse.Mapper;
 /// </summary>
 public interface IMappingResult
 {
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with the records saved before a failure. The value is
+    /// a <see cref="MappingResult{TTarget}"/>.
+    /// </summary>
+    public const string PartialResultsDataKey = "DevPack4Dataverse.Mapper.PartialResults";
+
     IReadOnlyList<MappingError> Errors { get; }
 
     IReadOnlyList<EntityReference> SavedReferences { get; }

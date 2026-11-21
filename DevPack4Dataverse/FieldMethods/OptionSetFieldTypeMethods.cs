@@ -26,6 +26,7 @@ namespace DevPack4Dataverse.FieldMethods;
 public sealed class OptionSetFieldTypeMethods
 {
     private const int NoLanguageFilter = -1;
+    private const int BaseLanguageCode = 1033;
     private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
     private readonly ConcurrentDictionary<
         (string LogicalName, string FieldName),
@@ -106,18 +107,14 @@ public sealed class OptionSetFieldTypeMethods
             mappedFieldValueMetadata,
             message: $"Metadata for field was valid but optionset value of {valueToMap} was not found."
         );
-        if (languageCode == NoLanguageFilter)
-        {
-            return mappedFieldValueMetadata.Label.UserLocalizedLabel.Label;
-        }
-
-        LocalizedLabel? languageDependentLabel = FindLocalizedLabel(
+        string? label = GetLabel(
             mappedFieldValueMetadata.Label,
-            languageCode
+            languageCode == NoLanguageFilter ? null : languageCode
         );
-        return Guard.Against
-            .Null(languageDependentLabel, message: $"Unable to find label for language {languageCode}.")
-            .Label;
+        return label
+            ?? throw new InvalidOperationException(
+                $"Unable to find a label for language {languageCode}."
+            );
     }
 
     /// <summary>
@@ -159,7 +156,16 @@ public sealed class OptionSetFieldTypeMethods
             compareIgnoreCase
         ).ConfigureAwait(false);
 
-        return (T)(object)Guard.Against.EnumOutOfRange<T>(Guard.Against.Null(mapped).Value);
+        int mappedValue = Guard.Against.Null(mapped).Value;
+        T value = (T)Enum.ToObject(typeof(T), mappedValue);
+        if (!Enum.IsDefined(typeof(T), value))
+        {
+            throw new System.ComponentModel.InvalidEnumArgumentException(
+                $"Value {mappedValue} is not defined for enum {typeof(T).Name}."
+            );
+        }
+
+        return value;
     }
 
     public async Task<OptionSetValue> MapStringToOptionSet(
@@ -195,23 +201,21 @@ public sealed class OptionSetFieldTypeMethods
 
         foreach (OptionMetadata optionMetadata in metadataResponse)
         {
-            foreach (LocalizedLabel label in optionMetadata.Label.LocalizedLabels)
-            {
-                if (
-                    label.LanguageCode == languageCode
-                    && string.Equals(
-                        valueToMap,
-                        label.Label,
-                        compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
-                    )
+            string? optionLabel = GetLabel(optionMetadata.Label, languageCode);
+            if (
+                optionLabel != null
+                && string.Equals(
+                    valueToMap,
+                    optionLabel,
+                    compareIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
                 )
-                {
-                    Guard.Against.Null(
-                        optionMetadata.Value,
-                        message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
-                    );
-                    return new OptionSetValue(optionMetadata.Value.Value);
-                }
+            )
+            {
+                Guard.Against.Null(
+                    optionMetadata.Value,
+                    message: $"Metadata for field was valid, optionset label {valueToMap} was found but its value is null."
+                );
+                return new OptionSetValue(optionMetadata.Value.Value);
             }
         }
 
@@ -323,7 +327,7 @@ public sealed class OptionSetFieldTypeMethods
             : StringComparison.Ordinal;
         foreach (OptionMetadata option in options)
         {
-            string? optionLabel = option.Label?.UserLocalizedLabel?.Label;
+            string? optionLabel = GetLabel(option.Label, null);
             if (optionLabel != null && string.Equals(label, optionLabel, comparison))
             {
                 return option;
@@ -333,28 +337,56 @@ public sealed class OptionSetFieldTypeMethods
         return null;
     }
 
-    private static LocalizedLabel? FindLocalizedLabel(Label? label, int languageCode)
+    private static string? GetLabel(Label? label, int? languageCode)
     {
-        if (label?.LocalizedLabels == null)
+        if (label == null)
         {
             return null;
         }
 
-        foreach (LocalizedLabel localizedLabel in label.LocalizedLabels)
+        IEnumerable<LocalizedLabel> localizedLabels =
+            label.LocalizedLabels ?? Enumerable.Empty<LocalizedLabel>();
+        if (languageCode.HasValue)
         {
-            if (localizedLabel.LanguageCode == languageCode)
+            LocalizedLabel? exact = localizedLabels.FirstOrDefault(
+                candidate =>
+                    candidate.LanguageCode == languageCode
+                    && !string.IsNullOrEmpty(candidate.Label)
+            );
+            if (exact != null)
             {
-                return localizedLabel;
+                return exact.Label;
             }
+
+            // A missing translation falls back to the base language.
+            LocalizedLabel? baseLabel = localizedLabels.FirstOrDefault(
+                candidate =>
+                    candidate.LanguageCode == BaseLanguageCode
+                    && !string.IsNullOrEmpty(candidate.Label)
+            );
+            if (baseLabel != null)
+            {
+                return baseLabel.Label;
+            }
+
+            return localizedLabels.FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.Label))
+                ?.Label;
         }
 
-        // Dataverse falls back to the base-language label when the requested language is absent.
-        if (label.UserLocalizedLabel != null)
+        LocalizedLabel? userLabel = label.UserLocalizedLabel;
+        if (!string.IsNullOrEmpty(userLabel?.Label))
         {
-            return label.UserLocalizedLabel;
+            return userLabel!.Label;
         }
 
-        return label.LocalizedLabels.FirstOrDefault();
+        LocalizedLabel? fallback = localizedLabels.FirstOrDefault(
+            candidate =>
+                candidate.LanguageCode == BaseLanguageCode
+                && !string.IsNullOrEmpty(candidate.Label)
+        );
+        return fallback?.Label
+            ?? localizedLabels.FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.Label))
+                ?.Label;
     }
 
     private sealed class MetadataKeyComparer

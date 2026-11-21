@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
+
 namespace DevPack4Dataverse.Utils;
 
 internal static class AsyncParallel
@@ -36,12 +39,20 @@ internal static class AsyncParallel
             (item, token) => new ValueTask(body(item, token))
         );
 #else
-        return ForEachWithSemaphoreAsync(source, maxDegreeOfParallelism, cancellationToken, body);
+        return ForEachWithSemaphoreAsync(
+            source,
+            maxDegreeOfParallelism,
+            cancellationToken,
+            body
+        );
 #endif
     }
 
-#if !NET6_0_OR_GREATER
-    private static async Task ForEachWithSemaphoreAsync<T>(
+    /// <summary>
+    /// .NET Framework fallback. It is kept on every target framework so the failure
+    /// behaviour can be tested on modern runtimes as well.
+    /// </summary>
+    internal static async Task ForEachWithSemaphoreAsync<T>(
         IEnumerable<T> source,
         int maxDegreeOfParallelism,
         CancellationToken cancellationToken,
@@ -52,6 +63,7 @@ internal static class AsyncParallel
         {
             maxDegreeOfParallelism = Environment.ProcessorCount;
         }
+
         if (maxDegreeOfParallelism <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism));
@@ -59,36 +71,71 @@ internal static class AsyncParallel
 
         int workerCount = Math.Min(maxDegreeOfParallelism, 1024);
         using IEnumerator<T> enumerator = source.GetEnumerator();
+        using CancellationTokenSource linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
         object gate = new();
+        ConcurrentQueue<Exception> failures = new();
 
         Task Worker()
         {
             return Task.Run(
                 async () =>
                 {
-                    while (true)
+                    try
                     {
-                        T item;
-                        lock (gate)
+                        while (true)
                         {
-                            if (!enumerator.MoveNext())
+                            linkedCancellation.Token.ThrowIfCancellationRequested();
+
+                            T item;
+                            lock (gate)
                             {
-                                return;
+                                if (!enumerator.MoveNext())
+                                {
+                                    return;
+                                }
+
+                                item = enumerator.Current;
                             }
 
-                            item = enumerator.Current;
+                            linkedCancellation.Token.ThrowIfCancellationRequested();
+                            await body(item, linkedCancellation.Token).ConfigureAwait(false);
                         }
-
-                        cancellationToken.ThrowIfCancellationRequested();
-                        await body(item, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                        when (
+                            linkedCancellation.IsCancellationRequested
+                            && !cancellationToken.IsCancellationRequested
+                        )
+                    {
+                        // Another worker failed. Stop quietly and let that failure surface.
+                    }
+                    catch (Exception exception)
+                    {
+                        failures.Enqueue(exception);
+                        linkedCancellation.Cancel();
+                        throw;
                     }
                 },
-                cancellationToken
+                linkedCancellation.Token
             );
         }
 
         Task[] workers = Enumerable.Range(0, workerCount).Select(_ => Worker()).ToArray();
-        await Task.WhenAll(workers).ConfigureAwait(false);
+
+        try
+        {
+            await Task.WhenAll(workers).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (failures.TryPeek(out Exception? failure))
+            {
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            }
+
+            throw;
+        }
     }
-#endif
 }

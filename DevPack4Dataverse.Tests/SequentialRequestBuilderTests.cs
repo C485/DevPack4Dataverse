@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
@@ -38,6 +38,35 @@ public class SequentialRequestBuilderTests
 
     private static OrganizationResponse ActionResponse(string requestName) =>
         new() { ResponseName = requestName };
+
+    [Fact]
+    public async Task ExecuteAsync_Failure_PreservesCompletedSteps()
+    {
+        Guid id = Guid.NewGuid();
+        var (proxy, builder) = Create(request =>
+            request is CreateRequest
+                ? Created(id)
+                : throw new InvalidOperationException("step failed")
+        );
+
+        using (proxy)
+        {
+            builder
+                .Create(new Entity("account") { ["name"] = "Contoso" })
+                .Execute(new OrganizationRequest("fail"));
+
+            InvalidOperationException exception =
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => builder.ExecuteAsync()
+                );
+
+            var partial = Assert.IsType<SequentialRequestContext>(
+                exception.Data[SequentialRequestBuilder.PartialResultsDataKey]
+            );
+            Assert.Equal(1, partial.Count);
+            Assert.Equal(id, partial.CreatedId(0));
+        }
+    }
 
     [Fact]
     public async Task ExecuteAsync_CreateActionRetrieve_ExposesAllPreviousResults()

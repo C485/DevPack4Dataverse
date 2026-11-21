@@ -17,6 +17,7 @@ limitations under the License.
 using Ardalis.GuardClauses;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 
 namespace DevPack4Dataverse.Models;
 
@@ -68,6 +69,50 @@ public sealed class RequestSettings : RequestImpersonateSettings
     internal bool HasImpersonation =>
         ImpersonateAsUserByAADId.HasValue || ImpersonateAsUserByDataverseId.HasValue;
 
+    /// <summary>
+    /// Applies the values that were explicitly set to an inner request of a batch. Unlike
+    /// <see cref="AddToOrganizationRequest"/>, this never removes a parameter, so per-message
+    /// settings survive a batch-level override.
+    /// </summary>
+    internal void ApplyToInnerRequests(IEnumerable<OrganizationRequest> organizationRequests)
+    {
+        Guard.Against.Null(organizationRequests, parameterName: nameof(organizationRequests));
+        foreach (OrganizationRequest organizationRequest in organizationRequests)
+        {
+            ApplyToInnerRequest(organizationRequest);
+        }
+    }
+
+    internal void ApplyToInnerRequest(OrganizationRequest organizationRequest)
+    {
+        Guard.Against.Null(organizationRequest, parameterName: nameof(organizationRequest));
+
+        if (!string.IsNullOrEmpty(SharedVariable))
+        {
+            organizationRequest[RequestHeaders.TagName] = SharedVariable;
+        }
+
+        if (!string.IsNullOrEmpty(PartitionId))
+        {
+            organizationRequest[RequestHeaders.PartitionIdName] = PartitionId;
+        }
+
+        if (SuppressDuplicateDetection)
+        {
+            organizationRequest[RequestHeaders.SuppressDuplicateDetectioname] = true;
+        }
+
+        if (SkipPluginExecution)
+        {
+            organizationRequest[RequestHeaders.BypassCustomPluginExecutionName] = true;
+        }
+
+        if (ConcurrencyBehavior.HasValue && SupportsConcurrencyBehavior(organizationRequest))
+        {
+            organizationRequest[RequestHeaders.ConcurrencyBehaviorName] = ConcurrencyBehavior.Value;
+        }
+    }
+
     public void AddToOrganizationRequest(OrganizationRequest organizationRequest, ILogger logger)
     {
         Guard.Against.Null(organizationRequest, parameterName: nameof(organizationRequest));
@@ -92,12 +137,22 @@ public sealed class RequestSettings : RequestImpersonateSettings
             RequestHeaders.BypassCustomPluginExecutionName,
             SkipPluginExecution ? true : null
         );
-        SetOrRemove(
-            organizationRequest,
-            RequestHeaders.ConcurrencyBehaviorName,
-            ConcurrencyBehavior
-        );
+        if (SupportsConcurrencyBehavior(organizationRequest))
+        {
+            SetOrRemove(
+                organizationRequest,
+                RequestHeaders.ConcurrencyBehaviorName,
+                ConcurrencyBehavior
+            );
+        }
     }
+
+    private static bool SupportsConcurrencyBehavior(OrganizationRequest organizationRequest) =>
+        organizationRequest
+            is UpdateRequest
+                or DeleteRequest
+                or UpdateMultipleRequest
+                or DeleteMultipleRequest;
 
     private static void SetOrRemove(OrganizationRequest organizationRequest, string name, object? value)
     {

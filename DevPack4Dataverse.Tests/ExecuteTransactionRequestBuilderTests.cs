@@ -162,6 +162,36 @@ public class ExecuteTransactionRequestBuilderTests
     }
 
     [Fact]
+    public void AddRequest_ConcurrentAdds_DoNotExceedOneThousand()
+    {
+        var builder = Create();
+        for (int index = 0; index < 999; index++)
+        {
+            builder.AddRequest(new OrganizationRequest("req" + index));
+        }
+
+        int failures = 0;
+        Parallel.For(
+            0,
+            200,
+            index =>
+            {
+                try
+                {
+                    builder.AddRequest(new OrganizationRequest("extra" + index));
+                }
+                catch (InvalidOperationException)
+                {
+                    Interlocked.Increment(ref failures);
+                }
+            }
+        );
+
+        Assert.Equal(1000, builder.Count);
+        Assert.True(failures > 0);
+    }
+
+    [Fact]
     public void AddRequest_RejectsMoreThanOneThousandRequests()
     {
         var builder = Create();

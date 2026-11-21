@@ -45,6 +45,39 @@ public class RequestSettingsTests
     }
 
     [Fact]
+    public void ConcurrencyBehavior_IsNotAddedToCreateRequests()
+    {
+        var request = new CreateRequest { Target = new Entity("account") };
+        var settings = new RequestSettings
+        {
+            ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches
+        };
+
+        settings.AddToOrganizationRequest(request, NullLogger.Instance);
+
+        Assert.False(request.Parameters.Contains("ConcurrencyBehavior"));
+    }
+
+    [Fact]
+    public void ApplyToInnerRequest_SkipsConcurrencyBehaviorForCreate()
+    {
+        var create = new CreateRequest { Target = new Entity("account") };
+        var update = new UpdateRequest
+        {
+            Target = new Entity("account") { Id = Guid.NewGuid() }
+        };
+        var settings = new RequestSettings
+        {
+            ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches
+        };
+
+        settings.ApplyToInnerRequests(new OrganizationRequest[] { create, update });
+
+        Assert.False(create.Parameters.Contains("ConcurrencyBehavior"));
+        Assert.Equal(ConcurrencyBehavior.IfRowVersionMatches, update["ConcurrencyBehavior"]);
+    }
+
+    [Fact]
     public void AddToOrganizationRequest_NullRequest_Throws()
     {
         Assert.Throws<ArgumentNullException>(

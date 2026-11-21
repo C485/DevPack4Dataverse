@@ -41,6 +41,26 @@ public sealed class BulkOperationLogic
     /// <summary>Key in <see cref="Exception.Data"/> with the failed chunk record count.</summary>
     public const string FailedChunkCountDataKey = "DevPack4Dataverse.BulkOperation.Count";
 
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with the indexes of chunks that completed before the
+    /// failure. Chunks that were still running when the failure happened are included only if
+    /// they finished before the operation stopped.
+    /// </summary>
+    public const string CompletedChunkIndicesDataKey =
+        "DevPack4Dataverse.BulkOperation.CompletedChunkIndices";
+
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with a snapshot of the created ids per completed chunk.
+    /// </summary>
+    public const string CompletedCreateIdsDataKey =
+        "DevPack4Dataverse.BulkOperation.CompletedCreateIds";
+
+    /// <summary>
+    /// Key in <see cref="Exception.Data"/> with a snapshot of the upsert responses per completed chunk.
+    /// </summary>
+    public const string CompletedUpsertResponsesDataKey =
+        "DevPack4Dataverse.BulkOperation.CompletedUpsertResponses";
+
     private readonly ILogger _logger;
     private readonly SdkProxy _sdkProxy;
 
@@ -71,24 +91,32 @@ public sealed class BulkOperationLogic
         BulkOperationSettings bulkSettings = (settings ?? new BulkOperationSettings()).Validate();
         ConcurrentDictionary<int, Guid[]> results = new();
 
-        await RunChunksAsync(
-                prepared.Entities.ToList(),
-                "CreateMultiple",
-                bulkSettings,
-                cancellationToken,
-                async (chunk, index, token) =>
-                {
-                    Guid[] ids = await _sdkProxy
-                        .CreateMultipleAsync(
-                            CreateEntityCollection(chunk, prepared.EntityName),
-                            requestSettings,
-                            token
-                        )
-                        .ConfigureAwait(false);
-                    results[index] = ids;
-                }
-            )
-            .ConfigureAwait(false);
+        try
+        {
+            await RunChunksAsync(
+                    prepared.Entities.ToList(),
+                    "CreateMultiple",
+                    bulkSettings,
+                    cancellationToken,
+                    async (chunk, index, token) =>
+                    {
+                        Guid[] ids = await _sdkProxy
+                            .CreateMultipleAsync(
+                                CreateEntityCollection(chunk, prepared.EntityName),
+                                requestSettings,
+                                token
+                            )
+                            .ConfigureAwait(false);
+                        results[index] = ids;
+                    }
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            exception.Data[CompletedCreateIdsDataKey] = new Dictionary<int, Guid[]>(results);
+            throw;
+        }
 
         List<Guid> merged = new(items.Count);
         for (int index = 0; index < results.Count; index++)
@@ -163,24 +191,33 @@ public sealed class BulkOperationLogic
         BulkOperationSettings bulkSettings = (settings ?? new BulkOperationSettings()).Validate();
         ConcurrentDictionary<int, UpsertResponse[]> results = new();
 
-        await RunChunksAsync(
-                prepared.Entities.ToList(),
-                "UpsertMultiple",
-                bulkSettings,
-                cancellationToken,
-                async (chunk, index, token) =>
-                {
-                    UpsertResponse[] responses = await _sdkProxy
-                        .UpsertMultipleAsync(
-                            CreateEntityCollection(chunk, prepared.EntityName),
-                            requestSettings,
-                            token
-                        )
-                        .ConfigureAwait(false);
-                    results[index] = responses;
-                }
-            )
-            .ConfigureAwait(false);
+        try
+        {
+            await RunChunksAsync(
+                    prepared.Entities.ToList(),
+                    "UpsertMultiple",
+                    bulkSettings,
+                    cancellationToken,
+                    async (chunk, index, token) =>
+                    {
+                        UpsertResponse[] responses = await _sdkProxy
+                            .UpsertMultipleAsync(
+                                CreateEntityCollection(chunk, prepared.EntityName),
+                                requestSettings,
+                                token
+                            )
+                            .ConfigureAwait(false);
+                        results[index] = responses;
+                    }
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            exception.Data[CompletedUpsertResponsesDataKey] =
+                new Dictionary<int, UpsertResponse[]>(results);
+            throw;
+        }
 
         List<UpsertResponse> merged = new(items.Count);
         for (int index = 0; index < results.Count; index++)
@@ -248,6 +285,7 @@ public sealed class BulkOperationLogic
                 ? Math.Max(1, _sdkProxy.ConnectionCount)
                 : settings.MaxDegreeOfParallelism;
         int processed = 0;
+        ConcurrentDictionary<int, byte> completedChunks = new();
         RepeatedTask? progressTask = null;
 
         if (settings.ReportProgress != null)
@@ -267,29 +305,42 @@ public sealed class BulkOperationLogic
 
         try
         {
-            await AsyncParallel
-                .ForEachAsync(
-                    chunks,
-                    degreeOfParallelism,
-                    cancellationToken,
-                    async (chunk, token) =>
-                    {
-                        try
+            try
+            {
+                await AsyncParallel
+                    .ForEachAsync(
+                        chunks,
+                        degreeOfParallelism,
+                        cancellationToken,
+                        async (chunk, token) =>
                         {
-                            await chunkAction(chunk.Items, chunk.Index, token)
-                                .ConfigureAwait(false);
-                        }
-                        catch (Exception exception)
-                        {
-                            exception.Data[FailedChunkStartIndexDataKey] = chunk.StartIndex;
-                            exception.Data[FailedChunkCountDataKey] = chunk.Items.Count;
-                            throw;
-                        }
+                            try
+                            {
+                                await chunkAction(chunk.Items, chunk.Index, token)
+                                    .ConfigureAwait(false);
+                            }
+                            catch (Exception exception)
+                            {
+                                exception.Data[FailedChunkStartIndexDataKey] = chunk.StartIndex;
+                                exception.Data[FailedChunkCountDataKey] = chunk.Items.Count;
+                                throw;
+                            }
 
-                        Interlocked.Add(ref processed, chunk.Items.Count);
-                    }
-                )
-                .ConfigureAwait(false);
+                            completedChunks[chunk.Index] = 0;
+                            Interlocked.Add(ref processed, chunk.Items.Count);
+                        }
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                // Every in-flight chunk has finished by now. Record what committed so a caller
+                // can resume without re-sending completed work.
+                exception.Data[CompletedChunkIndicesDataKey] = completedChunks
+                    .Keys.OrderBy(index => index)
+                    .ToArray();
+                throw;
+            }
         }
         finally
         {
