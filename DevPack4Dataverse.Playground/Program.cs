@@ -37,7 +37,23 @@ internal static class Program
             .CreateLogger();
 
         var microsoftLogger = new SerilogLoggerFactory(Log.Logger).CreateLogger("");
-        await new AdvancedMultipleRequest(microsoftLogger).Execute().ConfigureAwait(false);
-        Log.CloseAndFlush();
+        IExecute example = args.FirstOrDefault()?.ToLowerInvariant() switch
+        {
+            null or "advanced" => new AdvancedMultipleRequest(microsoftLogger),
+            "adaptive" => new AdaptiveMultipleRequest(microsoftLogger),
+            var name => throw new ArgumentException(
+                $"Unknown example '{name}'. Use 'advanced' or 'adaptive'.",
+                nameof(args)
+            )
+        };
+
+        try
+        {
+            await example.Execute().ConfigureAwait(false);
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+        }
     }
 }

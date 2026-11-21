@@ -1,0 +1,124 @@
+/*
+Copyright 2022 Kamil Skoracki / C485@GitHub
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+using DevPack4Dataverse.Creators;
+using DevPack4Dataverse.ExecuteMultiple;
+using DevPack4Dataverse.Models;
+
+namespace DevPack4Dataverse.Playground.Examples;
+
+public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
+{
+    private const string EntityName = "gas_tabela1";
+    private const string EntityNameFieldName = "gas_nowakolumna";
+    private const int RecordsToCreate = 20000;
+
+    // Set DEVPACK_DATAVERSE_CONNECTION to a ServiceClient connection string.
+    // The connection string creator adds RequireNewInstance=True.
+    public async Task Execute()
+    {
+        string connectionString = Environment.GetEnvironmentVariable(
+            "DEVPACK_DATAVERSE_CONNECTION"
+        ) ?? throw new InvalidOperationException(
+            "Set DEVPACK_DATAVERSE_CONNECTION to a ServiceClient connection string."
+        );
+
+        using DataverseDevPack connectionManager = new(
+            microsoftLogger,
+            true,
+            new ConnectionStringConnectionCreator(connectionString, 15)
+        );
+
+        await AddNewRecords(connectionManager).ConfigureAwait(false);
+        await DeleteRecords(connectionManager).ConfigureAwait(false);
+    }
+
+    private async Task AddNewRecords(DataverseDevPack connectionManager)
+    {
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = new(microsoftLogger, true);
+        foreach (int item in Enumerable.Range(0, RecordsToCreate))
+        {
+            Entity et = new(EntityName);
+            et[EntityNameFieldName] = $"Record [{item}]";
+            executeMultipleRequestBuilder.AddCreate(et);
+        }
+
+        ExecuteMultipleLogicResult result = await connectionManager.ExecuteMultiple
+            .ExecuteAdaptiveAsync(
+                executeMultipleRequestBuilder,
+                new AdaptiveRequesterSettings
+                {
+                    InitialBatchSize = 50,
+                    MinBatchSize = 1,
+                    MaxBatchSize = 200,
+                    InitialDegreeOfParallelism = 4,
+                    MinDegreeOfParallelism = 1,
+                    MaxDegreeOfParallelism = 16,
+                    TargetBatchDuration = TimeSpan.FromSeconds(3),
+                    EvaluationRecordCount = 500,
+                    ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
+                    ReportProgress = (cur, max) =>
+                        Console.Title = $"Adaptive progress[{cur}/{max}]"
+                }
+            )
+            .ConfigureAwait(false);
+
+        Console.WriteLine(result.ToString());
+    }
+
+    private async Task DeleteRecords(DataverseDevPack dataverseDevPack)
+    {
+        Entity[] recordsInCrm = dataverseDevPack.SdkProxy.RetrieveMultiple(
+            new QueryExpression { EntityName = EntityName, ColumnSet = new ColumnSet(false) }
+        );
+        ExecuteMultipleRequestBuilder executeMultipleRequestBuilder = dataverseDevPack.ExecuteMultiple
+            .CreateRequestBuilder();
+        foreach (Entity item in recordsInCrm)
+        {
+            executeMultipleRequestBuilder.AddDelete(item.ToEntityReference());
+        }
+
+        if (executeMultipleRequestBuilder.Count == 0)
+        {
+            return;
+        }
+
+        ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple
+            .ExecuteAdaptiveAsync(
+                executeMultipleRequestBuilder,
+                new AdaptiveRequesterSettings
+                {
+                    InitialBatchSize = 100,
+                    MinBatchSize = 1,
+                    MaxBatchSize = 500,
+                    InitialDegreeOfParallelism = 4,
+                    MinDegreeOfParallelism = 1,
+                    MaxDegreeOfParallelism = 16,
+                    TargetBatchDuration = TimeSpan.FromSeconds(3),
+                    EvaluationRecordCount = 500,
+                    ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}"),
+                    ReportProgress = (cur, max) =>
+                        Console.Title = $"Adaptive delete progress[{cur}/{max}]"
+                }
+            )
+            .ConfigureAwait(false);
+
+        Console.WriteLine(result.ToString());
+    }
+}
