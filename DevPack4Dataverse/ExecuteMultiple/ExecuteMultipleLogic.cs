@@ -576,6 +576,8 @@ public sealed class ExecuteMultipleLogic
         int batchSize = settings.InitialBatchSize;
         int degreeOfParallelism = settings.InitialDegreeOfParallelism;
         settings.CurrentDegreeOfParallelism = degreeOfParallelism;
+        settings.CurrentBatchSize = batchSize;
+        bool warmup = true;
         ExecuteMultipleLogicResult logicResult = new()
         {
             Stopwatch = Stopwatch.StartNew(),
@@ -672,21 +674,30 @@ public sealed class ExecuteMultipleLogic
             }
 
             recordsSinceAdjustment += waveRecords;
+            bool isWarmupWave = warmup;
+            warmup = false;
             if (
                 wave.Count == degreeOfParallelism
                 && recordsSinceAdjustment >= settings.EvaluationRecordCount
             )
             {
-                AdjustAdaptiveSettings(
-                    settings,
-                    waveStopwatch.Elapsed,
-                    ref batchSize,
-                    ref degreeOfParallelism
-                );
+                // The first wave includes JIT, connection setup, and warm-up work. Measure it,
+                // but do not let it distort the batch size.
+                if (!isWarmupWave)
+                {
+                    AdjustAdaptiveSettings(
+                        settings,
+                        waveStopwatch.Elapsed,
+                        ref batchSize,
+                        ref degreeOfParallelism
+                    );
+                }
+
                 recordsSinceAdjustment = 0;
             }
 
             settings.CurrentDegreeOfParallelism = degreeOfParallelism;
+            settings.CurrentBatchSize = batchSize;
             ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         }
 
@@ -700,6 +711,7 @@ public sealed class ExecuteMultipleLogic
         result.ThreadsUsed = degreeOfParallelism;
         result.BatchSizeUsed = batchSize;
         settings.CurrentDegreeOfParallelism = degreeOfParallelism;
+        settings.CurrentBatchSize = batchSize;
         ReportProgressSafely(settings.ReportProgress, progress, requests.Length);
         return result;
     }
@@ -739,7 +751,17 @@ public sealed class ExecuteMultipleLogic
         {
             if (batchSize > settings.MinBatchSize)
             {
-                batchSize--;
+                // Scale to the target in one step instead of subtracting one per wave. A big
+                // overshoot is exactly where a fixed one-step decrease is too slow.
+                double ratio =
+                    settings.TargetBatchDuration.Ticks / (double)Math.Max(1, waveDuration.Ticks);
+                int scaled = (int)Math.Floor(batchSize * ratio);
+                if (scaled >= batchSize)
+                {
+                    scaled = batchSize - 1;
+                }
+
+                batchSize = Math.Max(settings.MinBatchSize, scaled);
             }
             else if (degreeOfParallelism > settings.MinDegreeOfParallelism)
             {
@@ -754,11 +776,16 @@ public sealed class ExecuteMultipleLogic
         {
             if (batchSize < settings.MaxBatchSize)
             {
-                batchSize++;
+                int growth = Math.Max(1, batchSize / 2);
+                batchSize = Math.Min(settings.MaxBatchSize, batchSize + growth);
             }
             else if (degreeOfParallelism < settings.MaxDegreeOfParallelism)
             {
-                degreeOfParallelism++;
+                int growth = Math.Max(1, degreeOfParallelism / 2);
+                degreeOfParallelism = Math.Min(
+                    settings.MaxDegreeOfParallelism,
+                    degreeOfParallelism + growth
+                );
             }
         }
     }

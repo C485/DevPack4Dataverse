@@ -55,6 +55,46 @@ public class ExecuteMultipleLogicTests
     private static ExecuteMultipleResponseItem Failure(int requestIndex) =>
         new() { RequestIndex = requestIndex, Fault = new OrganizationServiceFault() };
 
+    private static (SdkProxy Proxy, ExecuteMultipleLogic Logic) CreateDelayed(
+        int connectionCount,
+        Func<int, int, TimeSpan> delay
+    )
+    {
+        int calls = 0;
+        FakeConnection[] connections = new FakeConnection[connectionCount];
+        for (int index = 0; index < connections.Length; index++)
+        {
+            connections[index] = new FakeConnection
+            {
+                AsyncExecuteHandler = async request =>
+                {
+                    var executeMultiple = (ExecuteMultipleRequest)request;
+                    int call = Interlocked.Increment(ref calls);
+                    await Task.Delay(
+                            delay(call, executeMultiple.Requests.Count)
+                        )
+                        .ConfigureAwait(false);
+                    return Response(
+                        executeMultiple
+                            .Requests.Select(
+                                (item, requestIndex) =>
+                                    Success(requestIndex, item.RequestName)
+                            )
+                            .ToArray()
+                    );
+                }
+            };
+        }
+
+        var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connections)
+        );
+        proxy.WaitForConnections(connectionCount);
+        return (proxy, new ExecuteMultipleLogic(proxy, NullLogger.Instance));
+    }
+
     [Fact]
     public async Task ExecuteAsync_ReturnsResultsInOriginalRequestOrder()
     {
@@ -594,6 +634,193 @@ public class ExecuteMultipleLogicTests
         );
         Assert.True(result.BatchSizeUsed >= 3);
         Assert.True(result.ThreadsUsed >= 2);
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_SlowService_ShrinksBatchToTarget()
+    {
+        var (proxy, logic) = CreateDelayed(
+            4,
+            (_, batchSize) => TimeSpan.FromMilliseconds(batchSize * 1.0)
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 1000).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 100,
+                MinBatchSize = 1,
+                MaxBatchSize = 1000,
+                InitialDegreeOfParallelism = 4,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(20),
+                EvaluationRecordCount = 200
+            };
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.True(
+                result.BatchSizeUsed <= 25,
+                $"Batch size {result.BatchSizeUsed} did not converge to the target."
+            );
+            Assert.Equal(settings.CurrentBatchSize, result.BatchSizeUsed);
+        }
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_FastService_GrowsBatch()
+    {
+        var (proxy, logic) = CreateDelayed(
+            4,
+            (_, batchSize) => TimeSpan.FromMilliseconds(batchSize * 0.5)
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 1000).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 10,
+                MinBatchSize = 1,
+                MaxBatchSize = 200,
+                InitialDegreeOfParallelism = 2,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(50),
+                EvaluationRecordCount = 100
+            };
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.True(
+                result.BatchSizeUsed > settings.InitialBatchSize,
+                $"Batch size {result.BatchSizeUsed} did not grow."
+            );
+        }
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_FirstWaveSpike_DoesNotShrinkBatch()
+    {
+        var (proxy, logic) = CreateDelayed(
+            2,
+            (call, _) =>
+                call == 1
+                    ? TimeSpan.FromMilliseconds(200)
+                    : TimeSpan.FromMilliseconds(5)
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 200).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 50,
+                MinBatchSize = 1,
+                MaxBatchSize = 100,
+                InitialDegreeOfParallelism = 2,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 2,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(50),
+                EvaluationRecordCount = 50
+            };
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.True(
+                result.BatchSizeUsed > settings.InitialBatchSize,
+                $"Warm-up wave shrank the batch to {result.BatchSizeUsed}."
+            );
+        }
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_PartialWave_DoesNotAdjust()
+    {
+        var (proxy, logic) = CreateDelayed(
+            4,
+            (_, batchSize) => TimeSpan.FromMilliseconds(batchSize * 5.0)
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 25).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 10,
+                MinBatchSize = 1,
+                MaxBatchSize = 100,
+                InitialDegreeOfParallelism = 4,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(20),
+                EvaluationRecordCount = 1
+            };
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.Equal(10, result.BatchSizeUsed);
+        }
+    }
+
+    [Fact]
+    public async Task AdaptiveExecuteAsync_MinBatchSlow_ReducesDop()
+    {
+        var (proxy, logic) = CreateDelayed(
+            4,
+            (_, _) => TimeSpan.FromMilliseconds(20)
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith(
+                Enumerable.Range(0, 100).Select(index => "req" + index).ToArray()
+            );
+            var settings = new AdaptiveRequesterSettings
+            {
+                InitialBatchSize = 1,
+                MinBatchSize = 1,
+                MaxBatchSize = 4,
+                InitialDegreeOfParallelism = 4,
+                MinDegreeOfParallelism = 1,
+                MaxDegreeOfParallelism = 4,
+                TargetBatchDuration = TimeSpan.FromMilliseconds(10),
+                EvaluationRecordCount = 10
+            };
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAdaptiveAsync(
+                builder,
+                settings
+            );
+
+            Assert.Equal(1, result.BatchSizeUsed);
+            Assert.True(
+                result.ThreadsUsed < settings.InitialDegreeOfParallelism,
+                $"Degree of parallelism stayed at {result.ThreadsUsed}."
+            );
+        }
     }
 
     [Fact]

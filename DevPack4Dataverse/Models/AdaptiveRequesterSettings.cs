@@ -43,6 +43,10 @@ public sealed class AdaptiveRequesterSettings
 
     public int InitialDegreeOfParallelism { get; set; } = 4;
 
+    /// <summary>
+    /// Target duration of one adaptive wave. This is not a target for the whole run; a run of
+    /// N records takes roughly N / (batch size × degree of parallelism) waves.
+    /// </summary>
     public TimeSpan TargetBatchDuration { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>Number of records processed before the next adjustment.</summary>
@@ -53,6 +57,12 @@ public sealed class AdaptiveRequesterSettings
     /// can be read from <see cref="ReportProgress"/> while the run is in progress.
     /// </summary>
     public int CurrentDegreeOfParallelism { get; internal set; }
+
+    /// <summary>
+    /// Batch size selected by the adaptive run. It is updated as the run adjusts and can be read
+    /// from <see cref="ReportProgress"/> while the run is in progress.
+    /// </summary>
+    public int CurrentBatchSize { get; internal set; }
 
     /// <summary>Optional callback for failed requests.</summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };

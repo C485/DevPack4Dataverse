@@ -72,7 +72,8 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         settings.ReportProgress = (cur, max) =>
             Console.Title = "Adaptive progress "
                 + rate.Format(cur, max)
-                + $" DOP={settings.CurrentDegreeOfParallelism}";
+                + $" DOP={settings.CurrentDegreeOfParallelism}"
+                + $" batch={settings.CurrentBatchSize}";
 
         ExecuteMultipleLogicResult result = await connectionManager.ExecuteMultiple
             .ExecuteAdaptiveAsync(executeMultipleRequestBuilder, settings)
@@ -114,7 +115,8 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         settings.ReportProgress = (cur, max) =>
             Console.Title = "Adaptive delete "
                 + rate.Format(cur, max)
-                + $" DOP={settings.CurrentDegreeOfParallelism}";
+                + $" DOP={settings.CurrentDegreeOfParallelism}"
+                + $" batch={settings.CurrentBatchSize}";
 
         ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple
             .ExecuteAdaptiveAsync(executeMultipleRequestBuilder, settings)
