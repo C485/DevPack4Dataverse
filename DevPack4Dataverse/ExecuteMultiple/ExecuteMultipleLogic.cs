@@ -588,6 +588,12 @@ public sealed class ExecuteMultipleLogic
         int progress = 0;
         int nextIndex = 0;
         long recordsSinceAdjustment = 0;
+        int lastEvaluatedBatchSize = 0;
+        bool dopProbeActive = false;
+        bool dopSettled = false;
+        int dopBeforeProbe = 0;
+        long dopProbeBaselineTicks = 0;
+        int dopProbeBaselineRecords = 0;
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
         bool cancelled = false;
 
@@ -599,13 +605,16 @@ public sealed class ExecuteMultipleLogic
                 break;
             }
 
+            int waveBatchSize = batchSize;
+            int waveDop = degreeOfParallelism;
             List<RequestChunk> wave = TakeAdaptiveWave(
                 requests,
                 ref nextIndex,
-                batchSize,
-                degreeOfParallelism
+                waveBatchSize,
+                waveDop
             );
             Stopwatch waveStopwatch = Stopwatch.StartNew();
+            int waveServiceLimitFaults = 0;
 
             try
             {
@@ -629,6 +638,28 @@ public sealed class ExecuteMultipleLogic
                                         )
                                         .ConfigureAwait(false);
 
+                                int serviceLimitFaults = 0;
+                                foreach (
+                                    ExecuteMultipleResponseItem responseItem in responseWithResults
+                                )
+                                {
+                                    if (
+                                        responseItem?.Fault is { } fault
+                                        && IsServiceProtectionLimit(fault.ErrorCode)
+                                    )
+                                    {
+                                        serviceLimitFaults++;
+                                    }
+                                }
+
+                                if (serviceLimitFaults > 0)
+                                {
+                                    Interlocked.Add(
+                                        ref waveServiceLimitFaults,
+                                        serviceLimitFaults
+                                    );
+                                }
+
                                 StoreResponses(
                                     responseWithResults,
                                     packOfRequests,
@@ -644,6 +675,15 @@ public sealed class ExecuteMultipleLogic
                             }
                             catch (Exception exception)
                             {
+                                if (
+                                    exception is FaultException<OrganizationServiceFault> fault
+                                    && fault.Detail is { } faultDetail
+                                    && IsServiceProtectionLimit(faultDetail.ErrorCode)
+                                )
+                                {
+                                    Interlocked.Increment(ref waveServiceLimitFaults);
+                                }
+
                                 foreach (OrganizationRequest request in packOfRequests)
                                 {
                                     InvokeErrorReport(
@@ -676,24 +716,93 @@ public sealed class ExecuteMultipleLogic
             recordsSinceAdjustment += waveRecords;
             bool isWarmupWave = warmup;
             warmup = false;
-            if (
-                wave.Count == degreeOfParallelism
-                && recordsSinceAdjustment >= settings.EvaluationRecordCount
-            )
+            if (wave.Count == waveDop)
             {
-                // The first wave includes JIT, connection setup, and warm-up work. Measure it,
-                // but do not let it distort the batch size.
-                if (!isWarmupWave)
+                bool evaluated = false;
+
+                if (dopProbeActive)
                 {
-                    AdjustAdaptiveSettings(
-                        settings,
-                        waveStopwatch.Elapsed,
-                        ref batchSize,
-                        ref degreeOfParallelism
-                    );
+                    // A probe is one full wave at the next degree of parallelism. Keep it only
+                    // when throughput did not regress and no service limit was hit.
+                    dopProbeActive = false;
+                    double baselineThroughput =
+                        dopProbeBaselineRecords / (double)Math.Max(1, dopProbeBaselineTicks);
+                    double probeThroughput =
+                        waveRecords / (double)Math.Max(1, waveStopwatch.Elapsed.Ticks);
+                    if (
+                        waveServiceLimitFaults > 0
+                        || probeThroughput < baselineThroughput * 0.8
+                    )
+                    {
+                        degreeOfParallelism = dopBeforeProbe;
+                        dopSettled = true;
+                    }
+
+                    evaluated = true;
+                }
+                else if (waveServiceLimitFaults > 0)
+                {
+                    // Service protection limits mean the service cannot take more load:
+                    // back off one step and stop growing parallelism for this run.
+                    if (degreeOfParallelism > settings.MinDegreeOfParallelism)
+                    {
+                        degreeOfParallelism--;
+                    }
+                    else if (batchSize > settings.MinBatchSize)
+                    {
+                        batchSize = Math.Max(settings.MinBatchSize, batchSize / 2);
+                    }
+
+                    dopSettled = true;
+                    evaluated = true;
+                }
+                else if (
+                    !isWarmupWave
+                    && recordsSinceAdjustment >= settings.EvaluationRecordCount
+                )
+                {
+                    // The first wave includes JIT, connection setup, and warm-up work. Measure
+                    // it, but do not let it distort the batch size.
+                    bool isSlow = IsSlow(settings, waveStopwatch.Elapsed);
+                    bool isFast = IsFast(settings, waveStopwatch.Elapsed);
+                    bool batchStable =
+                        lastEvaluatedBatchSize > 0
+                        && Math.Abs(waveBatchSize - lastEvaluatedBatchSize)
+                            <= Math.Max(1, lastEvaluatedBatchSize / 5);
+                    if (
+                        !isSlow
+                        && !dopSettled
+                        && degreeOfParallelism < settings.MaxDegreeOfParallelism
+                        && (isFast ? batchSize >= settings.MaxBatchSize : batchStable)
+                    )
+                    {
+                        // The batch is at its target (or the cap) and the run is healthy.
+                        // Probe one more parallel request; the next full wave decides.
+                        dopBeforeProbe = degreeOfParallelism;
+                        dopProbeBaselineTicks = Math.Max(1, waveStopwatch.Elapsed.Ticks);
+                        dopProbeBaselineRecords = waveRecords;
+                        degreeOfParallelism++;
+                        dopProbeActive = true;
+                    }
+                    else
+                    {
+                        AdjustAdaptiveSettings(
+                            settings,
+                            waveStopwatch.Elapsed,
+                            ref batchSize,
+                            ref degreeOfParallelism
+                        );
+                    }
+
+                    evaluated = true;
                 }
 
-                recordsSinceAdjustment = 0;
+                if (evaluated)
+                {
+                    recordsSinceAdjustment = 0;
+                }
+
+                lastEvaluatedBatchSize = waveBatchSize;
             }
 
             settings.CurrentDegreeOfParallelism = degreeOfParallelism;
@@ -747,7 +856,7 @@ public sealed class ExecuteMultipleLogic
         ref int degreeOfParallelism
     )
     {
-        if (waveDuration > settings.TargetBatchDuration)
+        if (IsSlow(settings, waveDuration))
         {
             if (batchSize > settings.MinBatchSize)
             {
@@ -771,24 +880,28 @@ public sealed class ExecuteMultipleLogic
             return;
         }
 
-        long fastThresholdTicks = settings.TargetBatchDuration.Ticks / 10 * 7;
-        if (waveDuration.Ticks < fastThresholdTicks)
+        if (IsFast(settings, waveDuration) && batchSize < settings.MaxBatchSize)
         {
-            if (batchSize < settings.MaxBatchSize)
-            {
-                int growth = Math.Max(1, batchSize / 2);
-                batchSize = Math.Min(settings.MaxBatchSize, batchSize + growth);
-            }
-            else if (degreeOfParallelism < settings.MaxDegreeOfParallelism)
-            {
-                int growth = Math.Max(1, degreeOfParallelism / 2);
-                degreeOfParallelism = Math.Min(
-                    settings.MaxDegreeOfParallelism,
-                    degreeOfParallelism + growth
-                );
-            }
+            int growth = Math.Max(1, batchSize / 2);
+            batchSize = Math.Min(settings.MaxBatchSize, batchSize + growth);
         }
     }
+
+    private static bool IsSlow(AdaptiveRequesterSettings settings, TimeSpan waveDuration) =>
+        waveDuration > settings.TargetBatchDuration;
+
+    private static bool IsFast(AdaptiveRequesterSettings settings, TimeSpan waveDuration) =>
+        waveDuration.Ticks < settings.TargetBatchDuration.Ticks / 10 * 7;
+
+    /// <summary>
+    /// Detects Dataverse service protection limit faults. Codes are documented in
+    /// docs/powerapps-docs/powerapps-docs/developer/data-platform/api-limits.md.
+    /// </summary>
+    private static bool IsServiceProtectionLimit(int errorCode) =>
+        errorCode == -2147015902
+        || errorCode == -2147015903
+        || errorCode == -2147015898
+        || errorCode == 429;
 
     private static void ValidateSettings(ExecuteMultipleRequestSimpleSettings settings)
     {

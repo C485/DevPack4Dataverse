@@ -26,8 +26,14 @@ namespace DevPack4Dataverse.Models;
 /// The requester starts with <see cref="InitialBatchSize"/> records per ExecuteMultiple request
 /// and <see cref="InitialDegreeOfParallelism"/> parallel requests. Every
 /// <see cref="EvaluationRecordCount"/> records it compares the wave duration with
-/// <see cref="TargetBatchDuration"/>. Slow waves decrease the batch size first, then the
-/// degree of parallelism. Fast waves increase the batch size first, then the degree.
+/// <see cref="TargetBatchDuration"/>. Slow waves scale the batch size down toward the target;
+/// fast waves grow it. The batch size controls the duration of one request. The degree of
+/// parallelism controls throughput, so it is adjusted separately: once the batch size is
+/// stable and a wave stays inside the target, the requester probes one more parallel request.
+/// The probe is kept only when throughput did not regress. A probe that drops throughput or
+/// hits a Dataverse service protection limit is rolled back and parallelism stops growing for
+/// the run. When the batch is capped and waves are fast, the same probe is used to grow
+/// parallelism.
 /// </remarks>
 public sealed class AdaptiveRequesterSettings
 {
