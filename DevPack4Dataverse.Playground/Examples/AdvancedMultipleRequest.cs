@@ -25,25 +25,22 @@ namespace DevPack4Dataverse.Playground.Examples;
 
 public class AdvancedMultipleRequest(ILogger microsoftLogger) : IExecute
 {
-    private const string EntityName = "cr4cc_autocountervc";
-    private const string EntityNameFieldName = "cr4cc_name";
-    private const int RecordsToCreate = 2000;
+    private const string EntityName = "tablename";
+    private const string EntityNameFieldName = "name_fieldname";
+    private const int RecordsToCreate = 20000;
 
     //You'll need at least 4 accounts/application accounts
     //Make sure they've ExecuteMultiple
     public async Task Execute()
     {
+        string connectionString = File.ReadAllText("path_to_connection_file");
         DataverseDevPack connectionManager = new(
             microsoftLogger,
             true,
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6),
-            new ClientSecretConnectionCreator("", "", SdkProxy.StringToSecureString("")!, 6)
+            new ConnectionStringConnectionCreator(connectionString, 15)
         );
-        await DeleteRecords(connectionManager).ConfigureAwait(false);
-
         await AddNewRecords(connectionManager).ConfigureAwait(false);
+        await DeleteRecords(connectionManager).ConfigureAwait(false);
     }
 
     private async Task AddNewRecords(DataverseDevPack connectionManager)

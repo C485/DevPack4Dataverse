@@ -26,20 +26,20 @@ namespace DevPack4Dataverse.Playground.Examples;
 
 public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
 {
-    private const string EntityName = "gas_tabela1";
-    private const string EntityNameFieldName = "gas_nowakolumna";
-    private const int RecordsToCreate = 20000;
+    private const string EntityName = "tablename";
+    private const string EntityNameFieldName = "name_fieldname";
+    private const int RecordsToCreate = 30000;
 
     // Set DEVPACK_DATAVERSE_CONNECTION to a ServiceClient connection string.
     // The connection string creator adds RequireNewInstance=True.
     public async Task Execute()
     {
-        string connectionString = File.ReadAllText("D:\\Projekty\\DevPack4Dataverse\\auth_do_not_read.txt");
+        string connectionString = File.ReadAllText("path_to_connection_file");
 
         using DataverseDevPack connectionManager = new(
             microsoftLogger,
             true,
-            new ConnectionStringConnectionCreator(connectionString, 15)
+            new ConnectionStringConnectionCreator(connectionString, 5)
         );
 
         await AddNewRecords(connectionManager).ConfigureAwait(false);
@@ -59,12 +59,11 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         var rate = new RateTracker();
         var settings = new AdaptiveRequesterSettings
         {
-            InitialBatchSize = 50,
+            InitialBatchSize = 10,
             MinBatchSize = 1,
-            MaxBatchSize = 200,
-            DegreeOfParallelism = 15,
-            TargetBatchDuration = TimeSpan.FromSeconds(3),
-            EvaluationRecordCount = 500,
+            MaxBatchSize = 800,
+            TargetBatchDuration = TimeSpan.FromSeconds(8),
+            EvaluationRecordCount = 50,
             ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
         };
         settings.ReportProgress = (cur, max) =>
@@ -100,19 +99,19 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
         var rate = new RateTracker();
         var settings = new AdaptiveRequesterSettings
         {
-            InitialBatchSize = 100,
+            InitialBatchSize = 10,
             MinBatchSize = 1,
-            MaxBatchSize = 500,
-            DegreeOfParallelism = 15,
-            TargetBatchDuration = TimeSpan.FromSeconds(3),
-            EvaluationRecordCount = 500,
+            MaxBatchSize = 800,
+            TargetBatchDuration = TimeSpan.FromSeconds(8),
+            EvaluationRecordCount = 50,
             ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
         };
         settings.ReportProgress = (cur, max) =>
-            Console.Title = "Adaptive delete "
-                + rate.Format(cur, max)
-                + $" DOP={settings.CurrentDegreeOfParallelism}"
-                + $" batch={settings.CurrentBatchSize}";
+        {
+            string v = $"Adaptive delete {rate.Format(cur, max)} DOP={settings.CurrentDegreeOfParallelism} batch={settings.CurrentBatchSize}";
+            Console.Title = v;
+            Console.WriteLine(v);
+        };
 
         ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple
             .ExecuteAdaptiveAsync(executeMultipleRequestBuilder, settings)
