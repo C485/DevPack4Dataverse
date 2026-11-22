@@ -82,7 +82,7 @@ public sealed class AdaptiveRequesterSettings
             MinBatchSize,
             MaxBatchSize
         );
-        if (DegreeOfParallelism is { } degreeOfParallelism)
+        if (DegreeOfParallelism is int degreeOfParallelism)
         {
             Guard.Against.NegativeOrZero(degreeOfParallelism, nameof(DegreeOfParallelism));
         }
