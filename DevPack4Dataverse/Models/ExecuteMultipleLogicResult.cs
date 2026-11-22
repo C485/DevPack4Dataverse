@@ -32,9 +32,23 @@ public sealed class ExecuteMultipleLogicResult
     public int RecordsRequested { get; set; }
 
     /// <summary>
+    /// Number of attempted requests that produced no response because their batch failed at the
+    /// transport level. Use <c>ErrorReport</c> for details.
+    /// </summary>
+    public int UnansweredCount { get; set; }
+
+    /// <summary>
+    /// Number of stored responses that contain a Dataverse fault. The request was answered but
+    /// the operation failed.
+    /// </summary>
+    public int FaultedCount { get; set; }
+
+    /// <summary>
     /// Responses ordered by the original request order, across all ExecuteMultiple chunks.
     /// A request that failed at the batch/transport level, or that produced no response, is absent;
-    /// use <c>ErrorReport</c> for failures. <c>RequestIndex</c> is relative to its own chunk.
+    /// use <c>ErrorReport</c> for failures. <see cref="UnansweredCount"/> and
+    /// <see cref="FaultedCount"/> summarise the missing and failed responses. <c>RequestIndex</c>
+    /// is relative to its own chunk.
     /// </summary>
     public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } = [];
 
@@ -77,6 +91,14 @@ public sealed class ExecuteMultipleLogicResult
         sb.AppendLine();
         sb.Append("Results count: ");
         sb.Append(Results.Count);
+        sb.AppendLine();
+        sb.Append(nameof(UnansweredCount));
+        sb.Append(": ");
+        sb.Append(UnansweredCount);
+        sb.AppendLine();
+        sb.Append(nameof(FaultedCount));
+        sb.Append(": ");
+        sb.Append(FaultedCount);
         sb.AppendLine();
         return sb.ToString();
     }

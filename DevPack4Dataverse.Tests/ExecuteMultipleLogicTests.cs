@@ -223,6 +223,8 @@ public class ExecuteMultipleLogicTests
 
             ExecuteMultipleResponseItem item = Assert.Single(result.Results);
             Assert.NotNull(item.Fault);
+            Assert.Equal(1, result.FaultedCount);
+            Assert.Equal(0, result.UnansweredCount);
         }
     }
 
@@ -401,6 +403,8 @@ public class ExecuteMultipleLogicTests
 
             Assert.Equal(new[] { 6, 2, 2, 2 }, batchSizes);
             Assert.Equal(2, reported);
+            Assert.Equal(2, result.UnansweredCount);
+            Assert.Equal(0, result.FaultedCount);
             Assert.Equal(
                 new[] { "a", "b", "e", "f" },
                 result.Results.Select(item => ((MarkerResponse)item.Response).Marker).ToArray()
@@ -1123,6 +1127,8 @@ public class ExecuteMultipleLogicTests
         string text = new ExecuteMultipleLogicResult().ToString();
 
         Assert.Contains("Results count", text);
+        Assert.Contains("UnansweredCount", text);
+        Assert.Contains("FaultedCount", text);
     }
 
     private sealed class MarkerResponse : OrganizationResponse

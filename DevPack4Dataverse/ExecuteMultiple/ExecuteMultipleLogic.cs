@@ -822,6 +822,8 @@ public sealed class ExecuteMultipleLogic
         }
 
         logicResult.Results = orderedResponses.ToArray();
+        logicResult.UnansweredCount = progress - orderedResponses.Count;
+        logicResult.FaultedCount = orderedResponses.Count(item => item.Fault != null);
         logicResult.Cancelled = cancelled;
         return logicResult;
     }
