@@ -27,15 +27,18 @@ public class AdaptiveRequesterSettingsTests
     }
 
     [Fact]
-    public void InitialParallelismAboveMaximum_Throws()
+    public void DegreeOfParallelismZero_Throws()
     {
-        var settings = new AdaptiveRequesterSettings
-        {
-            MinDegreeOfParallelism = 1,
-            MaxDegreeOfParallelism = 4,
-            InitialDegreeOfParallelism = 5
-        };
+        var settings = new AdaptiveRequesterSettings { DegreeOfParallelism = 0 };
 
         Assert.ThrowsAny<ArgumentException>(() => settings.Validate());
+    }
+
+    [Fact]
+    public void DegreeOfParallelismPositive_IsValid()
+    {
+        var settings = new AdaptiveRequesterSettings { DegreeOfParallelism = 15 };
+
+        Assert.Same(settings, settings.Validate());
     }
 }

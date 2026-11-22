@@ -102,19 +102,21 @@ Production notes:
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
 #### Adaptive execution
-For large create/update/delete runs, `ExecuteAdaptiveAsync` adjusts batch size and parallelism while it works:
+For large create/update/delete runs, `ExecuteAdaptiveAsync` adjusts the batch size while it works:
 ```C#
 ExecuteMultipleLogicResult result = await dataverseDevPack.ExecuteMultiple.ExecuteAdaptiveAsync(
     executeMultipleRequestBuilder,
     new AdaptiveRequesterSettings
     {
         InitialBatchSize = 4,
-        InitialDegreeOfParallelism = 4,
+        // DegreeOfParallelism defaults to the connection pool size.
         TargetBatchDuration = TimeSpan.FromSeconds(3),
         EvaluationRecordCount = 40
     });
 ```
-It starts with the configured batch size and parallel requests. The first wave is a warm-up and is measured but does not change the settings, so JIT and connection startup do not distort the batch size. Every `EvaluationRecordCount` records it compares the wave duration with `TargetBatchDuration`. Slow waves scale the batch size down toward the target; fast waves grow it. The batch size controls how long one request takes. The degree of parallelism controls throughput, so it is adjusted separately: once the batch size is stable and a wave stays inside the target (or the batch is capped and waves are fast), the requester probes one more parallel request. The probe is kept only when throughput did not regress. If throughput drops or the wave hits a Dataverse service protection limit (error codes `-2147015902`, `-2147015903`, `-2147015898`, or HTTP 429), the probe is rolled back and parallelism stops growing for the run. In short, batch size is tuned for latency, parallelism for throughput. `ErrorReport` and `ReportProgress` work as in the regular ExecuteMultiple path; the progress callback can read `AdaptiveRequesterSettings.CurrentBatchSize` and `CurrentDegreeOfParallelism` for the live values. Results remain ordered by the original request order. `BatchSizeUsed` and `ThreadsUsed` on the result show the final values.
+It starts with the configured batch size and uses a fixed degree of parallelism. `DegreeOfParallelism` defaults to the connection pool size and is capped at it, so create as many connections as the concurrency you want. Only the batch size adapts. The first wave is a warm-up and is measured but does not change the settings, so JIT and connection startup do not distort the batch size. Every `EvaluationRecordCount` records it compares the wave duration with `TargetBatchDuration`. Slow waves scale the batch size down toward the target; fast waves grow it. `ErrorReport` and `ReportProgress` work as in the regular ExecuteMultiple path; the progress callback can read `AdaptiveRequesterSettings.CurrentBatchSize` and `CurrentDegreeOfParallelism` for the live values. Results remain ordered by the original request order. `BatchSizeUsed` and `ThreadsUsed` on the result show the final values.
+
+If Dataverse returns service protection limits, lower `DegreeOfParallelism` or the connection pool size; the library reports those faults through `ErrorReport` and does not change concurrency during a run.
 
 `TargetBatchDuration` is the target for one wave, not for the whole run. A run of N records takes roughly N / (batch size × degree of parallelism) waves, and each wave is kept near the target.
 

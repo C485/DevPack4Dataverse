@@ -62,9 +62,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
             InitialBatchSize = 50,
             MinBatchSize = 1,
             MaxBatchSize = 200,
-            InitialDegreeOfParallelism = 4,
-            MinDegreeOfParallelism = 1,
-            MaxDegreeOfParallelism = 16,
+            DegreeOfParallelism = 15,
             TargetBatchDuration = TimeSpan.FromSeconds(3),
             EvaluationRecordCount = 500,
             ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
@@ -105,9 +103,7 @@ public class AdaptiveMultipleRequest(ILogger microsoftLogger) : IExecute
             InitialBatchSize = 100,
             MinBatchSize = 1,
             MaxBatchSize = 500,
-            InitialDegreeOfParallelism = 4,
-            MinDegreeOfParallelism = 1,
-            MaxDegreeOfParallelism = 16,
+            DegreeOfParallelism = 15,
             TargetBatchDuration = TimeSpan.FromSeconds(3),
             EvaluationRecordCount = 500,
             ErrorReport = (obj, error) => Console.WriteLine($"Error: {error}")
