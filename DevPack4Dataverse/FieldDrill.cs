@@ -62,9 +62,9 @@ public sealed class FieldDrill
     /// name or ID.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// A retrieved field is missing, an intermediate field is null or is not an
-    /// <see cref="EntityReference"/>, the final field is null for a non-nullable value type, or the
-    /// final field has an unexpected type.
+    /// A retrieved intermediate field is missing or null, an intermediate field is not an
+    /// <see cref="EntityReference"/>, the final field is null or absent for a non-nullable value
+    /// type, or the final field has an unexpected type.
     /// </exception>
     public T Retreive<T>(EntityReference obj, string path, string delimiter = ".")
     {
@@ -86,9 +86,9 @@ public sealed class FieldDrill
     /// name or ID.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// A retrieved field is missing, an intermediate field is null or is not an
-    /// <see cref="EntityReference"/>, the final field is null for a non-nullable value type, or the
-    /// final field has an unexpected type.
+    /// A retrieved intermediate field is missing or null, an intermediate field is not an
+    /// <see cref="EntityReference"/>, the final field is null or absent for a non-nullable value
+    /// type, or the final field has an unexpected type.
     /// </exception>
     public T Retreive<T>(EntityReference obj, string[] pathParts)
     {
@@ -108,6 +108,13 @@ public sealed class FieldDrill
             );
             if (!retrievedRecord.Contains(currentFieldName))
             {
+                if (isLast)
+                {
+                    // Dataverse omits attributes whose value is null. The final segment is
+                    // therefore allowed to be absent and maps to null for reference types.
+                    return ConvertFinalValue<T>(null, currentFieldName);
+                }
+
                 throw new InvalidOperationException(
                     $"Retrieved record does not contain field '{currentFieldName}'."
                 );
@@ -152,6 +159,13 @@ public sealed class FieldDrill
             );
             if (!retrievedRecord.Contains(currentFieldName))
             {
+                if (isLast)
+                {
+                    // Dataverse omits attributes whose value is null. The final segment is
+                    // therefore allowed to be absent and maps to null for reference types.
+                    return ConvertFinalValue<T>(null, currentFieldName);
+                }
+
                 throw new InvalidOperationException(
                     $"Retrieved record does not contain field '{currentFieldName}'."
                 );
@@ -213,7 +227,7 @@ public sealed class FieldDrill
         );
     }
 
-    private static T ConvertFinalValue<T>(object retrievedField, string fieldName)
+    private static T ConvertFinalValue<T>(object? retrievedField, string fieldName)
     {
         if (retrievedField is T value)
         {

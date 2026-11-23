@@ -23,7 +23,7 @@ public class ValueComparerTests
     }
 
     [Fact]
-    public void OptionSetCollections_AreComparedBySequence()
+    public void OptionSetCollections_AreComparedAsSets()
     {
         var first = new OptionSetValueCollection
         {
@@ -42,7 +42,7 @@ public class ValueComparerTests
         };
 
         Assert.True(ValueComparer.AreEqual(first, second));
-        Assert.False(ValueComparer.AreEqual(first, different));
+        Assert.True(ValueComparer.AreEqual(first, different));
     }
 
     [Fact]
@@ -52,6 +52,18 @@ public class ValueComparerTests
 
         Assert.True(ValueComparer.AreEqual(utc, utc.ToLocalTime()));
         Assert.False(ValueComparer.AreEqual(utc, utc.AddSeconds(1)));
+    }
+
+    [Fact]
+    public void DateOnlyValues_AreComparedByWallClock()
+    {
+        var utcDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var unspecifiedDate = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+        Assert.True(ValueComparer.AreEqual(utcDate, unspecifiedDate));
+        Assert.False(
+            ValueComparer.AreEqual(utcDate, unspecifiedDate.AddDays(1))
+        );
     }
 
     [Fact]

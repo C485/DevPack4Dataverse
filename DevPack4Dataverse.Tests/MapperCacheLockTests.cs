@@ -10,6 +10,18 @@ namespace DevPack4Dataverse.Tests;
 public class MapperCacheLockTests
 {
     [Fact]
+    public void EntityKey_NumericAlternateKeyValues_UseOneNormalizedForm()
+    {
+        EntityKey intKey = EntityKey.ByAlternateKey("account", "number", 5);
+        EntityKey decimalKey = EntityKey.ByAlternateKey("account", "number", 5m);
+        EntityKey moneyKey = EntityKey.ByAlternateKey("account", "number", new Money(5m));
+
+        Assert.Equal(intKey, decimalKey);
+        Assert.Equal(intKey, moneyKey);
+        Assert.Equal(intKey.GetHashCode(), decimalKey.GetHashCode());
+    }
+
+    [Fact]
     public async Task InMemoryCache_ReturnsEntryBeforeTtl()
     {
         var cache = new InMemoryEntityCache();

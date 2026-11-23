@@ -24,6 +24,32 @@ public class SdkProxyTests
     }
 
     [Fact]
+    public async Task GetConnectionAsync_WaitsForTheSingleConnectionPermit()
+    {
+        var fake = new FakeConnection { UseRealLock = true };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(fake)
+        );
+        proxy.WaitForConnections(1);
+        using ConnectionLease first = proxy.GetConnection();
+
+        Task<ConnectionLease> second = proxy.GetConnectionAsync();
+        Task completed = await Task.WhenAny(second, Task.Delay(150));
+        Assert.NotSame(second, completed);
+
+        first.Dispose();
+        Task completedSecond = await Task.WhenAny(
+            second,
+            Task.Delay(TimeSpan.FromSeconds(5))
+        );
+        Assert.Same(second, completedSecond);
+        using ConnectionLease lease = await second;
+        Assert.Same(fake, lease.Connection);
+    }
+
+    [Fact]
     public void GetConnection_WithoutCreators_Throws()
     {
         var proxy = new SdkProxy(NullLogger.Instance, false);

@@ -180,7 +180,19 @@ public class FieldDrillTests
     }
 
     [Fact]
-    public void Retreive_MissingField_Throws()
+    public void Retreive_MissingFinalField_ReferenceType_ReturnsNull()
+    {
+        var accountReference = new EntityReference("account", Guid.NewGuid());
+        var (proxy, drill, _) = Create((entityName, id, _) => Record(entityName, id));
+
+        using (proxy)
+        {
+            Assert.Null(drill.Retreive<string>(accountReference, "name"));
+        }
+    }
+
+    [Fact]
+    public void Retreive_MissingFinalField_NonNullableValueType_Throws()
     {
         var accountReference = new EntityReference("account", Guid.NewGuid());
         var (proxy, drill, _) = Create((entityName, id, _) => Record(entityName, id));
@@ -188,7 +200,7 @@ public class FieldDrillTests
         using (proxy)
         {
             Assert.Throws<InvalidOperationException>(
-                () => drill.Retreive<string>(accountReference, "name")
+                () => drill.Retreive<int>(accountReference, "age")
             );
         }
     }

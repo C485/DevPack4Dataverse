@@ -380,6 +380,40 @@ public class BulkOperationLogicTests
         }
     }
 
+    [Fact]
+    public async Task CreateMultipleAsync_ShortChunkResponse_Throws()
+    {
+        var fake = new FakeConnection
+        {
+            CreateMultipleHandler = targets =>
+                targets.Entities
+                    .Take(targets.Entities.Count - 1)
+                    .Select(_ => Guid.NewGuid())
+                    .ToArray()
+        };
+        var (proxy, logic) = Create(fake);
+
+        using (proxy)
+        {
+            Entity[] records = Enumerable
+                .Range(0, 3)
+                .Select(_ => new Entity("account"))
+                .ToArray();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () =>
+                    logic.CreateMultipleAsync(
+                        records,
+                        new BulkOperationSettings
+                        {
+                            BatchSize = 2,
+                            MaxDegreeOfParallelism = 1
+                        }
+                    )
+            );
+        }
+    }
+
     private static (SdkProxy Proxy, BulkOperationLogic Logic) Create(FakeConnection connection)
     {
         SdkProxy proxy = new(

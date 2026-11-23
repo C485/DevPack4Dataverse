@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using DevPack4Dataverse.Mapper.Cache;
@@ -53,7 +54,8 @@ public sealed class MapperBuilder<TSource, TTarget>
         MapperWrapperOptions wrapperOptions,
         IEntityCache cache,
         IEntityLock entityLock,
-        string? name
+        string? name,
+        ConcurrentDictionary<string, DateTime> preloadedAt
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
@@ -68,7 +70,8 @@ public sealed class MapperBuilder<TSource, TTarget>
             _logger,
             _cache,
             _wrapperOptions,
-            primaryKeys
+            primaryKeys,
+            preloadedAt
         );
         _lookupResolver = new LookupResolver(
             _sdkProxy,

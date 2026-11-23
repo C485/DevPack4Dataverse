@@ -98,6 +98,37 @@ public class CallerIdRestoreTests
     }
 
     [Fact]
+    public void ClientThatIgnoresCallerId_RestoresBothOldValuesBeforeThrowing()
+    {
+        Guid oldId = Guid.NewGuid();
+        Guid? oldAad = Guid.NewGuid();
+        Guid targetId = Guid.NewGuid();
+        Guid targetAad = Guid.NewGuid();
+        var client = new FakeCallerIdClient
+        {
+            CallerId = oldId,
+            CallerAADObjectId = oldAad,
+            IgnoreCallerAad = true
+        };
+
+        Assert.Throws<NotSupportedException>(
+            () =>
+                new ReplaceAndRestoreCallerId(
+                    client,
+                    NullLogger.Instance,
+                    new RequestImpersonateSettings
+                    {
+                        ImpersonateAsUserByDataverseId = targetId,
+                        ImpersonateAsUserByAADId = targetAad
+                    }
+                )
+        );
+
+        Assert.Equal(oldId, client.CallerId);
+        Assert.Equal(oldAad, client.CallerAADObjectId);
+    }
+
+    [Fact]
     public void ClientThatIgnoresCallerId_ThrowsInsteadOfRunningAsTheWrongUser()
     {
         var client = new FakeCallerIdClient
@@ -121,9 +152,11 @@ public class CallerIdRestoreTests
     private sealed class FakeCallerIdClient : ICallerIdClient
     {
         private Guid _callerId;
+        private Guid? _callerAadObjectId;
 
         public bool SupportsCallerId { get; set; } = true;
         public bool IgnoreCallerId { get; set; }
+        public bool IgnoreCallerAad { get; set; }
 
         public Guid CallerId
         {
@@ -137,6 +170,16 @@ public class CallerIdRestoreTests
             }
         }
 
-        public Guid? CallerAADObjectId { get; set; }
+        public Guid? CallerAADObjectId
+        {
+            get => _callerAadObjectId;
+            set
+            {
+                if (!IgnoreCallerAad)
+                {
+                    _callerAadObjectId = value;
+                }
+            }
+        }
     }
 }

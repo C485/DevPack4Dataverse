@@ -20,20 +20,24 @@ using Microsoft.Xrm.Sdk;
 namespace DevPack4Dataverse.ExecuteMultiple;
 
 /// <summary>
-/// Thrown by the simple ExecuteMultiple overload when a request faults. Carries the partial
-/// result and the faulted response item so the caller can resume instead of repeating work.
+/// Thrown by the simple ExecuteMultiple overload when a request faults or a chunk fails.
+/// Carries the partial result and, when available, the faulted response item so the caller
+/// can resume instead of repeating work.
 /// </summary>
 public sealed class ExecuteMultipleException : InvalidOperationException
 {
     public ExecuteMultipleException(
         string message,
         ExecuteMultipleLogicResult result,
-        ExecuteMultipleResponseItem? fault
+        ExecuteMultipleResponseItem? fault,
+        int? faultIndex = null,
+        Exception? innerException = null
     )
-        : base(message)
+        : base(message, innerException)
     {
         Result = result ?? throw new ArgumentNullException(nameof(result));
         Fault = fault;
+        FaultIndex = faultIndex;
     }
 
     /// <summary>Responses collected before the fault, in the original request order.</summary>
@@ -41,4 +45,10 @@ public sealed class ExecuteMultipleException : InvalidOperationException
 
     /// <summary>The faulted response item, including the Dataverse fault and the chunk-local index.</summary>
     public ExecuteMultipleResponseItem? Fault { get; }
+
+    /// <summary>
+    /// Global zero-based index of the failed request in the original builder order, when known.
+    /// Use this value to resume; <see cref="Fault"/>.<c>RequestIndex</c> is chunk-local.
+    /// </summary>
+    public int? FaultIndex { get; }
 }

@@ -201,7 +201,9 @@ public sealed class OptionSetFieldTypeMethods
 
         foreach (OptionMetadata optionMetadata in metadataResponse)
         {
-            string? optionLabel = GetLabel(optionMetadata.Label, languageCode);
+            // Parsing must not fall back to another language: a base label and a translated
+            // label can be identical, and the fallback would pick the wrong option value.
+            string? optionLabel = GetExactLabel(optionMetadata.Label, languageCode);
             if (
                 optionLabel != null
                 && string.Equals(
@@ -331,6 +333,24 @@ public sealed class OptionSetFieldTypeMethods
             if (optionLabel != null && string.Equals(label, optionLabel, comparison))
             {
                 return option;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetExactLabel(Label? label, int languageCode)
+    {
+        if (label?.LocalizedLabels == null)
+        {
+            return null;
+        }
+
+        foreach (LocalizedLabel candidate in label.LocalizedLabels)
+        {
+            if (candidate.LanguageCode == languageCode && !string.IsNullOrEmpty(candidate.Label))
+            {
+                return candidate.Label;
             }
         }
 

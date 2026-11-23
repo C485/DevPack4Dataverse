@@ -28,7 +28,6 @@ namespace DevPack4Dataverse.Mapper.Redis;
 public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 {
     private readonly StackExchange.Redis.IDatabase _database;
-    private readonly StackExchange.Redis.IConnectionMultiplexer _connection;
     private readonly string _prefix;
 
     public RedisEntityCache(
@@ -37,7 +36,11 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     )
     {
         // Use a unique prefix per environment when several environments share one Redis.
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        if (connection == null)
+        {
+            throw new ArgumentNullException(nameof(connection));
+        }
+
         _database = connection.GetDatabase();
         _prefix = string.IsNullOrWhiteSpace(keyPrefix) ? "devpack:mapper:entity:" : keyPrefix;
     }
@@ -125,42 +128,25 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
         CancellationToken cancellationToken = default
     )
     {
+        cancellationToken.ThrowIfCancellationRequested();
         StackExchange.Redis.RedisKey indexKey = IndexKey(logicalName, id);
         StackExchange.Redis.RedisValue[] indexedKeys = await _database
             .SetMembersAsync(indexKey)
             .ConfigureAwait(false);
-
-        if (indexedKeys.Length > 0)
+        if (indexedKeys.Length == 0)
         {
-            foreach (StackExchange.Redis.RedisValue indexedKey in indexedKeys)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await _database.KeyDeleteAsync(indexedKey.ToString()).ConfigureAwait(false);
-            }
-
-            await _database.KeyDeleteAsync(indexKey).ConfigureAwait(false);
+            // No index entry means the record was never cached. Scanning the table here
+            // made every create read the whole cache; it is intentionally not done.
             return;
         }
 
-        // shortcut: entries created before the id index existed are removed by scanning.
-        foreach (StackExchange.Redis.RedisKey key in EnumerateKeys(logicalName, cancellationToken))
+        foreach (StackExchange.Redis.RedisValue indexedKey in indexedKeys)
         {
-            StackExchange.Redis.RedisValue value = await _database
-                .StringGetAsync(key)
-                .ConfigureAwait(false);
-            if (value.IsNull)
-            {
-                continue;
-            }
-
-            CachedEntityDto? dto = JsonConvert.DeserializeObject<CachedEntityDto>(
-                value.ToString()
-            );
-            if (dto?.Id == id)
-            {
-                await _database.KeyDeleteAsync(key).ConfigureAwait(false);
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            await _database.KeyDeleteAsync(indexedKey.ToString()).ConfigureAwait(false);
         }
+
+        await _database.KeyDeleteAsync(indexKey).ConfigureAwait(false);
     }
 
     public async Task ClearAsync(
@@ -189,40 +175,6 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
     internal static CachedEntity? Deserialize(string json) =>
         JsonConvert.DeserializeObject<CachedEntityDto>(json)?.ToCachedEntity();
 
-    private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeys(
-        string logicalName,
-        CancellationToken cancellationToken
-    ) => EnumerateKeysByPattern(KeyPrefix(logicalName) + "*", cancellationToken);
-
-    private IEnumerable<StackExchange.Redis.RedisKey> EnumerateKeysByPattern(
-        string pattern,
-        CancellationToken cancellationToken
-    )
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        System.Net.EndPoint[] endpoints = _connection.GetEndPoints();
-        if (endpoints.Length == 0)
-        {
-            throw new MapperException("Redis connection has no endpoints.");
-        }
-
-        StackExchange.Redis.IServer[] servers = endpoints
-            .Select(endpoint => _connection.GetServer(endpoint))
-            .Where(server => !server.IsReplica)
-            .ToArray();
-
-        foreach (StackExchange.Redis.IServer server in servers)
-        {
-            foreach (
-                StackExchange.Redis.RedisKey key in server.Keys(pattern: pattern, pageSize: 1000)
-            )
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return key;
-            }
-        }
-    }
-
     private StackExchange.Redis.RedisKey Key(EntityKey key) => _prefix + key;
 
     private StackExchange.Redis.RedisKey IndexKey(string logicalName, Guid id) =>
@@ -230,9 +182,6 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private StackExchange.Redis.RedisKey TableKey(string logicalName) =>
         _prefix + "table:" + logicalName.ToLowerInvariant();
-
-    private string KeyPrefix(string logicalName) =>
-        _prefix + logicalName.ToLowerInvariant() + "|";
 
     private sealed class CachedEntityDto
     {

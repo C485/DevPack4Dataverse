@@ -64,9 +64,14 @@ internal static class ValueComparer
         if (left is OptionSetValueCollection leftOptionCollection
             && right is OptionSetValueCollection rightOptionCollection)
         {
+            // A multi-select column is a set. Dataverse may return a different order than
+            // the source, so compare sorted values instead of the original sequence.
             return leftOptionCollection
                 .Select(option => option.Value)
-                .SequenceEqual(rightOptionCollection.Select(option => option.Value));
+                .OrderBy(value => value)
+                .SequenceEqual(
+                    rightOptionCollection.Select(option => option.Value).OrderBy(value => value)
+                );
         }
 
         if (left is Money leftMoney && right is Money rightMoney)
@@ -86,6 +91,18 @@ internal static class ValueComparer
 
         if (left is DateTime leftDateTime && right is DateTime rightDateTime)
         {
+            // Dataverse returns date-only columns with Kind = Unspecified. Comparing them as
+            // UTC instants makes a UTC-kind source look different on a non-UTC host, which
+            // turns every run into an update. Compare wall-clock time when either side has
+            // no zone information.
+            if (
+                leftDateTime.Kind == DateTimeKind.Unspecified
+                || rightDateTime.Kind == DateTimeKind.Unspecified
+            )
+            {
+                return leftDateTime.Ticks == rightDateTime.Ticks;
+            }
+
             return leftDateTime.ToUniversalTime().Ticks == rightDateTime.ToUniversalTime().Ticks;
         }
 

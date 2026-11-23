@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-using System.Collections.Concurrent;
 using DevPack4Dataverse.Models;
 using Microsoft.Xrm.Sdk;
 
@@ -38,7 +37,4 @@ internal sealed class MappingExecutionState
     public bool ForceRefresh { get; }
 
     public TimeSpan LockTimeout { get; }
-
-    public ConcurrentDictionary<string, Task> Preloads { get; } =
-        new(StringComparer.OrdinalIgnoreCase);
 }

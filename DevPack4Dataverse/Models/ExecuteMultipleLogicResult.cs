@@ -52,6 +52,13 @@ public sealed class ExecuteMultipleLogicResult
     /// </summary>
     public IReadOnlyCollection<ExecuteMultipleResponseItem> Results { get; set; } = [];
 
+    /// <summary>
+    /// Responses keyed by their global zero-based request index. Unlike <see cref="Results"/>,
+    /// this keeps the position of a missing response visible.
+    /// </summary>
+    public IReadOnlyDictionary<int, ExecuteMultipleResponseItem> ResultsByIndex { get; set; } =
+        new Dictionary<int, ExecuteMultipleResponseItem>();
+
     /// <summary>Elapsed execution time. Never null.</summary>
     public Stopwatch Stopwatch { get; set; } = new();
 

@@ -397,26 +397,43 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             return;
         }
 
+        TimeSpan serviceTimeout = ServiceClient.MaxConnectionTimeout;
+        if (serviceTimeout <= TimeSpan.Zero)
+        {
+            serviceTimeout = TimeSpan.FromMinutes(4);
+        }
+
+        TimeSpan waitTimeout =
+            DisposeWaitTimeoutOverride ?? serviceTimeout + TimeSpan.FromSeconds(30);
+        if (waitTimeout <= TimeSpan.Zero)
+        {
+            waitTimeout = TimeSpan.FromSeconds(1);
+        }
+
+        DateTime deadline = DateTime.UtcNow.Add(waitTimeout);
         try
         {
-            await _connectionCreator.StopAsync().ConfigureAwait(false);
+            // The background tick calls IConnectionCreator.Create synchronously and can be
+            // inside a network call. Do not let that block shutdown past the same deadline.
+            using CancellationTokenSource stopWait = new();
+            Task stopTask = _connectionCreator.StopAsync();
+            Task delayTask = Task.Delay(waitTimeout, stopWait.Token);
+            Task completed = await Task.WhenAny(stopTask, delayTask).ConfigureAwait(false);
+            stopWait.Cancel();
+            if (completed == stopTask)
+            {
+                await stopTask.ConfigureAwait(false);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Stopped waiting for the connection creator after {Timeout}; it may still be connecting.",
+                    waitTimeout
+                );
+            }
         }
         finally
         {
-            TimeSpan serviceTimeout = ServiceClient.MaxConnectionTimeout;
-            if (serviceTimeout <= TimeSpan.Zero)
-            {
-                serviceTimeout = TimeSpan.FromMinutes(4);
-            }
-
-            TimeSpan waitTimeout =
-                DisposeWaitTimeoutOverride ?? serviceTimeout + TimeSpan.FromSeconds(30);
-            if (waitTimeout <= TimeSpan.Zero)
-            {
-                waitTimeout = TimeSpan.FromSeconds(1);
-            }
-
-            DateTime deadline = DateTime.UtcNow.Add(waitTimeout);
             foreach (IConnection connection in _connections)
             {
                 try

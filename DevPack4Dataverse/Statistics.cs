@@ -26,6 +26,7 @@ internal sealed class Statistics : IStatistics
     private const int MaxBucketMinutes = 2;
     private const int BucketsPerMinute = 60;
     private const int BucketCount = MaxBucketMinutes * BucketsPerMinute;
+    private const ulong FailurePenalty = 100_000;
     private readonly object _lock = new();
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private readonly long[] _secondByBucket = new long[BucketCount];
@@ -40,13 +41,21 @@ internal sealed class Statistics : IStatistics
         }
     }
 
-    public void Finish(Statistic statistic)
+    public void Finish(Statistic statistic, bool succeeded = true)
     {
         statistic.SetEnd(_stopwatch.Elapsed);
         lock (_lock)
         {
             _totalMilliseconds += statistic.ElapsedMilliseconds;
-            AddWeight(statistic.ElapsedMilliseconds / 10ul);
+            ulong weight = statistic.ElapsedMilliseconds / 10ul;
+            if (!succeeded)
+            {
+                // A fast failure would otherwise look cheaper than a healthy request and
+                // keep receiving traffic. The penalty decays with the two-minute window.
+                weight += FailurePenalty;
+            }
+
+            AddWeight(weight);
         }
     }
 

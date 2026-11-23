@@ -111,6 +111,10 @@ public sealed class FileOrImageFieldTypeMethods
         int chunkSize = fileBlockResponse.IsChunkingSupported
             ? MaxBlockSizeInBytes
             : sizeOfFileToDownload;
+        int expectedBlocks =
+            sizeOfFileToDownload == 0
+                ? 0
+                : (sizeOfFileToDownload + chunkSize - 1) / chunkSize;
         int offset = 0;
         while (sizeOfFileToDownload > 0)
         {
@@ -131,13 +135,24 @@ public sealed class FileOrImageFieldTypeMethods
         Models.ExecuteMultipleLogicResult executeMultipleLogicResult = await _executeMultipleLogic
             .ExecuteAsync(requestBuilder, new Models.ExecuteMultipleRequestSimpleSettings())
             .ConfigureAwait(false);
-        // ExecuteMultipleLogic returns responses in the original request order across all chunks.
-        foreach (ExecuteMultipleResponseItem responseItem in executeMultipleLogicResult.Results)
+        for (int blockIndex = 0; blockIndex < expectedBlocks; blockIndex++)
         {
+            if (
+                !executeMultipleLogicResult.ResultsByIndex.TryGetValue(
+                    blockIndex,
+                    out ExecuteMultipleResponseItem? responseItem
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    $"Download of '{fieldName}' returned no response for block {blockIndex}."
+                );
+            }
+
             if (responseItem.Response is not DownloadBlockResponse downloadBlockResponse)
             {
                 throw new InvalidOperationException(
-                    $"Download of '{fieldName}' returned no data for one block."
+                    $"Download of '{fieldName}' returned no data for block {blockIndex}."
                 );
             }
 

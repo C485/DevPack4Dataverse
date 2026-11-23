@@ -96,7 +96,7 @@ public sealed class RedisEntityCacheIntegrationTests
     }
 
     [RedisFact]
-    public async Task RedisCache_RemoveByRecordIdFallsBackToScanWhenIndexIsMissing()
+    public async Task RedisCache_RemoveByRecordId_DoesNotScanWhenIndexIsMissing()
     {
         using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();
         string prefix = RedisIntegrationTest.NewPrefix();
@@ -108,7 +108,8 @@ public sealed class RedisEntityCacheIntegrationTests
         Entity record = new("account", id) { ["name"] = "Contoso" };
         CachedEntity entry = new(record);
 
-        // Write the cache entry without the id index to exercise the scan fallback.
+        // An entry written without the id index is not removed. Scanning the whole table
+        // on a cache miss made every create read the entire cache, so the TTL owns cleanup.
         await database.StringSetAsync(
             prefix + key,
             RedisEntityCache.Serialize(entry),
@@ -119,7 +120,7 @@ public sealed class RedisEntityCacheIntegrationTests
 
         await cache.RemoveByRecordIdAsync("account", id);
 
-        Assert.Null(await cache.GetAsync(key));
+        Assert.NotNull(await cache.GetAsync(key));
     }
 
     [RedisFact]

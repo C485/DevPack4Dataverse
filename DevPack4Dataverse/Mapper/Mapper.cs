@@ -268,6 +268,20 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             )
             .ConfigureAwait(false);
 
+        // An id-key mapper and an alternate-key mapper reach the same row through different
+        // lock strings. Hold the id lock too, so both paths serialize. Always take the
+        // alternate-key lock first to keep one lock order.
+        using IEntityLockHandle? idLockHandle =
+            current != null && key.IsAlternateKey
+                ? await _entityLock
+                    .AcquireAsync(
+                        EntityKey.ById(current.LogicalName, current.Id),
+                        state.LockTimeout,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false)
+                : null;
+
         if (current == null)
         {
             return await CreateAsync(context, entity, key, state, cancellationToken)
@@ -284,15 +298,19 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         }
 
         EntityLockGuard.EnsureHeld(lockHandle);
+        if (idLockHandle != null)
+        {
+            EntityLockGuard.EnsureHeld(idLockHandle);
+        }
 
-        IReadOnlyList<string> changed = EntityChangeDetector.GetChangedFields(
+        EntityChangeDetector.ChangeSet changes = EntityChangeDetector.GetChanges(
             current,
             entity,
             _options.SkipFieldsToChanged
         );
 
         EntityReference reference = new(entity.LogicalName, current.Id);
-        if (changed.Count == 0)
+        if (!changes.RequiresUpdate)
         {
             return new MappedRecord<TTarget>(
                 context.Source,
@@ -301,12 +319,12 @@ public sealed class Mapper<TSource, TTarget> : IMapper
                 current,
                 false,
                 true,
-                changed
+                changes.ChangedFields
             );
         }
 
         Entity update = new(entity.LogicalName, current.Id);
-        foreach (string attribute in changed)
+        foreach (string attribute in changes.ChangedFields)
         {
             update[attribute] = entity[attribute];
         }
@@ -326,7 +344,7 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             entity,
             false,
             false,
-            changed
+            changes.ChangedFields
         );
     }
 

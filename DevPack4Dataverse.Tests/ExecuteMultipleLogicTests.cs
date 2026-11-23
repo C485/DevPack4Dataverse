@@ -377,7 +377,7 @@ public class ExecuteMultipleLogicTests
 
             if (batchSizes.Count == 3)
             {
-                throw new InvalidOperationException("transport failure");
+                throw new TimeoutException("transport failure");
             }
 
             return Response(
@@ -498,6 +498,93 @@ public class ExecuteMultipleLogicTests
 
             OrganizationRequest inner = Assert.Single(captured);
             Assert.Equal(true, inner["BypassCustomPluginExecution"]);
+        }
+    }
+
+    [Fact]
+    public async Task SimpleExecuteAsync_TransportFailureCarriesPartialResult()
+    {
+        int calls = 0;
+        var (proxy, logic) = Create(_ =>
+        {
+            calls++;
+            if (calls == 1)
+            {
+                return Response(Success(0, "first"));
+            }
+
+            throw new TimeoutException("down");
+        });
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("first", "second");
+
+            ExecuteMultipleException exception =
+                await Assert.ThrowsAsync<ExecuteMultipleException>(
+                    () =>
+                        logic.ExecuteAsync(
+                            builder,
+                            new ExecuteMultipleRequestSimpleSettings { RequestSize = 1 }
+                        )
+                );
+
+            Assert.Single(exception.Result.Results);
+            Assert.Null(exception.Fault);
+            Assert.Null(exception.FaultIndex);
+            Assert.IsType<TimeoutException>(exception.InnerException);
+            Assert.Equal(2, exception.Result.RecordsRequested);
+            Assert.Equal(1, exception.Result.RecordsProcessed);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FatalFailurePropagates()
+    {
+        var (proxy, logic) = Create(_ => throw new ObjectDisposedException("proxy"));
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("first");
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () =>
+                    logic.ExecuteAsync(
+                        builder,
+                        new ExecuteMultipleRequestSettings
+                        {
+                            RequestSize = 1,
+                            MaxDegreeOfParallelism = 1
+                        }
+                    )
+            );
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ResultsByIndexKeepsMissingRequestVisible()
+    {
+        var (proxy, logic) = Create(
+            _ => Response(Success(0, "first"))
+        );
+
+        using (proxy)
+        {
+            ExecuteMultipleRequestBuilder builder = BuilderWith("first", "second");
+
+            ExecuteMultipleLogicResult result = await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSettings
+                {
+                    RequestSize = 2,
+                    MaxDegreeOfParallelism = 1
+                }
+            );
+
+            Assert.Single(result.Results);
+            Assert.True(result.ResultsByIndex.ContainsKey(0));
+            Assert.False(result.ResultsByIndex.ContainsKey(1));
+            Assert.Equal(1, result.UnansweredCount);
         }
     }
 
@@ -870,6 +957,7 @@ public class ExecuteMultipleLogicTests
         );
 
         Assert.Equal(3, result.ThreadsUsed);
+        Assert.Equal(settings.InitialBatchSize, result.BatchSizeUsed);
     }
 
     [Fact]

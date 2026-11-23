@@ -1,4 +1,6 @@
 using DevPack4Dataverse;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 using Xunit;
 
@@ -59,5 +61,66 @@ public class ConnectionPagingTests
         Assert.Null(paging);
         Assert.Same(source, query);
         Assert.Equal(2, source.PageInfo!.PageNumber);
+    }
+
+    [Fact]
+    public void RetrieveAllPages_FollowsCookieAndIncrementsPageNumber()
+    {
+        var source = new QueryExpression("account")
+        {
+            ColumnSet = new ColumnSet("name")
+        };
+        var requestedPages = new List<(int PageNumber, string? PagingCookie)>();
+        int call = 0;
+
+        Entity[] rows = Connection
+            .RetrieveAllPages(
+                source,
+                request =>
+                {
+                    var query = (QueryExpression)request.Query;
+                    requestedPages.Add(
+                        (query.PageInfo!.PageNumber, query.PageInfo.PagingCookie)
+                    );
+                    call++;
+                    return call == 1
+                        ? Response(
+                            new[] { new Entity("account") { ["name"] = "first" } },
+                            moreRecords: true,
+                            pagingCookie: "cookie-1"
+                        )
+                        : Response(
+                            new[] { new Entity("account") { ["name"] = "second" } },
+                            moreRecords: false,
+                            pagingCookie: null
+                        );
+                }
+            )
+            .ToArray();
+
+        Assert.Equal(2, call);
+        Assert.Equal(2, rows.Length);
+        Assert.Equal("first", rows[0]["name"]);
+        Assert.Equal("second", rows[1]["name"]);
+        Assert.Equal(1, requestedPages[0].PageNumber);
+        Assert.Equal(2, requestedPages[1].PageNumber);
+        Assert.Equal("cookie-1", requestedPages[1].PagingCookie);
+        Assert.Null(source.PageInfo!.PagingCookie);
+    }
+
+    private static RetrieveMultipleResponse Response(
+        Entity[] entities,
+        bool moreRecords,
+        string? pagingCookie
+    )
+    {
+        var collection = new EntityCollection(entities)
+        {
+            MoreRecords = moreRecords,
+            PagingCookie = pagingCookie
+        };
+        var response = new RetrieveMultipleResponse();
+        response.Results["EntityCollection"] = collection;
+        return response;
     }
 }

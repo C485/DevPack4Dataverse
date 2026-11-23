@@ -93,17 +93,11 @@ internal sealed class ReplaceAndRestoreCallerId : IDisposable
         EnsureApplied(client, requestedCallerId ?? Guid.Empty, requestedAADCallerId);
     }
 
-    ~ReplaceAndRestoreCallerId()
-    {
-        InnerDispose();
-    }
-
     private ICallerIdClient? Client { get; set; }
 
     public void Dispose()
     {
         InnerDispose();
-        GC.SuppressFinalize(this);
     }
 
     private static void EnsureCallerIdSupported(

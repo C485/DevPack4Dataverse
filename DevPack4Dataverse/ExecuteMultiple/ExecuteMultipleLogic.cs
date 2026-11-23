@@ -176,7 +176,7 @@ public sealed class ExecuteMultipleLogic
                             {
                                 throw;
                             }
-                            catch (Exception e)
+                            catch (Exception e) when (IsTransientBatchFailure(e))
                             {
                                 foreach (OrganizationRequest recordToSave in packOfRequests)
                                 {
@@ -271,6 +271,7 @@ public sealed class ExecuteMultipleLogic
 
         ConcurrentDictionary<int, ExecuteMultipleResponseItem> responsesByIndex = new();
         bool cancelled = false;
+        Exception? failure = null;
         ExecuteMultipleResponseItem? firstFault = null;
         int firstFaultIndex = -1;
 
@@ -315,6 +316,12 @@ public sealed class ExecuteMultipleLogic
             // Cancellation is reported through logicResult.Cancelled.
             cancelled = true;
         }
+        catch (Exception exception)
+        {
+            // A transport or service failure is not a per-request fault. Keep the partial
+            // result so the caller can resume instead of repeating committed writes.
+            failure = exception;
+        }
 
         ExecuteMultipleLogicResult result = CompleteResult(
             logicResult,
@@ -329,7 +336,19 @@ public sealed class ExecuteMultipleLogic
             throw new ExecuteMultipleException(
                 $"Request on index {firstFaultIndex} failed with error, {firstFault.Fault}",
                 result,
-                firstFault
+                firstFault,
+                firstFaultIndex
+            );
+        }
+
+        if (failure != null)
+        {
+            throw new ExecuteMultipleException(
+                "ExecuteMultiple stopped after a transport or service failure.",
+                result,
+                null,
+                null,
+                failure
             );
         }
 
@@ -382,7 +401,7 @@ public sealed class ExecuteMultipleLogic
                 {
                     throw;
                 }
-                catch (Exception exception)
+                catch (Exception exception) when (IsTransientBatchFailure(exception))
                 {
                     if (!continueOnError)
                     {
@@ -461,6 +480,12 @@ public sealed class ExecuteMultipleLogic
 
         return items;
     }
+
+    private static bool IsTransientBatchFailure(Exception exception) =>
+        exception
+            is FaultException<OrganizationServiceFault>
+                or TimeoutException
+                or System.ServiceModel.CommunicationException;
 
     private static bool TryGetMaxBatchSize(
         FaultException<OrganizationServiceFault> fault,
@@ -612,6 +637,7 @@ public sealed class ExecuteMultipleLogic
                 degreeOfParallelism
             );
             Stopwatch waveStopwatch = Stopwatch.StartNew();
+            int waveFailed = 0;
 
             try
             {
@@ -635,7 +661,7 @@ public sealed class ExecuteMultipleLogic
                                         )
                                         .ConfigureAwait(false);
 
-                                StoreResponses(
+                                ExecuteMultipleResponseItem? firstFault = StoreResponses(
                                     responseWithResults,
                                     packOfRequests,
                                     chunk.StartIndex,
@@ -643,13 +669,21 @@ public sealed class ExecuteMultipleLogic
                                     settings.ErrorReport,
                                     false
                                 );
+                                if (
+                                    firstFault != null
+                                    || responseWithResults.Count != packOfRequests.Length
+                                )
+                                {
+                                    Interlocked.Exchange(ref waveFailed, 1);
+                                }
                             }
                             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                             {
                                 throw;
                             }
-                            catch (Exception exception)
+                            catch (Exception exception) when (IsTransientBatchFailure(exception))
                             {
+                                Interlocked.Exchange(ref waveFailed, 1);
                                 foreach (OrganizationRequest request in packOfRequests)
                                 {
                                     InvokeErrorReport(
@@ -688,8 +722,9 @@ public sealed class ExecuteMultipleLogic
             )
             {
                 // The first wave includes JIT, connection setup, and warm-up work. Measure it,
-                // but do not let it distort the batch size.
-                if (!isWarmupWave)
+                // but do not let it distort the batch size. A wave with failures is not a
+                // throughput signal; growing the batch after a fast failure makes throttling worse.
+                if (!isWarmupWave && Volatile.Read(ref waveFailed) == 0)
                 {
                     AdjustAdaptiveSettings(settings, waveStopwatch.Elapsed, ref batchSize);
                 }
@@ -822,6 +857,9 @@ public sealed class ExecuteMultipleLogic
         }
 
         logicResult.Results = orderedResponses.ToArray();
+        logicResult.ResultsByIndex = new Dictionary<int, ExecuteMultipleResponseItem>(
+            responsesByIndex
+        );
         logicResult.UnansweredCount = progress - orderedResponses.Count;
         logicResult.FaultedCount = orderedResponses.Count(item => item.Fault != null);
         logicResult.Cancelled = cancelled;

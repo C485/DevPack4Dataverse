@@ -107,6 +107,13 @@ public sealed class BulkOperationLogic
                                 token
                             )
                             .ConfigureAwait(false);
+                        if (ids.Length != chunk.Count)
+                        {
+                            throw new InvalidOperationException(
+                                $"CreateMultiple returned {ids.Length} ids for a chunk of {chunk.Count} records."
+                            );
+                        }
+
                         results[index] = ids;
                     }
                 )
@@ -207,6 +214,13 @@ public sealed class BulkOperationLogic
                                 token
                             )
                             .ConfigureAwait(false);
+                        if (responses.Length != chunk.Count)
+                        {
+                            throw new InvalidOperationException(
+                                $"UpsertMultiple returned {responses.Length} results for a chunk of {chunk.Count} records."
+                            );
+                        }
+
                         results[index] = responses;
                     }
                 )

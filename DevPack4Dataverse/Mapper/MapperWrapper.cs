@@ -31,6 +31,8 @@ public sealed class MapperWrapper
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, IMapper> _mappers =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
     private readonly ValidationReader _validationReader;
 
@@ -69,7 +71,8 @@ public sealed class MapperWrapper
             Options,
             Cache,
             Lock,
-            name
+            name,
+            _preloadedAt
         );
     }
 
