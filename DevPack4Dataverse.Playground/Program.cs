@@ -37,6 +37,7 @@ internal static class Program
             .CreateLogger();
 
         var microsoftLogger = new SerilogLoggerFactory(Log.Logger).CreateLogger("");
+
         IExecute example = new AdaptiveMultipleRequest(microsoftLogger);
 
         try
