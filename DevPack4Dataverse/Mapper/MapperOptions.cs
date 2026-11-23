@@ -35,7 +35,10 @@ public sealed class MapperOptions<TSource, TTarget>
     /// <summary>Runs after all stages and before change detection.</summary>
     public Action<MappingContext<TSource, TTarget>>? PreSave { get; set; }
 
-    /// <summary>Fields ignored when deciding whether an update is required.</summary>
+    /// <summary>
+    /// Fields ignored when deciding whether an update is required. They are still written
+    /// when another field triggers the update, so do not list server-managed or read-only fields.
+    /// </summary>
     public ISet<string> SkipFieldsToChanged { get; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

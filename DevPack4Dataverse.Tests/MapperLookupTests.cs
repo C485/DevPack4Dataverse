@@ -468,6 +468,51 @@ public class MapperLookupTests
     }
 
     [Fact]
+    public async Task RetrieveAllRecords_WithImpersonation_ThrowsConfigurationException()
+    {
+        int retrievals = 0;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ =>
+            {
+                retrievals++;
+                return Array.Empty<Entity>();
+            }
+        };
+        var (proxy, wrapper) = Create(fake);
+        var options = new LookupMappingOptions
+        {
+            RetrievalMode = LookupRetrievalMode.RetrieveAllRecords
+        };
+        options.Fields.Add("name");
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<LookupSource, LookupTarget>("lookup")
+                .MapLookup(
+                    target => target.Account,
+                    context => EntityKey.ById("account", context.Source.AccountId),
+                    options
+                )
+                .WithOptions(
+                    options =>
+                        options.RequestSettings.ImpersonateAsUserByDataverseId =
+                            Guid.NewGuid()
+                )
+                .Build();
+
+            await Assert.ThrowsAsync<MapperConfigurationException>(
+                () =>
+                    mapper.ExecuteAsync(
+                        new LookupSource { AccountId = Guid.NewGuid() }
+                    )
+            );
+            Assert.Equal(0, retrievals);
+        }
+    }
+
+    [Fact]
     public async Task RetrieveAllRecords_ReusesPreloadAcrossRuns()
     {
         Guid accountId = Guid.NewGuid();

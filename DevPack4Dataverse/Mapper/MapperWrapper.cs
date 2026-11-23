@@ -28,8 +28,11 @@ namespace DevPack4Dataverse.Mapper;
 /// </summary>
 public sealed class MapperWrapper
 {
+    private readonly MapperWrapperOptions _effectiveOptions;
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, IMapper> _mappers =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
     private readonly ValidationReader _validationReader;
@@ -45,6 +48,7 @@ public sealed class MapperWrapper
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Options = options ?? new MapperWrapperOptions();
+        _effectiveOptions = Options.Snapshot();
         Cache = cache ?? new InMemoryEntityCache();
         Lock = entityLock ?? new InMemoryEntityLock();
         _validationReader = new ValidationReader(
@@ -53,6 +57,10 @@ public sealed class MapperWrapper
         );
     }
 
+    /// <summary>
+    /// Options captured when the wrapper was created. Change them before constructing the
+    /// wrapper; later mutations do not affect existing mappers.
+    /// </summary>
     public MapperWrapperOptions Options { get; }
 
     public IEntityCache Cache { get; }
@@ -66,10 +74,11 @@ public sealed class MapperWrapper
         return new MapperBuilder<TSource, TTarget>(
             _sdkProxy,
             _logger,
-            Options,
+            _effectiveOptions,
             Cache,
             Lock,
-            name
+            name,
+            _preloadedAt
         );
     }
 
@@ -133,8 +142,8 @@ public sealed class MapperWrapper
         List<MappingError> errors = new(result.Errors);
         if (
             runOptions?.ValidateAfterSave != false
-            && Options.ValidateAfterSave
-            && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+            && _effectiveOptions.ValidateAfterSave
+            && (_effectiveOptions.ValidateAfterMapperValidation || !ValidationWasRun(result))
         )
         {
             try
@@ -191,7 +200,10 @@ public sealed class MapperWrapper
 
                 if (
                     execution.RunOptions?.ValidateAfterSave != false
-                    && (Options.ValidateAfterMapperValidation || !ValidationWasRun(result))
+                    && (
+                        _effectiveOptions.ValidateAfterMapperValidation
+                        || !ValidationWasRun(result)
+                    )
                 )
                 {
                     referencesToValidate.AddRange(result.SavedReferences);
@@ -207,7 +219,7 @@ public sealed class MapperWrapper
             }
         }
 
-        if (Options.ValidateAfterSave)
+        if (_effectiveOptions.ValidateAfterSave)
         {
             try
             {
@@ -240,9 +252,9 @@ public sealed class MapperWrapper
         }
 
         if (
-            Options.Validator != null
-            && Options.ValidationFields.Count == 0
-            && Options.ValidationFieldsByEntity.Count == 0
+            _effectiveOptions.Validator != null
+            && _effectiveOptions.ValidationFields.Count == 0
+            && _effectiveOptions.ValidationFieldsByEntity.Count == 0
         )
         {
             throw new MapperConfigurationException(
@@ -255,7 +267,7 @@ public sealed class MapperWrapper
             .Select(p => new ValidationTarget(p, null, null, null))
             .ToList();
 
-        if (Options.Validator != null)
+        if (_effectiveOptions.Validator != null)
         {
             foreach (
                 IGrouping<string, ValidationTarget> group in targets.GroupBy(
@@ -264,7 +276,7 @@ public sealed class MapperWrapper
                 )
             )
             {
-                if (Options.GetValidationFields(group.Key).Count == 0)
+                if (_effectiveOptions.GetValidationFields(group.Key).Count == 0)
                 {
                     throw new MapperConfigurationException(
                         $"Wrapper ValidateAfterSave has no validation fields for '{group.Key}'."
@@ -276,10 +288,10 @@ public sealed class MapperWrapper
         return await _validationReader
             .ValidateAsync(
                 targets,
-                Options.GetValidationFields,
-                Options.Validator,
+                _effectiveOptions.GetValidationFields,
+                _effectiveOptions.Validator,
                 null,
-                Options.RequestSettings,
+                _effectiveOptions.RequestSettings,
                 cancellationToken
             )
             .ConfigureAwait(false);

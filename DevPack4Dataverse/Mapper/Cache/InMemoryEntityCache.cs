@@ -29,7 +29,8 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
     );
     private readonly ConcurrentDictionary<string, CacheEntry> _entries =
         new(StringComparer.Ordinal);
-    private readonly ConcurrentQueue<string> _evictionQueue = new();
+    private readonly ConcurrentQueue<(string Key, long Generation)> _evictionQueue = new();
+    private long _nextGeneration;
     private readonly ConcurrentDictionary<
         string,
         ConcurrentDictionary<string, byte>
@@ -89,21 +90,12 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
             UnindexEntry(cacheKey, previous.Value);
         }
 
-        CacheEntry newEntry = new(entry, expiresUtc);
+        long generation = Interlocked.Increment(ref _nextGeneration);
+        CacheEntry newEntry = new(entry, expiresUtc, generation);
         _entries[cacheKey] = newEntry;
         IndexEntry(cacheKey, entry);
-        _evictionQueue.Enqueue(cacheKey);
+        _evictionQueue.Enqueue((cacheKey, generation));
         TrimCacheIfNeeded();
-        while (
-            _evictionQueue.Count > MaxEntries
-            && _evictionQueue.TryDequeue(out string? staleKey)
-        )
-        {
-            if (_entries.TryRemove(staleKey, out CacheEntry? staleEntry))
-            {
-                UnindexEntry(staleKey, staleEntry.Value);
-            }
-        }
 
         return Task.CompletedTask;
     }
@@ -165,13 +157,38 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
 
     private void TrimCacheIfNeeded()
     {
-        while (_entries.Count > MaxEntries && _evictionQueue.TryDequeue(out string? key))
+        while (_entries.Count > MaxEntries && TryEvictOldest())
         {
-            if (_entries.TryRemove(key!, out CacheEntry? entry))
-            {
-                UnindexEntry(key, entry.Value);
-            }
         }
+
+        while (_evictionQueue.Count > MaxEntries && TryEvictOldest())
+        {
+        }
+    }
+
+    private bool TryEvictOldest()
+    {
+        if (!_evictionQueue.TryDequeue(out (string Key, long Generation) candidate))
+        {
+            return false;
+        }
+
+        // The same key may have been written again after this queue entry was enqueued.
+        // Only the current generation may be evicted; stale entries are discarded.
+        if (
+            !_entries.TryGetValue(candidate.Key, out CacheEntry? entry)
+            || entry.Generation != candidate.Generation
+        )
+        {
+            return true;
+        }
+
+        if (_entries.TryRemove(candidate.Key, out CacheEntry? removed))
+        {
+            UnindexEntry(candidate.Key, removed.Value);
+        }
+
+        return true;
     }
 
     private void IndexEntry(string cacheKey, CachedEntity entry)
@@ -211,10 +228,11 @@ public sealed class InMemoryEntityCache : IEntityCache, IEntityCacheByRecordId
     private static string RecordIndexKey(string logicalName, Guid id) =>
         logicalName.ToLowerInvariant() + "|" + id.ToString("N");
 
-    private sealed class CacheEntry(CachedEntity value, DateTime expiresUtc)
+    private sealed class CacheEntry(CachedEntity value, DateTime expiresUtc, long generation)
     {
         public CachedEntity Value { get; } = value;
         public DateTime ExpiresUtc { get; } = expiresUtc;
+        public long Generation { get; } = generation;
         public Task<CachedEntity?> ReadTask { get; } = Task.FromResult<CachedEntity?>(value);
     }
 }

@@ -20,30 +20,38 @@ namespace DevPack4Dataverse.Mapper.Internal;
 
 internal static class EntityChangeDetector
 {
-    public static IReadOnlyList<string> GetChangedFields(
-        Entity current,
+    internal readonly struct ChangeSet
+    {
+        public ChangeSet(IReadOnlyList<string> changedFields, bool requiresUpdate)
+        {
+            ChangedFields = changedFields;
+            RequiresUpdate = requiresUpdate;
+        }
+
+        public IReadOnlyList<string> ChangedFields { get; }
+        public bool RequiresUpdate { get; }
+    }
+
+    public static ChangeSet GetChanges(
+        Entity? current,
         Entity mapped,
-        ISet<string> skipFields
+        ISet<string>? skipFields
     )
     {
         if (mapped == null)
         {
-            return Array.Empty<string>();
+            return new ChangeSet(Array.Empty<string>(), false);
         }
 
         if (current == null)
         {
-            return mapped.Attributes.Keys.ToArray();
+            return new ChangeSet(mapped.Attributes.Keys.ToArray(), true);
         }
 
         List<string> changed = new(mapped.Attributes.Count);
+        bool requiresUpdate = false;
         foreach (KeyValuePair<string, object> attribute in mapped.Attributes)
         {
-            if (skipFields != null && skipFields.Contains(attribute.Key))
-            {
-                continue;
-            }
-
             if (
                 !current.Attributes.TryGetValue(attribute.Key, out object currentValue)
                 && attribute.Value == null
@@ -52,18 +60,21 @@ internal static class EntityChangeDetector
                 continue;
             }
 
-            if (!current.Attributes.ContainsKey(attribute.Key))
+            bool differs =
+                !current.Attributes.ContainsKey(attribute.Key)
+                || !ValueComparer.AreEqual(currentValue, attribute.Value);
+            if (!differs)
             {
-                changed.Add(attribute.Key);
                 continue;
             }
 
-            if (!ValueComparer.AreEqual(currentValue, attribute.Value))
+            changed.Add(attribute.Key);
+            if (skipFields == null || !skipFields.Contains(attribute.Key))
             {
-                changed.Add(attribute.Key);
+                requiresUpdate = true;
             }
         }
 
-        return changed;
+        return new ChangeSet(changed, requiresUpdate);
     }
 }

@@ -70,9 +70,10 @@ public sealed class RequestSettings : RequestImpersonateSettings
         ImpersonateAsUserByAADId.HasValue || ImpersonateAsUserByDataverseId.HasValue;
 
     /// <summary>
-    /// Applies the values that were explicitly set to an inner request of a batch. Unlike
-    /// <see cref="AddToOrganizationRequest"/>, this never removes a parameter, so per-message
-    /// settings survive a batch-level override.
+    /// Applies the values that were explicitly set to an inner request of a batch. A value
+    /// already present on the inner request wins; the batch-level value only fills gaps.
+    /// Boolean flags are only added when true, so a per-message false does not remove a
+    /// batch-level true.
     /// </summary>
     internal void ApplyToInnerRequests(IEnumerable<OrganizationRequest> organizationRequests)
     {
@@ -89,27 +90,31 @@ public sealed class RequestSettings : RequestImpersonateSettings
 
         if (!string.IsNullOrEmpty(SharedVariable))
         {
-            organizationRequest[RequestHeaders.TagName] = SharedVariable;
+            SetIfMissing(organizationRequest, RequestHeaders.TagName, SharedVariable!);
         }
 
         if (!string.IsNullOrEmpty(PartitionId))
         {
-            organizationRequest[RequestHeaders.PartitionIdName] = PartitionId;
+            SetIfMissing(organizationRequest, RequestHeaders.PartitionIdName, PartitionId!);
         }
 
         if (SuppressDuplicateDetection)
         {
-            organizationRequest[RequestHeaders.SuppressDuplicateDetectioname] = true;
+            SetIfMissing(organizationRequest, RequestHeaders.SuppressDuplicateDetectioname, true);
         }
 
         if (SkipPluginExecution)
         {
-            organizationRequest[RequestHeaders.BypassCustomPluginExecutionName] = true;
+            SetIfMissing(organizationRequest, RequestHeaders.BypassCustomPluginExecutionName, true);
         }
 
         if (ConcurrencyBehavior.HasValue && SupportsConcurrencyBehavior(organizationRequest))
         {
-            organizationRequest[RequestHeaders.ConcurrencyBehaviorName] = ConcurrencyBehavior.Value;
+            SetIfMissing(
+                organizationRequest,
+                RequestHeaders.ConcurrencyBehaviorName,
+                ConcurrencyBehavior.Value
+            );
         }
     }
 
@@ -154,6 +159,18 @@ public sealed class RequestSettings : RequestImpersonateSettings
                 or UpdateMultipleRequest
                 or DeleteMultipleRequest;
 
+    private static void SetIfMissing(
+        OrganizationRequest organizationRequest,
+        string name,
+        object value
+    )
+    {
+        if (!organizationRequest.Parameters.ContainsKey(name))
+        {
+            organizationRequest[name] = value;
+        }
+    }
+
     private static void SetOrRemove(OrganizationRequest organizationRequest, string name, object? value)
     {
         if (value == null)
@@ -178,12 +195,6 @@ public sealed class RequestSettings : RequestImpersonateSettings
         public const string ConcurrencyBehaviorName = "ConcurrencyBehavior";
 
         public const string PartitionIdName = "PartitionId";
-
-        /// <summary>
-        /// key used to apply the operation to a given solution.
-        /// See: https://docs.microsoft.com/powerapps/developer/common-data-service/org-service/use-messages#passing-optional-parameters-with-a-request
-        /// </summary>
-        public const string SolutionUniqueNameName = "SolutionUniqueName";
 
         /// <summary>
         /// used to apply duplicate detection behavior to a given request.

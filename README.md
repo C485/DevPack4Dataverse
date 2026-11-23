@@ -93,12 +93,12 @@ Gives the ability to quickly call the Dataverse endpoint with optimized packs of
 
 Production notes:
 - Requests are split into chunks of `RequestSize`; it must be greater than zero and is capped at 1000. When a deployment allows a smaller batch, the fault's `MaxBatchSize` is used to split and resend the chunk automatically.
-- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads. A request that fails at the batch/transport level, or that returns no response, is absent from `Results`; use `ErrorReport` for failures. `RequestIndex` on an item is relative to its own chunk.
-- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and throws `ExecuteMultipleException`. Its `Result` property holds the responses collected before the fault and `Fault` holds the failed item, so the caller can resume instead of repeating successful work.
+- `Results` are ordered by the original request order, across all chunks. This matters for multi-block file uploads/downloads. A request that fails at the batch/transport level, or that returns no response, is absent from `Results`; use `ErrorReport` for failures. `RequestIndex` on an item is relative to its own chunk. `ResultsByIndex` keeps the responses keyed by their global request index, so a missing response does not shift later results; `ExecuteMultipleException.FaultIndex` gives the global failed index.
+- The full `ExecuteMultipleRequestSettings` overload continues after request failures and reports them through `ErrorReport`; the simple settings overload stops at the first fault and throws `ExecuteMultipleException`. Its `Result` property holds the responses collected before the fault and `Fault` holds the failed item. On a chunk or transport failure, `Fault` is null and the original exception is in `InnerException`; resume from `Result.RecordsProcessed` instead of repeating successful work.
 - Both overloads accept an optional `RequestSettings` for the outer batch request, including impersonation and plug-in bypass. Per-message impersonation is rejected because Dataverse applies one caller id to the whole batch.
 - `ErrorReport`, `ReportProgress` and the callbacks are optional; `ReportProgressInterval` must be positive. A throwing callback is logged and does not abort the run.
 - The builder is thread-safe and preserves insertion order. A snapshot is taken when execution starts. A nested `ExecuteMultipleRequest` is rejected; a batch may contain `ExecuteTransactionRequest` items, as Dataverse allows.
-- Cancellation returns the partial result with `Cancelled = true` instead of throwing. The token also cancels the wait for a free connection and the request gate.
+- Cancellation returns the partial result with `Cancelled = true` instead of throwing. The token also cancels the wait for a free connection, the request gate, and the in-flight Dataverse call.
 - Automatic parallelism uses the available connections but always uses at least one worker.
 
 #### Adaptive execution
@@ -231,7 +231,6 @@ Mapper<Order, Entity> mapper = mapperWrapper
         {
             Fields = { "name", "accountnumber" },
             AlternateKeyAttributes = { "accountnumber" },
-            RetrievalMode = LookupRetrievalMode.RetrieveAllRecords,
             CreateIfNotExists = true
         },
         context => new Entity("account") { ["name"] = context.Source.CustomerName })
@@ -243,7 +242,6 @@ Mapper<Order, Entity> mapper = mapperWrapper
         options.RequestSettings.ImpersonateAsUserByDataverseId = userId;
         options.RequestSettings.ImpersonateAsUserByAADId = userAadObjectId;
         options.RequestSettings.SkipPluginExecution = true;
-        options.SkipFieldsToChanged.Add("modifiedon");
         options.PreSave = context => context.Target["new_name"] = context.Target
             .GetAttributeValue<string>("new_name")
             ?.Trim();
@@ -272,10 +270,10 @@ Every lookup mapping has its own options:
 
 Mapper behaviour:
 - `PreSave` runs before change detection.
-- `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
+- `SkipFieldsToChanged` ignores fields when deciding whether an update is needed. A skipped field is still written when another field triggers the update, so do not list server-managed or read-only fields such as `modifiedon`.
 - Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness. The primary key attribute is read from table metadata, so activity tables such as `email` and `task` use `activityid`.
 - A blank alternate key is rejected before any read; an alternate key that matches more than one record throws `MapperException` instead of picking one.
-- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload.
+- `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload. Preloads are keyed by table and requested columns, and they cannot be combined with impersonation: the record cache is not scoped by caller, so the mapper throws `MapperConfigurationException` instead of running one query per record.
 - When impersonating, set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available. On some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
 - Only changed attributes are sent on update; unchanged records are skipped. For an alternate-key upsert, key columns are removed from the body so the key value always wins.
 - `LookupMappingOptions` is copied at `Build`; later changes to the options object do not affect a built mapper.
@@ -296,10 +294,12 @@ MapperBatchResult batchResult = await mapperWrapper.ExecuteAllAsync(
         new MapperExecution("order-line", line)
     });
 ```
-Wrapper validation can use one global field set or per-table field sets:
+Wrapper validation can use one global field set or per-table field sets. Configure them on the options before creating the wrapper:
 ```C#
-mapperWrapper.Options.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
-mapperWrapper.Options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+var wrapperOptions = new MapperWrapperOptions();
+wrapperOptions.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
+wrapperOptions.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+MapperWrapper mapperWrapper = dataverseDevPack.CreateMapperWrapper(wrapperOptions);
 ```
 If the mapper already ran `ValidateAfterSave`, wrapper validation is skipped to avoid duplicate reads. Set `MapperWrapperOptions.ValidateAfterMapperValidation = true` when both validators must run.
 The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:
@@ -312,13 +312,13 @@ MapperWrapper redisWrapper = new(
     new RedisEntityCache(redis),
     new RedisEntityLock(redis));
 ```
-Redis remains an optional project and ships as the `DevPack4Dataverse.Mapper.Redis` package. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) and renews it while the handle is alive, so a long save keeps mutual exclusion. Release failures are ignored because the TTL cleans up. Use a unique key prefix per environment when several environments share one Redis. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
+Redis remains an optional project and ships as the `DevPack4Dataverse.Mapper.Redis` package. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. The wrapper captures its options when it is created; configure TTLs and validation fields before calling `CreateMapperWrapper`. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) and renews it while the handle is alive, so a long save keeps mutual exclusion. Release failures are ignored because the TTL cleans up. Use a unique key prefix per environment when several environments share one Redis. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
 For example when we have lookup that points to record X, we can call FieldDrill with these parameters
 `await dataverseDevPack.FieldDrill.RetreiveAsync<string>(item.ToEntityReference(), "ownerid.fullname");`
-It will retrieve field fullname from lookup named ownerid in starting record entity reference.
+It will retrieve field fullname from lookup named ownerid in starting record entity reference. A missing final field returns null for reference and nullable types; a missing intermediate field still throws.
 ### Money fields
 `FieldMethods.MoneyFieldTypeMethods` provides helpers for transaction-currency and base-currency amounts:
 ```C#
@@ -336,7 +336,7 @@ string formatted = money.GetFormattedValue(account, "creditlimit");
 ```
 `SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
 
-Choice label metadata is cached for five minutes per table and column. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata changes immediately.
+Choice label metadata is cached for five minutes per table and column. Exchange rates retrieved from `transactioncurrency` are cached for five minutes per currency. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata or rate changes immediately.
 
 `FileOrImageFieldTypeMethods.Delete(record, field)` reads the file id stored on the record. Image columns do not return that id in a normal retrieve; for images, keep `UploadFileFieldResult.FileId` and call `Delete(fileId)`.
 
@@ -376,10 +376,10 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 376 tests and runs on `net8.0`, `net11.0`, and `net48` (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 412 tests and runs on `net8.0`, `net11.0`, and `net48` (11 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
-- A failed connection pool fails fast instead of looping forever when every connection creator has errored.
+- A failed connection pool fails fast instead of looping forever when every connection creator has errored. A transient creator failure is retried with a short backoff (three attempts); only then is the creator marked failed.
 - Caller-id impersonation is serialized per connection, so a shared `ServiceClient` cannot run a request as the wrong user or leave the impersonation behind. Set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available; on some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
 - Deleting a missing file/image returns `false` instead of throwing. For image columns, keep the `FileId` returned by `Upload` and call `Delete(fileId)`; image values are not returned by a normal retrieve.
 - Finalizers tolerate a failed constructor, so a null-argument guard cannot crash the process later.

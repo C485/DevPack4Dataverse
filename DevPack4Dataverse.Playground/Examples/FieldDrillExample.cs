@@ -20,6 +20,7 @@ using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 
 namespace DevPack4Dataverse.Playground.Examples;
 
@@ -108,6 +109,30 @@ public sealed class FieldDrillExample(ILogger logger) : IExecute
         );
     }
 
+    private static async Task<EntityReference> GetBaseCurrencyAsync(DataverseDevPack devPack)
+    {
+        Entity[] currencies = await devPack.SdkProxy
+            .RetrieveMultipleAsync(
+                new QueryExpression("transactioncurrency")
+                {
+                    ColumnSet = new ColumnSet("currencyname", "exchangerate")
+                }
+            )
+            .ConfigureAwait(false);
+        Entity? baseCurrency =
+            currencies.FirstOrDefault(
+                currency => currency.GetAttributeValue<decimal>("exchangerate") == 1m
+            ) ?? currencies.FirstOrDefault();
+        if (baseCurrency == null)
+        {
+            throw new InvalidOperationException(
+                "No transaction currency found in the organization."
+            );
+        }
+
+        return baseCurrency.ToEntityReference();
+    }
+
     private static async Task<DrillGraph> CreateGraphAsync(
         DataverseDevPack devPack,
         List<EntityReference> created
@@ -115,8 +140,14 @@ public sealed class FieldDrillExample(ILogger logger) : IExecute
     {
         Section("Create graph");
         string suffix = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        EntityReference baseCurrency = await GetBaseCurrencyAsync(devPack).ConfigureAwait(false);
+        Console.WriteLine($"Base currency: {baseCurrency.Id}");
 
-        Entity rootAccount = new("account") { ["name"] = $"DevPack Drill Root {suffix}" };
+        Entity rootAccount = new("account")
+        {
+            ["name"] = $"DevPack Drill Root {suffix}",
+            ["transactioncurrencyid"] = baseCurrency
+        };
         EntityReference rootAccountReference = new(
             "account",
             await devPack.SdkProxy.CreateRecordAsync(rootAccount).ConfigureAwait(false)
@@ -126,7 +157,8 @@ public sealed class FieldDrillExample(ILogger logger) : IExecute
         Entity childAccount = new("account")
         {
             ["name"] = $"DevPack Drill Child {suffix}",
-            ["parentaccountid"] = rootAccountReference
+            ["parentaccountid"] = rootAccountReference,
+            ["transactioncurrencyid"] = baseCurrency
         };
         EntityReference childAccountReference = new(
             "account",
@@ -140,7 +172,8 @@ public sealed class FieldDrillExample(ILogger logger) : IExecute
             ["lastname"] = $"Drill {suffix}",
             ["parentcustomerid"] = childAccountReference,
             ["birthdate"] = new DateTime(1990, 1, 2),
-            ["donotemail"] = true
+            ["donotemail"] = true,
+            ["transactioncurrencyid"] = baseCurrency
         };
         EntityReference contactReference = new(
             "contact",
@@ -173,7 +206,8 @@ public sealed class FieldDrillExample(ILogger logger) : IExecute
         {
             ["subject"] = $"DevPack Drill Task {suffix}",
             ["regardingobjectid"] = contactReference,
-            ["scheduledend"] = DateTime.UtcNow.AddDays(1)
+            ["scheduledend"] = DateTime.UtcNow.AddDays(1),
+            ["transactioncurrencyid"] = baseCurrency
         };
         EntityReference activityReference = new(
             "task",

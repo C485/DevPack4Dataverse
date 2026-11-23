@@ -29,9 +29,8 @@ internal sealed class RecordStore
     private const int CacheWriteParallelism = 32;
     private readonly IEntityCache _cache;
     private readonly ILogger _logger;
+    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt;
     private readonly PrimaryKeyAttributeProvider _primaryKeys;
-    private readonly ConcurrentDictionary<string, DateTime> _preloadedAt =
-        new(StringComparer.OrdinalIgnoreCase);
     private readonly SdkProxy _sdkProxy;
     private readonly MapperWrapperOptions _wrapperOptions;
 
@@ -40,7 +39,8 @@ internal sealed class RecordStore
         ILogger logger,
         IEntityCache cache,
         MapperWrapperOptions wrapperOptions,
-        PrimaryKeyAttributeProvider primaryKeys
+        PrimaryKeyAttributeProvider primaryKeys,
+        ConcurrentDictionary<string, DateTime> preloadedAt
     )
     {
         _sdkProxy = sdkProxy ?? throw new ArgumentNullException(nameof(sdkProxy));
@@ -48,6 +48,30 @@ internal sealed class RecordStore
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _wrapperOptions = wrapperOptions ?? throw new ArgumentNullException(nameof(wrapperOptions));
         _primaryKeys = primaryKeys ?? throw new ArgumentNullException(nameof(primaryKeys));
+        _preloadedAt = preloadedAt ?? throw new ArgumentNullException(nameof(preloadedAt));
+    }
+
+    internal static string BuildPreloadKey(
+        string logicalName,
+        IEnumerable<string>? requiredColumns,
+        IEnumerable<string>? alternateKeyAttributes
+    )
+    {
+        static string Normalize(IEnumerable<string>? values) =>
+            string.Join(
+                ",",
+                (values ?? Enumerable.Empty<string>())
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value.ToLowerInvariant())
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+            );
+
+        return logicalName.ToLowerInvariant()
+            + "|"
+            + Normalize(requiredColumns)
+            + "|"
+            + Normalize(alternateKeyAttributes);
     }
 
     public async Task<Entity?> GetAsync(
@@ -167,22 +191,26 @@ internal sealed class RecordStore
             return;
         }
 
+        string[] alternateAttributes =
+            alternateKeyAttributes?.ToArray() ?? Array.Empty<string>();
+        string[] requestedColumns = requiredColumns?.ToArray() ?? Array.Empty<string>();
+        string preloadKey = BuildPreloadKey(
+            logicalName,
+            requestedColumns,
+            alternateAttributes
+        );
+
         DateTime now = DateTime.UtcNow;
         if (
             !forceRefresh
-            && _preloadedAt.TryGetValue(logicalName, out DateTime loadedAt)
+            && _preloadedAt.TryGetValue(preloadKey, out DateTime loadedAt)
             && now - loadedAt < _wrapperOptions.GetCacheTtl(logicalName)
         )
         {
             return;
         }
 
-        string[] alternateAttributes =
-            alternateKeyAttributes?.ToArray() ?? Array.Empty<string>();
-        HashSet<string> columns = new(
-            requiredColumns ?? Enumerable.Empty<string>(),
-            StringComparer.OrdinalIgnoreCase
-        );
+        HashSet<string> columns = new(requestedColumns, StringComparer.OrdinalIgnoreCase);
         foreach (string attribute in alternateAttributes)
         {
             columns.Add(attribute);
@@ -244,7 +272,7 @@ internal sealed class RecordStore
             )
             .ConfigureAwait(false);
 
-        _preloadedAt[logicalName] = DateTime.UtcNow;
+        _preloadedAt[preloadKey] = DateTime.UtcNow;
     }
 
     public async Task CacheSavedAsync(
@@ -253,7 +281,11 @@ internal sealed class RecordStore
         CancellationToken cancellationToken
     )
     {
-        if (entity == null || requestSettings?.HasImpersonation == true)
+        if (
+            entity == null
+            || requestSettings?.HasImpersonation == true
+            || requestSettings?.ConcurrencyBehavior == ConcurrencyBehavior.IfRowVersionMatches
+        )
         {
             return;
         }
@@ -336,22 +368,24 @@ internal sealed class RecordStore
 
         if (record.Id != Guid.Empty)
         {
-            await CacheEntryAsync(
-                    EntityKey.ById(record.LogicalName, record.Id),
-                    entry,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            EntityKey idKey = EntityKey.ById(record.LogicalName, record.Id);
+            if (!idKey.Equals(requestedKey))
+            {
+                await CacheEntryAsync(idKey, entry, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         if (record.KeyAttributes != null && record.KeyAttributes.Count > 0)
         {
-            await CacheEntryAsync(
-                    EntityKey.ByAlternateKey(record.LogicalName, record.KeyAttributes),
-                    entry,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            EntityKey alternateKey = EntityKey.ByAlternateKey(
+                record.LogicalName,
+                record.KeyAttributes
+            );
+            if (!alternateKey.Equals(requestedKey))
+            {
+                await CacheEntryAsync(alternateKey, entry, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
     }
 
@@ -488,6 +522,17 @@ internal sealed class RecordStore
 
     private async Task ClearCacheAsync(string logicalName, CancellationToken cancellationToken)
     {
+        // A table clear also invalidates every preload marker for that table. Another mapper
+        // with a fresh marker must reload instead of silently missing the cleared entries.
+        string prefix = logicalName + "|";
+        foreach (string key in _preloadedAt.Keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                _preloadedAt.TryRemove(key, out _);
+            }
+        }
+
         try
         {
             await _cache.ClearAsync(logicalName, cancellationToken).ConfigureAwait(false);

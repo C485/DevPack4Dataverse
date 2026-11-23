@@ -11,9 +11,11 @@ namespace DevPack4Dataverse.Tests.TestDoubles;
 
 public sealed class FakeConnection : IConnection, IConnectionIdleWaiter
 {
+    private readonly SemaphoreSlim _realLock = new(1, 1);
     public int ReleaseCount { get; private set; }
     public int TryLockCount { get; private set; }
     public bool TryLockResult { get; set; } = true;
+    public bool UseRealLock { get; set; }
     public ulong Weight { get; set; }
     public RequestSettings? LastRequestSettings { get; private set; }
     public Func<CancellationToken, Task>? WaitForIdleHandler { get; set; }
@@ -34,7 +36,14 @@ public sealed class FakeConnection : IConnection, IConnectionIdleWaiter
 
     public void ApplyConnectionOptimalization() { }
     public ulong GetConnectionWeight() => Weight;
-    public void ReleaseLock() => ReleaseCount++;
+    public void ReleaseLock()
+    {
+        ReleaseCount++;
+        if (UseRealLock)
+        {
+            _realLock.Release();
+        }
+    }
     public bool Test() => true;
     public Task<bool> TestAsync() => Task.FromResult(true);
 
@@ -44,13 +53,13 @@ public sealed class FakeConnection : IConnection, IConnectionIdleWaiter
     public bool TryLock()
     {
         TryLockCount++;
-        return TryLockResult;
+        return UseRealLock ? _realLock.Wait(0) : TryLockResult;
     }
 
     public Task<bool> TryLockAsync()
     {
         TryLockCount++;
-        return Task.FromResult(TryLockResult);
+        return UseRealLock ? _realLock.WaitAsync(0) : Task.FromResult(TryLockResult);
     }
 
     public Guid CreateRecord(Entity record, RequestSettings? requestSettings = null)

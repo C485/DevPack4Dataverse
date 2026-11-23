@@ -96,7 +96,7 @@ public sealed class RedisEntityCacheIntegrationTests
     }
 
     [RedisFact]
-    public async Task RedisCache_RemoveByRecordIdFallsBackToScanWhenIndexIsMissing()
+    public async Task RedisCache_RemoveByRecordId_DoesNotScanWhenIndexIsMissing()
     {
         using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();
         string prefix = RedisIntegrationTest.NewPrefix();
@@ -108,7 +108,8 @@ public sealed class RedisEntityCacheIntegrationTests
         Entity record = new("account", id) { ["name"] = "Contoso" };
         CachedEntity entry = new(record);
 
-        // Write the cache entry without the id index to exercise the scan fallback.
+        // An entry written without the id index is not removed. Scanning the whole table
+        // on a cache miss made every create read the entire cache, so the TTL owns cleanup.
         await database.StringSetAsync(
             prefix + key,
             RedisEntityCache.Serialize(entry),
@@ -119,7 +120,35 @@ public sealed class RedisEntityCacheIntegrationTests
 
         await cache.RemoveByRecordIdAsync("account", id);
 
-        Assert.Null(await cache.GetAsync(key));
+        Assert.NotNull(await cache.GetAsync(key));
+    }
+
+    [RedisFact]
+    public async Task RedisCache_TableIndexDoesNotShortenItsTtl()
+    {
+        using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();
+        string prefix = RedisIntegrationTest.NewPrefix();
+        RedisEntityCache cache = new(connection, prefix);
+        Guid first = Guid.NewGuid();
+        Guid second = Guid.NewGuid();
+
+        await cache.SetAsync(
+            EntityKey.ById("account", first),
+            new CachedEntity(new Entity("account", first)),
+            TimeSpan.FromMinutes(10)
+        );
+        await cache.SetAsync(
+            EntityKey.ById("account", second),
+            new CachedEntity(new Entity("account", second)),
+            TimeSpan.FromSeconds(1)
+        );
+
+        TimeSpan? ttl = await connection
+            .GetDatabase()
+            .KeyTimeToLiveAsync(prefix + "table:account");
+
+        Assert.NotNull(ttl);
+        Assert.True(ttl!.Value > TimeSpan.FromMinutes(1));
     }
 
     [RedisFact]

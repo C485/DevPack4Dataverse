@@ -138,27 +138,26 @@ internal sealed class LookupResolver
     {
         if (state.RequestSettings.HasImpersonation)
         {
-            // Preloading under impersonation would cache another user's view of the table.
-            return;
+            // The record cache is not scoped by caller identity, so a preload under
+            // impersonation would be unsafe to reuse. Reject the combination instead of
+            // silently turning every lookup into its own query.
+            throw new MapperConfigurationException(
+                $"Lookup '{logicalName}' uses RetrieveAllRecords together with impersonation. "
+                    + "The record cache is not scoped by caller; use LookupRetrievalMode.OneByOne "
+                    + "or remove the impersonation settings."
+            );
         }
 
-        if (state.Preloads.TryGetValue(logicalName, out Task? existing))
-        {
-            await existing.ConfigureAwait(false);
-            return;
-        }
-
-        Task load = _recordStore.LoadAllAsync(
-            logicalName,
-            options.Fields,
-            options.AlternateKeyAttributes,
-            state.ForceRefresh,
-            state.RequestSettings,
-            cancellationToken
-        );
-
-        state.Preloads.TryAdd(logicalName, load);
-        await load.ConfigureAwait(false);
+        await _recordStore
+            .LoadAllAsync(
+                logicalName,
+                options.Fields,
+                options.AlternateKeyAttributes,
+                state.ForceRefresh,
+                state.RequestSettings,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     private async Task<Entity> CreateAsync(

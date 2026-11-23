@@ -268,6 +268,27 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             )
             .ConfigureAwait(false);
 
+        // An id-key mapper and an alternate-key mapper reach the same row through different
+        // lock strings. Hold the id lock too, and re-read under it, so both paths serialize
+        // the whole read-modify-write. Always take the alternate-key lock first.
+        (IEntityLockHandle? idLock, Entity? refreshedCurrent) = await AcquireIdLockAndRefreshAsync(
+                current,
+                key,
+                requiredColumns,
+                useCacheForChangeDetection,
+                state,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        using IEntityLockHandle? idLockHandle = idLock;
+        current = refreshedCurrent;
+
+        EntityLockGuard.EnsureHeld(lockHandle);
+        if (idLockHandle != null)
+        {
+            EntityLockGuard.EnsureHeld(idLockHandle);
+        }
+
         if (current == null)
         {
             return await CreateAsync(context, entity, key, state, cancellationToken)
@@ -283,16 +304,14 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             );
         }
 
-        EntityLockGuard.EnsureHeld(lockHandle);
-
-        IReadOnlyList<string> changed = EntityChangeDetector.GetChangedFields(
+        EntityChangeDetector.ChangeSet changes = EntityChangeDetector.GetChanges(
             current,
             entity,
             _options.SkipFieldsToChanged
         );
 
         EntityReference reference = new(entity.LogicalName, current.Id);
-        if (changed.Count == 0)
+        if (!changes.RequiresUpdate)
         {
             return new MappedRecord<TTarget>(
                 context.Source,
@@ -301,12 +320,12 @@ public sealed class Mapper<TSource, TTarget> : IMapper
                 current,
                 false,
                 true,
-                changed
+                changes.ChangedFields
             );
         }
 
         Entity update = new(entity.LogicalName, current.Id);
-        foreach (string attribute in changed)
+        foreach (string attribute in changes.ChangedFields)
         {
             update[attribute] = entity[attribute];
         }
@@ -326,8 +345,49 @@ public sealed class Mapper<TSource, TTarget> : IMapper
             entity,
             false,
             false,
-            changed
+            changes.ChangedFields
         );
+    }
+
+    private async Task<(IEntityLockHandle? LockHandle, Entity? Current)> AcquireIdLockAndRefreshAsync(
+        Entity? current,
+        EntityKey key,
+        IEnumerable<string> requiredColumns,
+        bool useCacheForChangeDetection,
+        MappingExecutionState state,
+        CancellationToken cancellationToken
+    )
+    {
+        if (current == null || !key.IsAlternateKey)
+        {
+            return (null, current);
+        }
+
+        EntityKey idKey = EntityKey.ById(current.LogicalName, current.Id);
+        IEntityLockHandle lockHandle = await _entityLock
+            .AcquireAsync(idKey, state.LockTimeout, cancellationToken)
+            .ConfigureAwait(false);
+        try
+        {
+            // The first read happened before the id lock. Read again under the lock so a
+            // concurrent id-key writer cannot change the row between our read and write.
+            Entity? refreshed = await _recordStore
+                .GetAsync(
+                    idKey,
+                    requiredColumns,
+                    useCacheForChangeDetection,
+                    useCacheForChangeDetection ? state.ForceRefresh : true,
+                    state.RequestSettings,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            return (lockHandle, refreshed);
+        }
+        catch
+        {
+            lockHandle.Dispose();
+            throw;
+        }
     }
 
     private static void ApplyAlternateKey(Entity entity, EntityKey key)

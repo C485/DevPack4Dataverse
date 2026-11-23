@@ -359,6 +359,34 @@ public sealed class EntityKey : IEquatable<EntityKey>
 
     private static string NormalizeValue(object value)
     {
+        // Alternate-key values come from different CLR types (int, decimal, Money) for the
+        // same Dataverse number. Normalize all of them to one canonical form so lock and
+        // cache keys agree.
+        if (value is Money moneyValue)
+        {
+            return "n:" + moneyValue.Value.ToString("G29", CultureInfo.InvariantCulture);
+        }
+
+        if (
+            value
+            is byte
+                or sbyte
+                or short
+                or ushort
+                or int
+                or uint
+                or long
+                or ulong
+                or decimal
+                or double
+                or float
+        )
+        {
+            return "n:"
+                + Convert.ToDecimal(value, CultureInfo.InvariantCulture)
+                    .ToString("G29", CultureInfo.InvariantCulture);
+        }
+
         switch (value)
         {
             case null:
@@ -402,14 +430,6 @@ public sealed class EntityKey : IEquatable<EntityKey>
                     + "}";
             case OptionSetValue optionSetValue:
                 return "os:" + optionSetValue.Value.ToString(CultureInfo.InvariantCulture);
-            case Money money:
-                return "m:" + money.Value.ToString(CultureInfo.InvariantCulture);
-            case decimal decimalValue:
-                return "d:" + decimalValue.ToString("G29", CultureInfo.InvariantCulture);
-            case double doubleValue:
-                return "db:" + doubleValue.ToString("R", CultureInfo.InvariantCulture);
-            case float floatValue:
-                return "f:" + floatValue.ToString("R", CultureInfo.InvariantCulture);
             case string text:
                 return "s:" + text.ToLowerInvariant();
             case IFormattable formattable:

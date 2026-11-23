@@ -88,11 +88,34 @@ public class OptionSetFieldTypeMethodsTests
     }
 
     [Fact]
-    public async Task MapStringToOptionSet_MissingLanguage_FallsBackToBase()
+    public async Task MapStringToOptionSet_MissingLanguage_Throws()
     {
         var connection = new FakeConnection
         {
             ExecuteHandler = _ => MetadataResponseWithTranslations()
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            await Assert.ThrowsAsync<KeyNotFoundException>(
+                () =>
+                    methods.MapStringToOptionSet(
+                        "account",
+                        "industrycode",
+                        "Red",
+                        languageCode: 1036
+                    )
+            );
+        }
+    }
+
+    [Fact]
+    public async Task MapStringToOptionSet_ExactTranslationWinsOverBaseLabel()
+    {
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = _ => MetadataResponseWithConflictingTranslations()
         };
         var (proxy, methods) = Create(connection);
 
@@ -105,7 +128,7 @@ public class OptionSetFieldTypeMethodsTests
                 languageCode: 1036
             );
 
-            Assert.Equal(1, value.Value);
+            Assert.Equal(2, value.Value);
         }
     }
 
@@ -157,6 +180,24 @@ public class OptionSetFieldTypeMethodsTests
         var label = new Label("Czerwony", 1045);
         label.LocalizedLabels.Add(new LocalizedLabel("Red", 1033));
         metadata.OptionSet.Options.Add(new OptionMetadata(label, 1));
+
+        var response = new RetrieveAttributeResponse();
+        response.Results["AttributeMetadata"] = metadata;
+        return response;
+    }
+
+    private static RetrieveAttributeResponse MetadataResponseWithConflictingTranslations()
+    {
+        var metadata = new PicklistAttributeMetadata("industrycode")
+        {
+            OptionSet = new OptionSetMetadata()
+        };
+        metadata.OptionSet.Options.Add(
+            new OptionMetadata(new Label("Red", 1033), 1)
+        );
+        var translated = new Label("Blue", 1033);
+        translated.LocalizedLabels.Add(new LocalizedLabel("Red", 1036));
+        metadata.OptionSet.Options.Add(new OptionMetadata(translated, 2));
 
         var response = new RetrieveAttributeResponse();
         response.Results["AttributeMetadata"] = metadata;

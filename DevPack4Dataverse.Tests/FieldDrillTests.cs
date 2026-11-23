@@ -180,7 +180,50 @@ public class FieldDrillTests
     }
 
     [Fact]
-    public void Retreive_MissingField_Throws()
+    public void Retreive_ArrayPath_TrimsSegmentsAndIgnoresCase()
+    {
+        Guid ownerId = Guid.NewGuid();
+        var accountReference = new EntityReference("account", Guid.NewGuid());
+        var (proxy, drill, calls) = Create(
+            (entityName, id, _) =>
+                entityName == "account"
+                    ? Record(
+                        entityName,
+                        id,
+                        ("ownerid", new EntityReference("systemuser", ownerId))
+                    )
+                    : Record(entityName, id, ("fullname", "Alice"))
+        );
+
+        using (proxy)
+        {
+            Assert.Equal(
+                "Alice",
+                drill.Retreive<string>(
+                    accountReference,
+                    new[] { " OwnerId ", " FullName " }
+                )
+            );
+        }
+
+        Assert.Equal(new[] { "ownerid" }, calls[0].Columns);
+        Assert.Equal(new[] { "fullname" }, calls[1].Columns);
+    }
+
+    [Fact]
+    public void Retreive_MissingFinalField_ReferenceType_ReturnsNull()
+    {
+        var accountReference = new EntityReference("account", Guid.NewGuid());
+        var (proxy, drill, _) = Create((entityName, id, _) => Record(entityName, id));
+
+        using (proxy)
+        {
+            Assert.Null(drill.Retreive<string>(accountReference, "name"));
+        }
+    }
+
+    [Fact]
+    public void Retreive_MissingFinalField_NonNullableValueType_Throws()
     {
         var accountReference = new EntityReference("account", Guid.NewGuid());
         var (proxy, drill, _) = Create((entityName, id, _) => Record(entityName, id));
@@ -188,7 +231,7 @@ public class FieldDrillTests
         using (proxy)
         {
             Assert.Throws<InvalidOperationException>(
-                () => drill.Retreive<string>(accountReference, "name")
+                () => drill.Retreive<int>(accountReference, "age")
             );
         }
     }

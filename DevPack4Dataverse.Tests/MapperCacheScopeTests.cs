@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using DevPack4Dataverse.Mapper;
 using DevPack4Dataverse.Mapper.Cache;
 using DevPack4Dataverse.Mapper.Internal;
@@ -45,7 +46,8 @@ public class MapperCacheScopeTests
             NullLogger.Instance,
             cache,
             new MapperWrapperOptions(),
-            new PrimaryKeyAttributeProvider(proxy)
+            new PrimaryKeyAttributeProvider(proxy),
+            new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase)
         );
         var settings = new RequestSettings
         {

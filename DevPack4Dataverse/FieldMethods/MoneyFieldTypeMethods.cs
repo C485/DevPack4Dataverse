@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+using System.Collections.Concurrent;
 using Ardalis.GuardClauses;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
@@ -36,7 +37,10 @@ public sealed class MoneyFieldTypeMethods
     private const string ExchangeRateAttribute = "exchangerate";
     private const string TransactionCurrencyAttribute = "transactioncurrencyid";
     private const string TransactionCurrencyLogicalName = "transactioncurrency";
+    private static readonly TimeSpan ExchangeRateCacheTtl = TimeSpan.FromMinutes(5);
 
+    private readonly ConcurrentDictionary<Guid, ExchangeRateCacheEntry> _exchangeRateCache =
+        new();
     private readonly SdkProxy _sdkProxy;
 
     /// <summary>
@@ -181,6 +185,11 @@ public sealed class MoneyFieldTypeMethods
     public decimal GetExchangeRate(EntityReference transactionCurrency)
     {
         string entityName = GetCurrencyEntityName(transactionCurrency);
+        if (TryGetCachedExchangeRate(transactionCurrency.Id, out decimal cachedRate))
+        {
+            return cachedRate;
+        }
+
         Entity currency = Guard.Against.Null(
             _sdkProxy.Retrieve(
                 entityName,
@@ -190,7 +199,12 @@ public sealed class MoneyFieldTypeMethods
             message: "The transaction currency record could not be retrieved."
         );
 
-        return ReadExchangeRate(currency, ExchangeRateAttribute);
+        decimal rate = ReadExchangeRate(currency, ExchangeRateAttribute);
+        _exchangeRateCache[transactionCurrency.Id] = new ExchangeRateCacheEntry(
+            rate,
+            DateTime.UtcNow.Add(ExchangeRateCacheTtl)
+        );
+        return rate;
     }
 
     /// <summary>
@@ -228,6 +242,10 @@ public sealed class MoneyFieldTypeMethods
     {
         string entityName = GetCurrencyEntityName(transactionCurrency);
         cancellationToken.ThrowIfCancellationRequested();
+        if (TryGetCachedExchangeRate(transactionCurrency.Id, out decimal cachedRate))
+        {
+            return cachedRate;
+        }
 
         Entity currency = Guard.Against.Null(
             await _sdkProxy
@@ -241,7 +259,27 @@ public sealed class MoneyFieldTypeMethods
         );
 
         cancellationToken.ThrowIfCancellationRequested();
-        return ReadExchangeRate(currency, ExchangeRateAttribute);
+        decimal rate = ReadExchangeRate(currency, ExchangeRateAttribute);
+        _exchangeRateCache[transactionCurrency.Id] = new ExchangeRateCacheEntry(
+            rate,
+            DateTime.UtcNow.Add(ExchangeRateCacheTtl)
+        );
+        return rate;
+    }
+
+    private bool TryGetCachedExchangeRate(Guid currencyId, out decimal rate)
+    {
+        if (
+            _exchangeRateCache.TryGetValue(currencyId, out ExchangeRateCacheEntry cached)
+            && cached.ExpiresUtc > DateTime.UtcNow
+        )
+        {
+            rate = cached.Rate;
+            return true;
+        }
+
+        rate = 0;
+        return false;
     }
 
     /// <summary>
@@ -364,6 +402,18 @@ public sealed class MoneyFieldTypeMethods
 
     private static object UnwrapAliased(object value) =>
         value is AliasedValue aliasedValue ? aliasedValue.Value : value;
+
+    private readonly struct ExchangeRateCacheEntry
+    {
+        public ExchangeRateCacheEntry(decimal rate, DateTime expiresUtc)
+        {
+            Rate = rate;
+            ExpiresUtc = expiresUtc;
+        }
+
+        public decimal Rate { get; }
+        public DateTime ExpiresUtc { get; }
+    }
 
     private static string GetCurrencyEntityName(EntityReference transactionCurrency)
     {

@@ -10,6 +10,18 @@ namespace DevPack4Dataverse.Tests;
 public class MapperCacheLockTests
 {
     [Fact]
+    public void EntityKey_NumericAlternateKeyValues_UseOneNormalizedForm()
+    {
+        EntityKey intKey = EntityKey.ByAlternateKey("account", "number", 5);
+        EntityKey decimalKey = EntityKey.ByAlternateKey("account", "number", 5m);
+        EntityKey moneyKey = EntityKey.ByAlternateKey("account", "number", new Money(5m));
+
+        Assert.Equal(intKey, decimalKey);
+        Assert.Equal(intKey, moneyKey);
+        Assert.Equal(intKey.GetHashCode(), decimalKey.GetHashCode());
+    }
+
+    [Fact]
     public async Task InMemoryCache_ReturnsEntryBeforeTtl()
     {
         var cache = new InMemoryEntityCache();
@@ -51,6 +63,28 @@ public class MapperCacheLockTests
         await Task.Delay(80);
 
         Assert.Null(await cache.GetAsync(key));
+    }
+
+    [Fact]
+    public async Task InMemoryCache_RepeatedWritesDoNotEvictTheFreshEntry()
+    {
+        var cache = new InMemoryEntityCache();
+        EntityKey key = EntityKey.ById("account", Guid.NewGuid());
+        for (int index = 0; index < 100_050; index++)
+        {
+            await cache.SetAsync(
+                key,
+                new CachedEntity(
+                    new Entity("account", key.Id!.Value) { ["value"] = index }
+                ),
+                TimeSpan.FromMinutes(1)
+            );
+        }
+
+        CachedEntity? entry = await cache.GetAsync(key);
+
+        Assert.NotNull(entry);
+        Assert.Equal(100_049, entry!.Record["value"]);
     }
 
     [Fact]

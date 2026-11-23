@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+            11.0.x
+
+      - name: Restore
+        run: dotnet restore DevPack4Dataverse.sln
+
+      - name: Build
+        run: dotnet build DevPack4Dataverse.sln -c Release --no-restore
+
+      - name: Test net8.0
+        run: dotnet test DevPack4Dataverse.Tests/DevPack4Dataverse.Tests.csproj -c Release -f net8.0 --no-build
+
+      - name: Test net11.0
+        run: dotnet test DevPack4Dataverse.Tests/DevPack4Dataverse.Tests.csproj -c Release -f net11.0 --no-build
+
+      - name: Test net48
+        run: dotnet test DevPack4Dataverse.Tests/DevPack4Dataverse.Tests.csproj -c Release -f net48 --no-build

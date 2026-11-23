@@ -1,6 +1,7 @@
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Xunit;
 using DevPack4Dataverse.ExecuteMultiple;
 using DevPack4Dataverse.FieldMethods;
@@ -107,4 +108,148 @@ public class FileOrImageFieldTypeMethodsTests
         Assert.NotNull(captured);
         Assert.Equal(fileId, captured.FileId);
     }
+
+    [Fact]
+    public async Task Receive_DownloadsAllBlocksInOffsetOrder()
+    {
+        const int blockSize = 4 * 1024 * 1024;
+        byte[] data = new byte[(blockSize * 2) + 1024];
+        for (int index = 0; index < data.Length; index++)
+        {
+            data[index] = (byte)(index % 251);
+        }
+
+        var offsets = new List<long>();
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                switch (request)
+                {
+                    case InitializeFileBlocksDownloadRequest:
+                        var initialize = new InitializeFileBlocksDownloadResponse();
+                        initialize.Results["FileSizeInBytes"] = (long)data.Length;
+                        initialize.Results["FileContinuationToken"] = "token";
+                        initialize.Results["FileName"] = "test.bin";
+                        initialize.Results["IsChunkingSupported"] = true;
+                        return initialize;
+                    case ExecuteMultipleRequest executeMultiple:
+                        var responses = new ExecuteMultipleResponseItemCollection();
+                        for (int index = 0; index < executeMultiple.Requests.Count; index++)
+                        {
+                            var download = Assert.IsType<DownloadBlockRequest>(
+                                executeMultiple.Requests[index]
+                            );
+                            offsets.Add(download.Offset);
+                            var block = new DownloadBlockResponse();
+                            block.Results["Data"] = data
+                                .Skip((int)download.Offset)
+                                .Take((int)download.BlockLength)
+                                .ToArray();
+                            responses.Add(
+                                new ExecuteMultipleResponseItem
+                                {
+                                    RequestIndex = index,
+                                    Response = block
+                                }
+                            );
+                        }
+
+                        var response = new ExecuteMultipleResponse();
+                        response.Results["Responses"] = responses;
+                        return response;
+                    default:
+                        throw new NotSupportedException(request.RequestName);
+                }
+            }
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            FileOrImageFieldTypeMethods.FileData file = await methods.Receive(
+                new EntityReference("account", Guid.NewGuid()),
+                "new_file"
+            );
+
+            Assert.Equal(data.Length, file.Size);
+            Assert.Equal("test.bin", file.Name);
+            Assert.Equal(data, file.Data);
+        }
+
+        Assert.Equal(new long[] { 0, blockSize, blockSize * 2 }, offsets);
+    }
+
+    [Fact]
+    public async Task Upload_SendsBlocksInOrderAndCommitsTheSameBlockList()
+    {
+        const int blockSize = 4 * 1024 * 1024;
+        byte[] data = new byte[blockSize * 9];
+        var uploadedBlockIds = new List<string>();
+        var batchSizes = new List<int>();
+        string[]? committedBlocks = null;
+        var connection = new FakeConnection
+        {
+            ExecuteHandler = request =>
+            {
+                switch (request)
+                {
+                    case InitializeFileBlocksUploadRequest:
+                        var initialize = new InitializeFileBlocksUploadResponse();
+                        initialize.Results["FileContinuationToken"] = "token";
+                        return initialize;
+                    case ExecuteMultipleRequest executeMultiple:
+                        batchSizes.Add(executeMultiple.Requests.Count);
+                        var responses = new ExecuteMultipleResponseItemCollection();
+                        for (int index = 0; index < executeMultiple.Requests.Count; index++)
+                        {
+                            var upload = Assert.IsType<UploadBlockRequest>(
+                                executeMultiple.Requests[index]
+                            );
+                            uploadedBlockIds.Add(upload.BlockId);
+                            responses.Add(
+                                new ExecuteMultipleResponseItem
+                                {
+                                    RequestIndex = index,
+                                    Response = new TestResponse()
+                                }
+                            );
+                        }
+
+                        var response = new ExecuteMultipleResponse();
+                        response.Results["Responses"] = responses;
+                        return response;
+                    case CommitFileBlocksUploadRequest commit:
+                        committedBlocks = commit.BlockList;
+                        var commitResponse = new CommitFileBlocksUploadResponse();
+                        commitResponse.Results["FileSizeInBytes"] = (long)data.Length;
+                        commitResponse.Results["FileId"] = Guid.NewGuid();
+                        return commitResponse;
+                    default:
+                        throw new NotSupportedException(request.RequestName);
+                }
+            }
+        };
+        var (proxy, methods) = Create(connection);
+
+        using (proxy)
+        {
+            FileOrImageFieldTypeMethods.UploadFileFieldResult result = await methods.Upload(
+                "test.bin",
+                new EntityReference("account", Guid.NewGuid()),
+                "new_file",
+                data
+            );
+
+            Assert.Equal(data.Length, result.SavedBytes);
+        }
+
+        Assert.Equal(new[] { 6, 2, 1 }, batchSizes);
+        Assert.Equal(9, uploadedBlockIds.Count);
+        Assert.All(uploadedBlockIds, id => Assert.DoesNotContain("+", id));
+        Assert.NotNull(committedBlocks);
+        Assert.Equal(uploadedBlockIds, committedBlocks);
+    }
+
+    private sealed class TestResponse : OrganizationResponse { }
 }

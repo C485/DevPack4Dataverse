@@ -62,9 +62,9 @@ public sealed class FieldDrill
     /// name or ID.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// A retrieved field is missing, an intermediate field is null or is not an
-    /// <see cref="EntityReference"/>, the final field is null for a non-nullable value type, or the
-    /// final field has an unexpected type.
+    /// A retrieved intermediate field is missing or null, an intermediate field is not an
+    /// <see cref="EntityReference"/>, the final field is null or absent for a non-nullable value
+    /// type, or the final field has an unexpected type.
     /// </exception>
     public T Retreive<T>(EntityReference obj, string path, string delimiter = ".")
     {
@@ -86,19 +86,19 @@ public sealed class FieldDrill
     /// name or ID.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// A retrieved field is missing, an intermediate field is null or is not an
-    /// <see cref="EntityReference"/>, the final field is null for a non-nullable value type, or the
-    /// final field has an unexpected type.
+    /// A retrieved intermediate field is missing or null, an intermediate field is not an
+    /// <see cref="EntityReference"/>, the final field is null or absent for a non-nullable value
+    /// type, or the final field has an unexpected type.
     /// </exception>
     public T Retreive<T>(EntityReference obj, string[] pathParts)
     {
-        ValidateArguments(obj, pathParts);
+        string[] path = ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
-        for (int index = 0; index < pathParts.Length; index++)
+        for (int index = 0; index < path.Length; index++)
         {
-            bool isLast = index == pathParts.Length - 1;
-            string currentFieldName = pathParts[index];
+            bool isLast = index == path.Length - 1;
+            string currentFieldName = path[index];
             Entity retrievedRecord = Guard.Against.Null(
                 _sdkProxy.Retrieve(
                     drillReference.LogicalName,
@@ -108,6 +108,13 @@ public sealed class FieldDrill
             );
             if (!retrievedRecord.Contains(currentFieldName))
             {
+                if (isLast)
+                {
+                    // Dataverse omits attributes whose value is null. The final segment is
+                    // therefore allowed to be absent and maps to null for reference types.
+                    return ConvertFinalValue<T>(null, currentFieldName);
+                }
+
                 throw new InvalidOperationException(
                     $"Retrieved record does not contain field '{currentFieldName}'."
                 );
@@ -134,13 +141,13 @@ public sealed class FieldDrill
     /// <inheritdoc cref="Retreive{T}(EntityReference, string[])"/>
     public async Task<T> RetreiveAsync<T>(EntityReference obj, string[] pathParts)
     {
-        ValidateArguments(obj, pathParts);
+        string[] path = ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
-        for (int index = 0; index < pathParts.Length; index++)
+        for (int index = 0; index < path.Length; index++)
         {
-            bool isLast = index == pathParts.Length - 1;
-            string currentFieldName = pathParts[index];
+            bool isLast = index == path.Length - 1;
+            string currentFieldName = path[index];
             Entity retrievedRecord = Guard.Against.Null(
                 await _sdkProxy
                     .RetrieveAsync(
@@ -152,6 +159,13 @@ public sealed class FieldDrill
             );
             if (!retrievedRecord.Contains(currentFieldName))
             {
+                if (isLast)
+                {
+                    // Dataverse omits attributes whose value is null. The final segment is
+                    // therefore allowed to be absent and maps to null for reference types.
+                    return ConvertFinalValue<T>(null, currentFieldName);
+                }
+
                 throw new InvalidOperationException(
                     $"Retrieved record does not contain field '{currentFieldName}'."
                 );
@@ -181,7 +195,7 @@ public sealed class FieldDrill
         return parts;
     }
 
-    private static void ValidateArguments(EntityReference obj, string[] pathParts)
+    private static string[] ValidateArguments(EntityReference obj, string[] pathParts)
     {
         Guard.Against.Null(pathParts, parameterName: nameof(pathParts));
         bool pathIsValid = pathParts.Length > 0;
@@ -211,9 +225,17 @@ public sealed class FieldDrill
             message: "Starting entity reference must have a non-empty ID.",
             parameterName: nameof(obj)
         );
+
+        string[] normalized = new string[pathParts.Length];
+        for (int index = 0; index < pathParts.Length; index++)
+        {
+            normalized[index] = pathParts[index].Trim().ToLowerInvariant();
+        }
+
+        return normalized;
     }
 
-    private static T ConvertFinalValue<T>(object retrievedField, string fieldName)
+    private static T ConvertFinalValue<T>(object? retrievedField, string fieldName)
     {
         if (retrievedField is T value)
         {
