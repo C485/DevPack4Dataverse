@@ -91,10 +91,10 @@ internal static class ValueComparer
 
         if (left is DateTime leftDateTime && right is DateTime rightDateTime)
         {
-            // Dataverse returns date-only columns with Kind = Unspecified. Comparing them as
-            // UTC instants makes a UTC-kind source look different on a non-UTC host, which
-            // turns every run into an update. Compare wall-clock time when either side has
-            // no zone information.
+            // Dataverse returns date-only and time-zone-independent columns with
+            // Kind = Unspecified. Comparing them as UTC instants makes a UTC-kind source look
+            // different on a non-UTC host, which turns every run into an update. Compare
+            // wall-clock time when either side has no zone information.
             if (
                 leftDateTime.Kind == DateTimeKind.Unspecified
                 || rightDateTime.Kind == DateTimeKind.Unspecified

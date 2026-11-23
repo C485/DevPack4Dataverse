@@ -242,7 +242,6 @@ Mapper<Order, Entity> mapper = mapperWrapper
         options.RequestSettings.ImpersonateAsUserByDataverseId = userId;
         options.RequestSettings.ImpersonateAsUserByAADId = userAadObjectId;
         options.RequestSettings.SkipPluginExecution = true;
-        options.SkipFieldsToChanged.Add("modifiedon");
         options.PreSave = context => context.Target["new_name"] = context.Target
             .GetAttributeValue<string>("new_name")
             ?.Trim();
@@ -271,7 +270,7 @@ Every lookup mapping has its own options:
 
 Mapper behaviour:
 - `PreSave` runs before change detection.
-- `SkipFieldsToChanged` ignores fields when deciding whether an update is needed.
+- `SkipFieldsToChanged` ignores fields when deciding whether an update is needed. A skipped field is still written when another field triggers the update, so do not list server-managed or read-only fields such as `modifiedon`.
 - Change detection reads the current record fresh from Dataverse by default. Set `UseCacheForChangeDetection = true` to allow the cache and accept possible staleness. The primary key attribute is read from table metadata, so activity tables such as `email` and `task` use `activityid`.
 - A blank alternate key is rejected before any read; an alternate key that matches more than one record throws `MapperException` instead of picking one.
 - `RetrieveAllRecords` preloads are reused across runs of the same mapper until the wrapper cache TTL expires; use `MappingRunOptions.ForceRefresh` to reload. Preloads are keyed by table and requested columns, and they cannot be combined with impersonation: the record cache is not scoped by caller, so the mapper throws `MapperConfigurationException` instead of running one query per record.

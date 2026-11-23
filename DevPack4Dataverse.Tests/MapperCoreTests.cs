@@ -988,18 +988,23 @@ public class MapperCoreTests
     public async Task AlternateKeySave_AlsoLocksTheResolvedId()
     {
         Guid id = Guid.NewGuid();
+        int retrievals = 0;
         var lockRecorder = new RecordingLock();
         var fake = new FakeConnection
         {
             RetrieveMultipleHandler = _ =>
-                new[]
+            {
+                retrievals++;
+                Assert.Equal(retrievals, lockRecorder.Keys.Count);
+                return new[]
                 {
                     new Entity("account", id)
                     {
                         ["name"] = "Old",
                         ["accountnumber"] = "A-1"
                     }
-                },
+                };
+            },
             UpdateRecordHandler = _ => { }
         };
         using var proxy = new SdkProxy(
@@ -1033,6 +1038,7 @@ public class MapperCoreTests
             new AlternateKeySource { AccountNumber = "A-1", Name = "New" }
         );
 
+        Assert.Equal(2, retrievals);
         Assert.Contains(lockRecorder.Keys, key => key.ToString().Contains("|ak="));
         Assert.Contains(
             lockRecorder.Keys,
