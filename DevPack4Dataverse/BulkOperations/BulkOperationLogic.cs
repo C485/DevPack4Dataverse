@@ -296,7 +296,7 @@ public sealed class BulkOperationLogic
         List<BulkChunk<T>> chunks = ChunkItems(items, settings.BatchSize);
         int degreeOfParallelism =
             settings.MaxDegreeOfParallelism <= 0
-                ? Math.Max(1, _sdkProxy.ConnectionCount)
+                ? Math.Max(1, _sdkProxy.ConfiguredConnectionCount)
                 : settings.MaxDegreeOfParallelism;
         int processed = 0;
         ConcurrentDictionary<int, byte> completedChunks = new();

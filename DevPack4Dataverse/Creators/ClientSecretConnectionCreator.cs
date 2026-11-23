@@ -22,11 +22,15 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Creators;
 
-public sealed class ClientSecretConnectionCreator : IConnectionCreator
+public sealed class ClientSecretConnectionCreator : IConnectionCreator, IConnectionCreatorRetry
 {
     private readonly string _appId;
-    private readonly string _crmUrl;
     private readonly int _connectionCount;
+    private readonly string _crmUrl;
+    private readonly ConnectionCreationRetry _retry = new(
+        maxAttempts: 3,
+        baseDelay: TimeSpan.FromSeconds(5)
+    );
     private readonly SecureString _secret;
     private bool _isCreated;
     private bool _isError;
@@ -57,6 +61,7 @@ public sealed class ClientSecretConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
     public int ConnectionCount => _connectionCount;
+    bool IConnectionCreatorRetry.CanCreateNow => _retry.CanCreateNow;
 
     public IReadOnlyList<IConnection> Create(ILogger logger)
     {
@@ -82,6 +87,7 @@ public sealed class ClientSecretConnectionCreator : IConnectionCreator
                 logger
             );
 
+            _retry.RecordSuccess();
             _isCreated = true;
             return connections;
         }
@@ -93,7 +99,12 @@ public sealed class ClientSecretConnectionCreator : IConnectionCreator
             }
 
             logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ClientSecretConnectionCreator));
-            _isError = true;
+            _retry.RecordFailure();
+            if (_retry.FailedPermanently)
+            {
+                _isError = true;
+            }
+
             throw;
         }
     }

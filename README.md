@@ -294,10 +294,12 @@ MapperBatchResult batchResult = await mapperWrapper.ExecuteAllAsync(
         new MapperExecution("order-line", line)
     });
 ```
-Wrapper validation can use one global field set or per-table field sets:
+Wrapper validation can use one global field set or per-table field sets. Configure them on the options before creating the wrapper:
 ```C#
-mapperWrapper.Options.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
-mapperWrapper.Options.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+var wrapperOptions = new MapperWrapperOptions();
+wrapperOptions.ValidationFieldsByEntity["account"] = new HashSet<string> { "name" };
+wrapperOptions.ValidationFieldsByEntity["contact"] = new HashSet<string> { "email" };
+MapperWrapper mapperWrapper = dataverseDevPack.CreateMapperWrapper(wrapperOptions);
 ```
 If the mapper already ran `ValidateAfterSave`, wrapper validation is skipped to avoid duplicate reads. Set `MapperWrapperOptions.ValidateAfterMapperValidation = true` when both validators must run.
 The default cache and lock are in-memory. External implementations can be injected through `IEntityCache` and `IEntityLock` on the `MapperWrapper` constructor; the optional `DevPack4Dataverse.Mapper.Redis` project provides `RedisEntityCache` and `RedisEntityLock`:
@@ -310,7 +312,7 @@ MapperWrapper redisWrapper = new(
     new RedisEntityCache(redis),
     new RedisEntityLock(redis));
 ```
-Redis remains an optional project and ships as the `DevPack4Dataverse.Mapper.Redis` package. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) and renews it while the handle is alive, so a long save keeps mutual exclusion. Release failures are ignored because the TTL cleans up. Use a unique key prefix per environment when several environments share one Redis. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
+Redis remains an optional project and ships as the `DevPack4Dataverse.Mapper.Redis` package. Cache TTL is configured per logical table name through `MapperWrapperOptions.CacheTtlByEntity`, and the lock timeout is configured globally. The wrapper captures its options when it is created; configure TTLs and validation fields before calling `CreateMapperWrapper`. `RedisEntityLock` accepts a separate `lockTimeToLive` value (default five minutes) and renews it while the handle is alive, so a long save keeps mutual exclusion. Release failures are ignored because the TTL cleans up. Use a unique key prefix per environment when several environments share one Redis. Wrapper validation uses `MapperWrapperOptions.Validator` and requires `ValidationFields` or `ValidationFieldsByEntity` to declare the columns the validator needs. Redis cache serialization supports common attribute types; unsupported attribute types fail explicitly instead of being silently cached. The Redis cache and lock integration tests run only when `DEVPACK_REDIS_CONNECTION` is set, for example `127.0.0.1:6390,allowAdmin=true` for a local Docker Redis.
 
 ### FieldDrill
 Gives ability to go down by lookup fields simply by defining path as string with specified delimiter or by providing path as array of fields.
@@ -334,7 +336,7 @@ string formatted = money.GetFormattedValue(account, "creditlimit");
 ```
 `SetValue` sets only the transaction Money field; Dataverse calculates the read-only `<field>_base` field when the record is saved. The base value formula is `transaction amount / exchange rate`. If the record does not contain `exchangerate`, `GetExchangeRate` and `GetExchangeRateAsync` retrieve it from the transaction currency record. `SetTransactionCurrency` and `GetTransactionCurrency` work with the `transactioncurrencyid` lookup.
 
-Choice label metadata is cached for five minutes per table and column. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata changes immediately.
+Choice label metadata is cached for five minutes per table and column. Exchange rates retrieved from `transactioncurrency` are cached for five minutes per currency. Recreate the `FieldMethods` instance, or wait for the TTL, to see metadata or rate changes immediately.
 
 `FileOrImageFieldTypeMethods.Delete(record, field)` reads the file id stored on the record. Image columns do not return that id in a normal retrieve; for images, keep `UploadFileFieldResult.FileId` and call `Delete(fileId)`.
 
@@ -374,10 +376,10 @@ Production notes:
 
 ## Audit and live-test fixes
 
-This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 396 tests and runs on `net8.0`, `net11.0`, and `net48` (10 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
+This pass addressed the findings below and validated the library against a live Dataverse environment. The unit suite has 412 tests and runs on `net8.0`, `net11.0`, and `net48` (11 Redis cache and lock integration tests skip unless `DEVPACK_REDIS_CONNECTION` is set), all target frameworks build, and the NuGet restore reports no known vulnerable-package warnings.
 
 ### Security and correctness
-- A failed connection pool fails fast instead of looping forever when every connection creator has errored.
+- A failed connection pool fails fast instead of looping forever when every connection creator has errored. A transient creator failure is retried with a short backoff (three attempts); only then is the creator marked failed.
 - Caller-id impersonation is serialized per connection, so a shared `ServiceClient` cannot run a request as the wrong user or leave the impersonation behind. Set both `ImpersonateAsUserByDataverseId` and `ImpersonateAsUserByAADId` when available; on some tenants the Dataverse id alone authorizes the call but the record's `createdby` stays the application user.
 - Deleting a missing file/image returns `false` instead of throwing. For image columns, keep the `FileId` returned by `Upload` and call `Delete(fileId)`; image values are not returned by a normal retrieve.
 - Finalizers tolerate a failed constructor, so a null-argument guard cannot crash the process later.

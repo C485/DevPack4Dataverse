@@ -823,7 +823,9 @@ public sealed class ExecuteMultipleLogic
 
     private int ResolveThreadsCount(int maxDegreeOfParallelism)
     {
-        int threads = maxDegreeOfParallelism <= 0 ? _sdkProxy.ConnectionCount : maxDegreeOfParallelism;
+        int threads = maxDegreeOfParallelism <= 0
+            ? _sdkProxy.ConfiguredConnectionCount
+            : maxDegreeOfParallelism;
         return Math.Max(1, threads);
     }
 

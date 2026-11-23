@@ -66,6 +66,28 @@ public class MapperCacheLockTests
     }
 
     [Fact]
+    public async Task InMemoryCache_RepeatedWritesDoNotEvictTheFreshEntry()
+    {
+        var cache = new InMemoryEntityCache();
+        EntityKey key = EntityKey.ById("account", Guid.NewGuid());
+        for (int index = 0; index < 100_050; index++)
+        {
+            await cache.SetAsync(
+                key,
+                new CachedEntity(
+                    new Entity("account", key.Id!.Value) { ["value"] = index }
+                ),
+                TimeSpan.FromMinutes(1)
+            );
+        }
+
+        CachedEntity? entry = await cache.GetAsync(key);
+
+        Assert.NotNull(entry);
+        Assert.Equal(100_049, entry!.Record["value"]);
+    }
+
+    [Fact]
     public async Task InMemoryCache_ClearRemovesAllEntityEntries()
     {
         var cache = new InMemoryEntityCache();

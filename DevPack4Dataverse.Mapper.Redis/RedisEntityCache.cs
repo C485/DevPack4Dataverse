@@ -84,7 +84,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
         StackExchange.Redis.RedisKey tableKey = TableKey(entry.Record.LogicalName);
         await _database.SetAddAsync(tableKey, Key(key).ToString()).ConfigureAwait(false);
-        await _database.KeyExpireAsync(tableKey, expiry).ConfigureAwait(false);
+        await ExtendTableTtlAsync(tableKey, expiry).ConfigureAwait(false);
 
         if (entry.Record.Id != Guid.Empty)
         {
@@ -95,7 +95,7 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
             await _database.SetAddAsync(indexKey, Key(key).ToString()).ConfigureAwait(false);
             await _database.SetAddAsync(tableKey, indexKey.ToString()).ConfigureAwait(false);
             await _database.KeyExpireAsync(indexKey, expiry).ConfigureAwait(false);
-            await _database.KeyExpireAsync(tableKey, expiry).ConfigureAwait(false);
+            await ExtendTableTtlAsync(tableKey, expiry).ConfigureAwait(false);
         }
     }
 
@@ -174,6 +174,18 @@ public sealed class RedisEntityCache : IEntityCache, IEntityCacheByRecordId
 
     internal static CachedEntity? Deserialize(string json) =>
         JsonConvert.DeserializeObject<CachedEntityDto>(json)?.ToCachedEntity();
+
+    private async Task ExtendTableTtlAsync(
+        StackExchange.Redis.RedisKey tableKey,
+        TimeSpan expiry
+    )
+    {
+        // The table set must outlive every entry it indexes. A later write with a shorter
+        // TTL must not expire the set while longer-lived entries remain.
+        TimeSpan? current = await _database.KeyTimeToLiveAsync(tableKey).ConfigureAwait(false);
+        TimeSpan tableTtl = current.HasValue && current.Value > expiry ? current.Value : expiry;
+        await _database.KeyExpireAsync(tableKey, tableTtl).ConfigureAwait(false);
+    }
 
     private StackExchange.Redis.RedisKey Key(EntityKey key) => _prefix + key;
 

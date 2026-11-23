@@ -368,22 +368,24 @@ internal sealed class RecordStore
 
         if (record.Id != Guid.Empty)
         {
-            await CacheEntryAsync(
-                    EntityKey.ById(record.LogicalName, record.Id),
-                    entry,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            EntityKey idKey = EntityKey.ById(record.LogicalName, record.Id);
+            if (!idKey.Equals(requestedKey))
+            {
+                await CacheEntryAsync(idKey, entry, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         if (record.KeyAttributes != null && record.KeyAttributes.Count > 0)
         {
-            await CacheEntryAsync(
-                    EntityKey.ByAlternateKey(record.LogicalName, record.KeyAttributes),
-                    entry,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            EntityKey alternateKey = EntityKey.ByAlternateKey(
+                record.LogicalName,
+                record.KeyAttributes
+            );
+            if (!alternateKey.Equals(requestedKey))
+            {
+                await CacheEntryAsync(alternateKey, entry, cancellationToken)
+                    .ConfigureAwait(false);
+            }
         }
     }
 

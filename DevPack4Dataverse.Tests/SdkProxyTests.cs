@@ -50,6 +50,25 @@ public class SdkProxyTests
     }
 
     [Fact]
+    public async Task WaitForConnections_DuplicateCreator_ThrowsInsteadOfHanging()
+    {
+        var creator = new FakeConnectionCreator(new FakeConnection());
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            creator,
+            creator
+        );
+        proxy.WaitForConnections(1);
+
+        Task wait = Task.Run(() => proxy.WaitForConnections(2));
+        Task completed = await Task.WhenAny(wait, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.Same(wait, completed);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => wait);
+    }
+
+    [Fact]
     public void GetConnection_WithoutCreators_Throws()
     {
         var proxy = new SdkProxy(NullLogger.Instance, false);
@@ -148,6 +167,51 @@ public class SdkProxyTests
         Task completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
         Assert.Same(task, completed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+    }
+
+    [Fact]
+    public async Task GetConnection_RespectsCreatorBackoff()
+    {
+        var creator = new BackoffCreator();
+        using var proxy = new SdkProxy(NullLogger.Instance, false, creator);
+        Task<ConnectionLease> leaseTask = Task.Run(() => proxy.GetConnection());
+
+        await Task.Delay(200);
+        Assert.Equal(0, creator.Attempts);
+
+        creator.Ready = true;
+        Task completed = await Task.WhenAny(
+            leaseTask,
+            Task.Delay(TimeSpan.FromSeconds(5))
+        );
+        Assert.Same(leaseTask, completed);
+        using ConnectionLease lease = await leaseTask;
+        Assert.Equal(1, creator.Attempts);
+        Assert.Same(creator.Connection, lease.Connection);
+    }
+
+    private sealed class BackoffCreator : IConnectionCreator, IConnectionCreatorRetry
+    {
+        public FakeConnection Connection { get; } = new();
+        public int Attempts;
+        public bool Ready { get; set; }
+        public bool IsCreated { get; private set; }
+        public bool IsError { get; private set; }
+        public bool IsValid => IsCreated && !IsError;
+        public int ConnectionCount => 1;
+        public bool CanCreateNow => Ready;
+
+        public IReadOnlyList<IConnection> Create(ILogger logger)
+        {
+            Attempts++;
+            if (!Ready)
+            {
+                throw new InvalidOperationException("not ready");
+            }
+
+            IsCreated = true;
+            return new IConnection[] { Connection };
+        }
     }
 
     private sealed class FailingCreator : IConnectionCreator

@@ -414,6 +414,62 @@ public class BulkOperationLogicTests
         }
     }
 
+    [Fact]
+    public async Task CreateMultipleAsync_AutomaticParallelismUsesConfiguredPoolSize()
+    {
+        using var started = new CountdownEvent(4);
+        using var release = new ManualResetEventSlim();
+        FakeConnection[] connections = Enumerable
+            .Range(0, 4)
+            .Select(
+                _ =>
+                    new FakeConnection
+                    {
+                        CreateMultipleHandler = targets =>
+                        {
+                            started.Signal();
+                            release.Wait(TimeSpan.FromSeconds(10));
+                            return targets.Entities.Select(_ => Guid.NewGuid()).ToArray();
+                        }
+                    }
+            )
+            .ToArray();
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(connections)
+        );
+        var logic = new BulkOperationLogic(proxy, NullLogger.Instance);
+        Entity[] records = Enumerable
+            .Range(0, 4)
+            .Select(_ => new Entity("account"))
+            .ToArray();
+
+        Task<Guid[]> task = logic.CreateMultipleAsync(
+            records,
+            new BulkOperationSettings
+            {
+                BatchSize = 1,
+                MaxDegreeOfParallelism = 0
+            }
+        );
+
+        try
+        {
+            Assert.True(
+                started.Wait(TimeSpan.FromSeconds(5)),
+                "The bulk operation did not use the configured pool size."
+            );
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        Guid[] ids = await task;
+        Assert.Equal(4, ids.Length);
+    }
+
     private static (SdkProxy Proxy, BulkOperationLogic Logic) Create(FakeConnection connection)
     {
         SdkProxy proxy = new(

@@ -362,6 +362,48 @@ public class ExecuteMultipleLogicTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_PerMessageSettingsWinOverBatchSettings()
+    {
+        OrganizationRequest? captured = null;
+        var (proxy, logic) = Create(request =>
+        {
+            var executeMultiple = (ExecuteMultipleRequest)request;
+            captured = executeMultiple.Requests[0];
+            return Response(Success(0, "a"));
+        });
+
+        using (proxy)
+        {
+            var builder = new ExecuteMultipleRequestBuilder(NullLogger.Instance);
+            builder.AddUpdate(
+                new Entity("account") { Id = Guid.NewGuid() },
+                new RequestSettings
+                {
+                    PartitionId = "per-message",
+                    SharedVariable = "per-message-tag",
+                    ConcurrencyBehavior = ConcurrencyBehavior.AlwaysOverwrite
+                }
+            );
+
+            await logic.ExecuteAsync(
+                builder,
+                new ExecuteMultipleRequestSettings { RequestSize = 10 },
+                requestSettings: new RequestSettings
+                {
+                    PartitionId = "batch",
+                    SharedVariable = "batch-tag",
+                    ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches
+                }
+            );
+
+            var update = Assert.IsType<UpdateRequest>(captured);
+            Assert.Equal("per-message", update["PartitionId"]);
+            Assert.Equal("per-message-tag", update["tag"]);
+            Assert.Equal(ConcurrencyBehavior.AlwaysOverwrite, update["ConcurrencyBehavior"]);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteAsync_SplitBatch_KeepsSuccessfulPartsWhenLaterPartThrows()
     {
         int reported = 0;
@@ -535,6 +577,24 @@ public class ExecuteMultipleLogicTests
             Assert.IsType<TimeoutException>(exception.InnerException);
             Assert.Equal(2, exception.Result.RecordsRequested);
             Assert.Equal(1, exception.Result.RecordsProcessed);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AutomaticParallelismUsesConfiguredPoolSize()
+    {
+        var (proxy, logic) = CreateDelayed(4, (_, _) => TimeSpan.FromMilliseconds(10));
+
+        using (proxy)
+        {
+            ExecuteMultipleLogicResult result = await logic.ExecuteAsync(
+                BuilderWith(
+                    Enumerable.Range(0, 8).Select(index => "req" + index).ToArray()
+                ),
+                new ExecuteMultipleRequestSettings { RequestSize = 1 }
+            );
+
+            Assert.Equal(4, result.ThreadsUsed);
         }
     }
 

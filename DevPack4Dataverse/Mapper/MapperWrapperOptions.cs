@@ -57,6 +57,41 @@ public sealed class MapperWrapperOptions
     /// </summary>
     public bool ValidateAfterMapperValidation { get; set; }
 
+    internal MapperWrapperOptions Snapshot()
+    {
+        var snapshot = new MapperWrapperOptions
+        {
+            ValidateAfterSave = ValidateAfterSave,
+            DefaultCacheTtl = DefaultCacheTtl,
+            LockTimeout = LockTimeout,
+            RequestSettings = RequestSettings.Clone(),
+            Validator = Validator,
+            ValidateAfterMapperValidation = ValidateAfterMapperValidation
+        };
+        foreach (KeyValuePair<string, TimeSpan> pair in CacheTtlByEntity)
+        {
+            snapshot.CacheTtlByEntity[pair.Key] = pair.Value;
+        }
+
+        foreach (string field in ValidationFields)
+        {
+            snapshot.ValidationFields.Add(field);
+        }
+
+        foreach (KeyValuePair<string, ISet<string>> pair in ValidationFieldsByEntity)
+        {
+            if (pair.Value != null)
+            {
+                snapshot.ValidationFieldsByEntity[pair.Key] = new HashSet<string>(
+                    pair.Value,
+                    StringComparer.OrdinalIgnoreCase
+                );
+            }
+        }
+
+        return snapshot;
+    }
+
     /// <summary>Returns per-table validation fields, falling back to <see cref="ValidationFields"/>.</summary>
     public ISet<string> GetValidationFields(string logicalName)
     {

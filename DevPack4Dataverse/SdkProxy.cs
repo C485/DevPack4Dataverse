@@ -65,7 +65,12 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
             () =>
             {
                 IConnectionCreator? connectionToCreate = _connectionCreators.FirstOrDefault(
-                    p => !p.IsCreated && !p.IsError
+                    p => !p.IsCreated
+                        && !p.IsError
+                        && (
+                            p is not IConnectionCreatorRetry retrying
+                            || retrying.CanCreateNow
+                        )
                 );
                 if (connectionToCreate == null)
                 {
@@ -112,6 +117,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
     /// </summary>
     internal int ConfiguredConnectionCount =>
         _connectionCreators
+            .Distinct()
             .Where(creator => !creator.IsError)
             .Sum(creator => creator.ConnectionCount);
 

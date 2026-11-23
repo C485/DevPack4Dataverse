@@ -823,6 +823,58 @@ public class MapperCoreTests
     }
 
     [Fact]
+    public async Task CacheWrite_DoesNotWriteTheSameIdKeyTwice()
+    {
+        Guid id = Guid.NewGuid();
+        var cache = new CountingCache();
+        var fake = new FakeConnection { CreateRecordHandler = _ => id };
+        var (proxy, wrapper) = Create(fake, null, cache);
+
+        using (proxy)
+        {
+            var mapper = wrapper
+                .CreateMapperBuilder<OrderSource, Entity>("orders")
+                .WithLogicalName("account")
+                .Map("name", context => context.Source.Name)
+                .Build();
+
+            await mapper.ExecuteAsync(new OrderSource { Name = "Contoso" });
+        }
+
+        Assert.Equal(1, cache.SetCount);
+    }
+
+    [Fact]
+    public async Task WrapperOptions_AreCapturedAtConstruction()
+    {
+        Guid id = Guid.NewGuid();
+        var cache = new CountingCache();
+        var options = new MapperWrapperOptions
+        {
+            DefaultCacheTtl = TimeSpan.FromMinutes(10)
+        };
+        var fake = new FakeConnection { CreateRecordHandler = _ => id };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(fake)
+        );
+        proxy.WaitForConnections(1);
+        var wrapper = new MapperWrapper(proxy, NullLogger.Instance, options, cache);
+        var mapper = wrapper
+            .CreateMapperBuilder<OrderSource, Entity>("orders")
+            .WithLogicalName("account")
+            .Map("name", context => context.Source.Name)
+            .Build();
+
+        await mapper.ExecuteAsync(new OrderSource { Name = "First" });
+        options.DefaultCacheTtl = TimeSpan.Zero;
+        await mapper.ExecuteAsync(new OrderSource { Name = "Second" });
+
+        Assert.Equal(TimeSpan.FromMinutes(10), cache.LastTtl);
+    }
+
+    [Fact]
     public async Task CacheFailure_DoesNotFailSuccessfulCreate()
     {
         Guid id = Guid.NewGuid();
@@ -985,6 +1037,47 @@ public class MapperCoreTests
     }
 
     [Fact]
+    public async Task MapperLostLock_DoesNotCreate()
+    {
+        Guid id = Guid.NewGuid();
+        bool created = false;
+        var fake = new FakeConnection
+        {
+            RetrieveMultipleHandler = _ => Array.Empty<Entity>(),
+            CreateRecordHandler = _ =>
+            {
+                created = true;
+                return id;
+            }
+        };
+        using var proxy = new SdkProxy(
+            NullLogger.Instance,
+            false,
+            new FakeConnectionCreator(fake)
+        );
+        proxy.WaitForConnections(1);
+        var wrapper = new MapperWrapper(
+            proxy,
+            NullLogger.Instance,
+            null,
+            null,
+            new LostEntityLock()
+        );
+        var mapper = wrapper
+            .CreateMapperBuilder<AccountUpdate, Entity>("account-create")
+            .WithLogicalName("account")
+            .WithEntityKey(context => EntityKey.ById("account", context.Source.Id))
+            .Map("name", context => context.Source.Name)
+            .Build();
+
+        await Assert.ThrowsAsync<MapperLockException>(
+            () => mapper.ExecuteAsync(new AccountUpdate { Id = id, Name = "New" })
+        );
+
+        Assert.False(created);
+    }
+
+    [Fact]
     public async Task AlternateKeySave_AlsoLocksTheResolvedId()
     {
         Guid id = Guid.NewGuid();
@@ -1044,6 +1137,39 @@ public class MapperCoreTests
             lockRecorder.Keys,
             key => key.ToString().Contains("|id=" + id.ToString("N"))
         );
+    }
+
+    private sealed class CountingCache : IEntityCache
+    {
+        public int SetCount { get; private set; }
+        public TimeSpan LastTtl { get; private set; }
+
+        public Task<CachedEntity?> GetAsync(
+            EntityKey key,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<CachedEntity?>(null);
+
+        public Task SetAsync(
+            EntityKey key,
+            CachedEntity entry,
+            TimeSpan timeToLive,
+            CancellationToken cancellationToken = default
+        )
+        {
+            SetCount++;
+            LastTtl = timeToLive;
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(
+            EntityKey key,
+            CancellationToken cancellationToken = default
+        ) => Task.CompletedTask;
+
+        public Task ClearAsync(
+            string logicalName,
+            CancellationToken cancellationToken = default
+        ) => Task.CompletedTask;
     }
 
     private sealed class RecordingLock : IEntityLock

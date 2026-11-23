@@ -283,6 +283,12 @@ public sealed class Mapper<TSource, TTarget> : IMapper
         using IEntityLockHandle? idLockHandle = idLock;
         current = refreshedCurrent;
 
+        EntityLockGuard.EnsureHeld(lockHandle);
+        if (idLockHandle != null)
+        {
+            EntityLockGuard.EnsureHeld(idLockHandle);
+        }
+
         if (current == null)
         {
             return await CreateAsync(context, entity, key, state, cancellationToken)
@@ -296,12 +302,6 @@ public sealed class Mapper<TSource, TTarget> : IMapper
                 $"The current record '{entity.LogicalName}:{current.Id}' has no row version. "
                     + "Disable cached change detection or refresh the record with the rowversion column."
             );
-        }
-
-        EntityLockGuard.EnsureHeld(lockHandle);
-        if (idLockHandle != null)
-        {
-            EntityLockGuard.EnsureHeld(idLockHandle);
         }
 
         EntityChangeDetector.ChangeSet changes = EntityChangeDetector.GetChanges(

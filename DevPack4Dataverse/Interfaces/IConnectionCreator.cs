@@ -19,6 +19,12 @@ using Microsoft.Extensions.Logging;
 
 namespace DevPack4Dataverse.Interfaces;
 
+internal interface IConnectionCreatorRetry
+{
+    /// <summary>False while the creator is waiting for its next retry.</summary>
+    bool CanCreateNow { get; }
+}
+
 public interface IConnectionCreator
 {
     /// <summary>

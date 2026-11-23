@@ -124,6 +124,34 @@ public sealed class RedisEntityCacheIntegrationTests
     }
 
     [RedisFact]
+    public async Task RedisCache_TableIndexDoesNotShortenItsTtl()
+    {
+        using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();
+        string prefix = RedisIntegrationTest.NewPrefix();
+        RedisEntityCache cache = new(connection, prefix);
+        Guid first = Guid.NewGuid();
+        Guid second = Guid.NewGuid();
+
+        await cache.SetAsync(
+            EntityKey.ById("account", first),
+            new CachedEntity(new Entity("account", first)),
+            TimeSpan.FromMinutes(10)
+        );
+        await cache.SetAsync(
+            EntityKey.ById("account", second),
+            new CachedEntity(new Entity("account", second)),
+            TimeSpan.FromSeconds(1)
+        );
+
+        TimeSpan? ttl = await connection
+            .GetDatabase()
+            .KeyTimeToLiveAsync(prefix + "table:account");
+
+        Assert.NotNull(ttl);
+        Assert.True(ttl!.Value > TimeSpan.FromMinutes(1));
+    }
+
+    [RedisFact]
     public async Task RedisCache_UnsupportedAttributeTypeThrows()
     {
         using ConnectionMultiplexer connection = await RedisIntegrationTest.ConnectAsync();

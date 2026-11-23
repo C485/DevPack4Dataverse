@@ -275,6 +275,32 @@ public class MoneyFieldTypeMethodsTests
     }
 
     [Fact]
+    public async Task GetExchangeRate_CachesRatePerCurrency()
+    {
+        var currencyId = Guid.NewGuid();
+        int retrievals = 0;
+        var (proxy, methods) = Create(
+            (_, _, _) =>
+            {
+                retrievals++;
+                return new Entity("transactioncurrency")
+                {
+                    Id = currencyId,
+                    ["exchangerate"] = 2.5m
+                };
+            }
+        );
+        var reference = new EntityReference("transactioncurrency", currencyId);
+
+        using (proxy)
+        {
+            Assert.Equal(2.5m, methods.GetExchangeRate(reference));
+            Assert.Equal(2.5m, await methods.GetExchangeRateAsync(reference));
+            Assert.Equal(1, retrievals);
+        }
+    }
+
+    [Fact]
     public async Task GetExchangeRateAsync_CanBeCanceled()
     {
         var (proxy, methods) = Create((_, _, _) => throw new InvalidOperationException());

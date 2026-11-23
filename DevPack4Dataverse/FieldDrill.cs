@@ -92,13 +92,13 @@ public sealed class FieldDrill
     /// </exception>
     public T Retreive<T>(EntityReference obj, string[] pathParts)
     {
-        ValidateArguments(obj, pathParts);
+        string[] path = ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
-        for (int index = 0; index < pathParts.Length; index++)
+        for (int index = 0; index < path.Length; index++)
         {
-            bool isLast = index == pathParts.Length - 1;
-            string currentFieldName = pathParts[index];
+            bool isLast = index == path.Length - 1;
+            string currentFieldName = path[index];
             Entity retrievedRecord = Guard.Against.Null(
                 _sdkProxy.Retrieve(
                     drillReference.LogicalName,
@@ -141,13 +141,13 @@ public sealed class FieldDrill
     /// <inheritdoc cref="Retreive{T}(EntityReference, string[])"/>
     public async Task<T> RetreiveAsync<T>(EntityReference obj, string[] pathParts)
     {
-        ValidateArguments(obj, pathParts);
+        string[] path = ValidateArguments(obj, pathParts);
 
         EntityReference drillReference = obj;
-        for (int index = 0; index < pathParts.Length; index++)
+        for (int index = 0; index < path.Length; index++)
         {
-            bool isLast = index == pathParts.Length - 1;
-            string currentFieldName = pathParts[index];
+            bool isLast = index == path.Length - 1;
+            string currentFieldName = path[index];
             Entity retrievedRecord = Guard.Against.Null(
                 await _sdkProxy
                     .RetrieveAsync(
@@ -195,7 +195,7 @@ public sealed class FieldDrill
         return parts;
     }
 
-    private static void ValidateArguments(EntityReference obj, string[] pathParts)
+    private static string[] ValidateArguments(EntityReference obj, string[] pathParts)
     {
         Guard.Against.Null(pathParts, parameterName: nameof(pathParts));
         bool pathIsValid = pathParts.Length > 0;
@@ -225,6 +225,14 @@ public sealed class FieldDrill
             message: "Starting entity reference must have a non-empty ID.",
             parameterName: nameof(obj)
         );
+
+        string[] normalized = new string[pathParts.Length];
+        for (int index = 0; index < pathParts.Length; index++)
+        {
+            normalized[index] = pathParts[index].Trim().ToLowerInvariant();
+        }
+
+        return normalized;
     }
 
     private static T ConvertFinalValue<T>(object? retrievedField, string fieldName)

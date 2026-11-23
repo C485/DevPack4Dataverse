@@ -29,11 +29,6 @@ public sealed class ConnectionLease : IDisposable
         Connection = Guard.Against.Null(connection);
     }
 
-    ~ConnectionLease()
-    {
-        DisposeConnection();
-    }
-
     public IConnection Connection { get; }
 
     public ServiceClient PureServiceClient => Connection.PureServiceClient;
@@ -41,7 +36,6 @@ public sealed class ConnectionLease : IDisposable
     public void Dispose()
     {
         DisposeConnection();
-        GC.SuppressFinalize(this);
     }
 
     private void DisposeConnection()
@@ -51,6 +45,6 @@ public sealed class ConnectionLease : IDisposable
             return;
         }
 
-        Connection?.ReleaseLock();
+        Connection.ReleaseLock();
     }
 }

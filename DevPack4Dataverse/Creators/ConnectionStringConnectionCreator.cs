@@ -22,13 +22,17 @@ using Microsoft.PowerPlatform.Dataverse.Client;
 
 namespace DevPack4Dataverse.Creators;
 
-public sealed class ConnectionStringConnectionCreator : IConnectionCreator
+public sealed class ConnectionStringConnectionCreator : IConnectionCreator, IConnectionCreatorRetry
 {
     private const string ConnectionStringInvalidError =
         "Unable to append RequireNewInstance because other option was provided. 'RequireNewInstance=True' is required to be properly detected.";
 
     private readonly string _connectionString;
     private readonly int _connectionCount;
+    private readonly ConnectionCreationRetry _retry = new(
+        maxAttempts: 3,
+        baseDelay: TimeSpan.FromSeconds(5)
+    );
     private bool _isCreated;
     private bool _isError;
 
@@ -61,6 +65,7 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
     public bool IsError => _isError;
     public bool IsValid => _isCreated && !_isError;
     public int ConnectionCount => _connectionCount;
+    bool IConnectionCreatorRetry.CanCreateNow => _retry.CanCreateNow;
 
     internal string ConnectionString => _connectionString;
 
@@ -78,7 +83,7 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
                 crmServiceClient,
                 nameof(crmServiceClient),
                 p => p.IsReady,
-                $"{nameof(ClientSecretConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
+                $"{nameof(ConnectionStringConnectionCreator)} - failed to make connection to connection string, LatestError: {crmServiceClient.LastError}"
             );
 
             ownershipTransferred = true;
@@ -88,6 +93,7 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
                 logger
             );
 
+            _retry.RecordSuccess();
             _isCreated = true;
             return connections;
         }
@@ -99,7 +105,12 @@ public sealed class ConnectionStringConnectionCreator : IConnectionCreator
             }
 
             logger.LogError(e, "Unexpected error in {NameOfClass}", nameof(ConnectionStringConnectionCreator));
-            _isError = true;
+            _retry.RecordFailure();
+            if (_retry.FailedPermanently)
+            {
+                _isError = true;
+            }
+
             throw;
         }
     }
