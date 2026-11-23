@@ -38,7 +38,11 @@ internal static class Program
 
         var microsoftLogger = new SerilogLoggerFactory(Log.Logger).CreateLogger("");
 
-        IExecute example = new AdaptiveMultipleRequest(microsoftLogger);
+        IExecute example = args.FirstOrDefault()?.ToLowerInvariant() switch
+        {
+            "drill" => new FieldDrillExample(microsoftLogger),
+            _ => new AdaptiveMultipleRequest(microsoftLogger)
+        };
 
         try
         {
