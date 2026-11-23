@@ -107,6 +107,14 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Number of connections the configured creators can produce, excluding failed creators.
+    /// </summary>
+    internal int ConfiguredConnectionCount =>
+        _connectionCreators
+            .Where(creator => !creator.IsError)
+            .Sum(creator => creator.ConnectionCount);
+
     /// <summary>Test seam: overrides the disposal wait derived from the service timeout.</summary>
     internal TimeSpan? DisposeWaitTimeoutOverride { get; set; }
 
@@ -218,9 +226,7 @@ public sealed class SdkProxy : IDataverseConnectionLayer, IDisposable
 
     private void EnsureConnectionsCanBeCreated(int count)
     {
-        int possibleConnections = _connectionCreators
-            .Where(creator => !creator.IsError)
-            .Sum(creator => creator.ConnectionCount);
+        int possibleConnections = ConfiguredConnectionCount;
         if (possibleConnections < count)
         {
             throw new InvalidOperationException(

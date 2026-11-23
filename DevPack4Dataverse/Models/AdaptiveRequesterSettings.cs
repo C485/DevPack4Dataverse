@@ -24,10 +24,11 @@ namespace DevPack4Dataverse.Models;
 /// </summary>
 /// <remarks>
 /// The requester starts with <see cref="InitialBatchSize"/> records per ExecuteMultiple request
-/// and <see cref="InitialDegreeOfParallelism"/> parallel requests. Every
+/// and uses <see cref="DegreeOfParallelism"/> concurrent requests. Every
 /// <see cref="EvaluationRecordCount"/> records it compares the wave duration with
-/// <see cref="TargetBatchDuration"/>. Slow waves decrease the batch size first, then the
-/// degree of parallelism. Fast waves increase the batch size first, then the degree.
+/// <see cref="TargetBatchDuration"/>. Slow waves scale the batch size down toward the target;
+/// fast waves grow it. The degree of parallelism is fixed for the run and defaults to the
+/// connection pool size, so the batch size only controls the duration of one request.
 /// </remarks>
 public sealed class AdaptiveRequesterSettings
 {
@@ -37,16 +38,33 @@ public sealed class AdaptiveRequesterSettings
 
     public int InitialBatchSize { get; set; } = 4;
 
-    public int MinDegreeOfParallelism { get; set; } = 1;
+    /// <summary>
+    /// Number of concurrent ExecuteMultiple requests. When null, the connection pool size is
+    /// used. The value is capped at the pool size. This is fixed for the whole run; only the
+    /// batch size adapts.
+    /// </summary>
+    public int? DegreeOfParallelism { get; set; }
 
-    public int MaxDegreeOfParallelism { get; set; } = 16;
-
-    public int InitialDegreeOfParallelism { get; set; } = 4;
-
+    /// <summary>
+    /// Target duration of one adaptive wave. This is not a target for the whole run; a run of
+    /// N records takes roughly N / (batch size × degree of parallelism) waves.
+    /// </summary>
     public TimeSpan TargetBatchDuration { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>Number of records processed before the next adjustment.</summary>
     public int EvaluationRecordCount { get; set; } = 40;
+
+    /// <summary>
+    /// Degree of parallelism used by the adaptive run. It is fixed for the run and can be read
+    /// from <see cref="ReportProgress"/> while the run is in progress.
+    /// </summary>
+    public int CurrentDegreeOfParallelism { get; internal set; }
+
+    /// <summary>
+    /// Batch size selected by the adaptive run. It is updated as the run adjusts and can be read
+    /// from <see cref="ReportProgress"/> while the run is in progress.
+    /// </summary>
+    public int CurrentBatchSize { get; internal set; }
 
     /// <summary>Optional callback for failed requests.</summary>
     public Action<OrganizationRequest, string> ErrorReport { get; set; } = (_, _) => { };
@@ -64,19 +82,11 @@ public sealed class AdaptiveRequesterSettings
             MinBatchSize,
             MaxBatchSize
         );
-        Guard.Against.NegativeOrZero(MinDegreeOfParallelism, nameof(MinDegreeOfParallelism));
-        Guard.Against.OutOfRange(
-            MaxDegreeOfParallelism,
-            nameof(MaxDegreeOfParallelism),
-            MinDegreeOfParallelism,
-            500
-        );
-        Guard.Against.OutOfRange(
-            InitialDegreeOfParallelism,
-            nameof(InitialDegreeOfParallelism),
-            MinDegreeOfParallelism,
-            MaxDegreeOfParallelism
-        );
+        if (DegreeOfParallelism is int degreeOfParallelism)
+        {
+            Guard.Against.NegativeOrZero(degreeOfParallelism, nameof(DegreeOfParallelism));
+        }
+
         Guard.Against.NegativeOrZero(TargetBatchDuration, nameof(TargetBatchDuration));
         Guard.Against.NegativeOrZero(EvaluationRecordCount, nameof(EvaluationRecordCount));
 
